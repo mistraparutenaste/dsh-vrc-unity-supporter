@@ -26,6 +26,13 @@ description: アバター改変を Unity Editor スクリプトとして書き�
 `<pkg>` は通常 `%USERPROFILE%\.dsh\profiles\<profile>\node_modules\dsh-vrc-unity-supporter`。
 分からなければ `doctor.ps1` が表示する。
 
+スクリプトは署名されていないため、Windows の既定（RemoteSigned）では**直接実行できない**。
+必ず次の形で呼ぶ。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "<pkg>\tools\unity-run.ps1" -Project "<proj>" -Method "<...>"
+```
+
 ## 1. 守る制約
 
 | # | 制約 |
@@ -106,7 +113,9 @@ namespace DSH.Tasks
 ## 3. 実行する
 
 ```powershell
-<pkg>/tools/unity-run.ps1 -Project "C:\path\to\Project" -Method "DSH.Tasks.AddOutfitToggle.Execute"
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  "<pkg>\tools\unity-run.ps1" -Project "C:\path\to\Project" `
+  -Method "DSH.Tasks.AddOutfitToggle.Execute"
 ```
 
 ランナーがやること:

@@ -11,7 +11,9 @@ description: アップロードせずに改変結果を確認する手順。バ�
 ## 1. まずコンパイルを通す（AI が実行する）
 
 ```powershell
-<pkg>/tools/unity-run.ps1 -Project "C:\path\to\Project" -Method "DSH.Editor.DshInspect.CompileCheck"
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  "<pkg>\tools\unity-run.ps1" -Project "C:\path\to\Project" `
+  -Method "DSH.Editor.DshInspect.CompileCheck"
 ```
 
 - 終了コード 0 かつログに `error CS` が無ければ合格
@@ -45,7 +47,9 @@ VRCFury の前提設定（OFF だと Play でトグルが動かない）:
 ## 4. 性能の再測定（AI が実行する）
 
 ```powershell
-<pkg>/tools/unity-run.ps1 -Project "C:\path\to\Project" -Method "DSH.Editor.DshInspect.Perf"
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  "<pkg>\tools\unity-run.ps1" -Project "C:\path\to\Project" `
+  -Method "DSH.Editor.DshInspect.Perf"
 ```
 
 改変前後で比較し、ランクが落ちた項目を名指しで報告する。

@@ -49,7 +49,9 @@ Mobile は **Medium を超えると表示されない**（Poor / Very Poor は�
 正確な値は Unity に数えさせる（`unity_inspect.py` では概算しか出せない）。
 
 ```powershell
-<pkg>/tools/unity-run.ps1 -Project "C:\path\to\Project" -Method "DSH.Editor.DshInspect.Perf"
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  "<pkg>\tools\unity-run.ps1" -Project "C:\path\to\Project" `
+  -Method "DSH.Editor.DshInspect.Perf"
 ```
 
 `Assets/DSH/Results/Perf.json` に項目別のカウントが出る。判定ルール:
