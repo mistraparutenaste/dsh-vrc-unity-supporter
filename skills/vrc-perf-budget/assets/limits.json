@@ -1,0 +1,81 @@
+{
+  "source": "https://creators.vrchat.com/avatars/avatar-performance-ranking-system/ (retrieved 2026-11-17)",
+  "note": "A value above a rank's maximum moves the whole avatar to the next rank. Disabled objects and components still count. Rank is decided by the worst single statistic.",
+  "pc": {
+    "excellent": {
+      "triangles": 32000, "textureMemoryMB": 40, "skinnedMeshes": 1, "basicMeshes": 4,
+      "materialSlots": 4, "physBoneComponents": 4, "physBoneTransforms": 16,
+      "physBoneColliders": 4, "physBoneCollisionChecks": 32, "contacts": 8,
+      "constraintCount": 100, "constraintDepth": 20, "animators": 1, "bones": 75,
+      "lights": 0, "particleSystems": 0, "totalParticles": 0, "meshParticlePolys": 0,
+      "trailRenderers": 1, "lineRenderers": 1, "raycasts": 1, "cloths": 0,
+      "audioSources": 1, "faceTrackingOperations": 2000, "forwardedParameters": 10
+    },
+    "good": {
+      "triangles": 70000, "textureMemoryMB": 75, "skinnedMeshes": 2, "basicMeshes": 8,
+      "materialSlots": 8, "physBoneComponents": 8, "physBoneTransforms": 64,
+      "physBoneColliders": 8, "physBoneCollisionChecks": 128, "contacts": 16,
+      "constraintCount": 250, "constraintDepth": 50, "animators": 4, "bones": 150,
+      "lights": 0, "particleSystems": 4, "totalParticles": 300, "meshParticlePolys": 1000,
+      "trailRenderers": 2, "lineRenderers": 2, "raycasts": 4, "cloths": 1,
+      "audioSources": 4, "faceTrackingOperations": 4000, "forwardedParameters": 20
+    },
+    "medium": {
+      "triangles": 70000, "textureMemoryMB": 110, "skinnedMeshes": 8, "basicMeshes": 16,
+      "materialSlots": 16, "physBoneComponents": 16, "physBoneTransforms": 128,
+      "physBoneColliders": 16, "physBoneCollisionChecks": 256, "contacts": 24,
+      "constraintCount": 300, "constraintDepth": 80, "animators": 16, "bones": 256,
+      "lights": 0, "particleSystems": 8, "totalParticles": 1000, "meshParticlePolys": 2000,
+      "trailRenderers": 4, "lineRenderers": 4, "raycasts": 8, "cloths": 1,
+      "audioSources": 8, "faceTrackingOperations": 8000, "forwardedParameters": 30
+    },
+    "poor": {
+      "triangles": 70000, "textureMemoryMB": 150, "skinnedMeshes": 16, "basicMeshes": 24,
+      "materialSlots": 32, "physBoneComponents": 32, "physBoneTransforms": 256,
+      "physBoneColliders": 32, "physBoneCollisionChecks": 512, "contacts": 32,
+      "constraintCount": 350, "constraintDepth": 100, "animators": 32, "bones": 400,
+      "lights": 1, "particleSystems": 16, "totalParticles": 2500, "meshParticlePolys": 5000,
+      "trailRenderers": 8, "lineRenderers": 8, "raycasts": 15, "cloths": 1,
+      "audioSources": 8, "faceTrackingOperations": 16000, "forwardedParameters": 40
+    }
+  },
+  "mobile": {
+    "note": "Avatars above Medium are blocked on mobile. Component caps are hard: exceeding one removes that component type entirely.",
+    "excellent": {
+      "triangles": 7500, "textureMemoryMB": 10, "skinnedMeshes": 1, "basicMeshes": 1,
+      "materialSlots": 1, "physBoneComponents": 0, "physBoneTransforms": 0,
+      "physBoneColliders": 0, "physBoneCollisionChecks": 0, "contacts": 2,
+      "constraintCount": 30, "constraintDepth": 5, "animators": 1, "bones": 75,
+      "particleSystems": 0, "totalParticles": 0, "meshParticlePolys": 0,
+      "trailRenderers": 0, "lineRenderers": 0, "raycasts": 1,
+      "faceTrackingOperations": 2000, "forwardedParameters": 10
+    },
+    "good": {
+      "triangles": 10000, "textureMemoryMB": 18, "skinnedMeshes": 1, "basicMeshes": 1,
+      "materialSlots": 1, "physBoneComponents": 4, "physBoneTransforms": 16,
+      "physBoneColliders": 4, "physBoneCollisionChecks": 16, "contacts": 4,
+      "constraintCount": 60, "constraintDepth": 15, "animators": 1, "bones": 90,
+      "particleSystems": 0, "totalParticles": 0, "meshParticlePolys": 0,
+      "trailRenderers": 0, "lineRenderers": 0, "raycasts": 2,
+      "faceTrackingOperations": 4000, "forwardedParameters": 20
+    },
+    "medium": {
+      "triangles": 15000, "textureMemoryMB": 25, "skinnedMeshes": 2, "basicMeshes": 2,
+      "materialSlots": 2, "physBoneComponents": 6, "physBoneTransforms": 32,
+      "physBoneColliders": 8, "physBoneCollisionChecks": 32, "contacts": 8,
+      "constraintCount": 120, "constraintDepth": 35, "animators": 1, "bones": 150,
+      "particleSystems": 0, "totalParticles": 0, "meshParticlePolys": 0,
+      "trailRenderers": 0, "lineRenderers": 0, "raycasts": 4,
+      "faceTrackingOperations": 8000, "forwardedParameters": 30
+    },
+    "poor": {
+      "triangles": 20000, "textureMemoryMB": 40, "skinnedMeshes": 2, "basicMeshes": 2,
+      "materialSlots": 4, "physBoneComponents": 8, "physBoneTransforms": 64,
+      "physBoneColliders": 16, "physBoneCollisionChecks": 64, "contacts": 16,
+      "constraintCount": 150, "constraintDepth": 50, "animators": 2, "bones": 150,
+      "particleSystems": 2, "totalParticles": 200, "meshParticlePolys": 400,
+      "trailRenderers": 1, "lineRenderers": 1, "raycasts": 8,
+      "faceTrackingOperations": 16000, "forwardedParameters": 40
+    }
+  }
+}

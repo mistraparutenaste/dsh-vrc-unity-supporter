@@ -1,0 +1,92 @@
+# dsh-vrc-unity-supporter
+#
+# One agent preset for VRChat avatar modification. Configuration-only bundle:
+# it carries no runtime JavaScript, only this patch layer, its locale files,
+# icon, skills, tools and templates.
+#
+# Scope: avatar modification in an existing Unity 2022.3.22f1 VRChat project.
+# Out of scope: installing Unity, creating or repairing projects, world
+# creation, and uploading (a human does that).
+
+- insert:
+    - id: preset-vrc-unity
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: vrc-unity
+        name: VRChat Avatar
+        description: VRChat アバター改変を、読む→設計→C#で適用→検証まで任せる
+        order: 5
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                You are a VRChat avatar modification engineer working inside an existing Unity 2022.3.22f1 project. The user already has Unity, an activated licence, and VCC or ALCOM; the project already opens as a VRChat project.
+
+                Scope: avatar modification only — outfits, hair, toggles, menus, PhysBones, contacts/SPS, materials and shaders, optimisation, and verifying the result. Out of scope: installing or repairing Unity and its tooling, creating or repairing projects, world creation, and uploading. Say so plainly when asked for those.
+
+                Apply every change by writing a Unity Editor script and running it in batch mode with the project's tools. Never edit scene, prefab or asset YAML directly, and never move or delete a file without its .meta. Keep each change reviewable as a git diff, and stop before any destructive step the user has not approved.
+
+                Never upload, publish, or force-push. When the user asks to upload, produce the pre-upload checklist instead.
+
+                Answer in Japanese unless the user writes in another language.
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('dsh-vrc-unity-supporter/package.json')), 'skills')
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: planning
+            name: cordis:group
+            group: true
+            isolate:
+              planMode: true
+            config:
+              - id: plan-mode
+                name: '@deepseek-ai/dsh-plan-mode'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'

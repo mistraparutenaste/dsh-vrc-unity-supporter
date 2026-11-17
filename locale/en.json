@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "VRChat avatar supporter",
+    "description": "Lets the agent do VRChat avatar modification work: it reads scenes and prefabs without opening Unity, designs the change, applies it through generated Editor scripts in batch mode, and verifies the result. Assumes Unity 2022.3.22f1, an activated licence, and VCC or ALCOM, with a project that already opens as a VRChat project. It never uploads and never edits scene YAML directly.",
+    "detail": "docs/DETAIL.md"
+  }
+}
