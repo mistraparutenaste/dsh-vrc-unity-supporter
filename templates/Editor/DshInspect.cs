@@ -101,6 +101,13 @@ namespace DSH.Editor
             EditorApplication.Exit(ok ? 0 : 1);
         }
 
+        private static bool IsAvatarDescriptor(Component c)
+        {
+            // SDK 3.x names the component VRCAvatarDescriptor; older SDKs used VRC_AvatarDescriptor.
+            var name = c.GetType().Name;
+            return name == "VRCAvatarDescriptor" || name == "VRC_AvatarDescriptor";
+        }
+
         private static IEnumerable<string> AvatarPrefabPaths()
         {
             foreach (var guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets" }))
@@ -113,7 +120,7 @@ namespace DSH.Editor
                 var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (go == null) continue;
                 var hasDescriptor = go.GetComponentsInChildren<Component>(true)
-                    .Any(c => c != null && c.GetType().Name == "VRC_AvatarDescriptor");
+                    .Any(c => c != null && IsAvatarDescriptor(c));
                 if (hasDescriptor) yield return path;
             }
         }

@@ -88,10 +88,12 @@ def iter_assets(root: Path):
 
 
 def read_text(path: Path, limit: int = 32 * 1024 * 1024) -> str:
+    """Read at most `limit` characters. Huge .meta files (FBX imports) are common."""
     try:
-        if path.stat().st_size > limit:
+        if path.stat().st_size == 0:
             return ""
-        return path.read_text("utf-8", errors="replace")
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            return handle.read(limit)
     except OSError:
         return ""
 
@@ -113,7 +115,9 @@ def cmd_index(args) -> int:
             continue
         meta = asset.with_name(asset.name + ".meta")
         if not meta.is_file():
-            no_meta.append(str(asset.relative_to(root)).replace("\\", "/"))
+            rel = str(asset.relative_to(root)).replace("\\", "/")
+            if rel.startswith("Assets/"):   # embedded packages legitimately ship without .meta
+                no_meta.append(rel)
             continue
         m = GUID_RE.search(read_text(meta, 4096))
         if m:
@@ -175,16 +179,8 @@ def child_refs(body: str) -> list[int]:
     return [int(x) for x in re.findall(r"fileID: (-?\d+)", block.group(1))]
 
 
-def cmd_hierarchy(args) -> int:
-    root = find_project(args.project)
-    target = Path(args.asset)
-    if not target.is_absolute():
-        target = root / target
-    text = read_text(target)
-    if not text:
-        raise SystemExit(f"cannot read {target}")
-
-    index = load_index(root)
+def build_tree(text: str, index: dict[str, str]) -> tuple[dict[int, dict], dict[int, int]]:
+    """Parse one asset's YAML into nodes keyed by file id, plus their parent edges."""
     docs = list(script_docs(text))
 
     def is_stub(body: str) -> bool:
@@ -273,22 +269,62 @@ def cmd_hierarchy(args) -> int:
         else:
             parent[nid] = p
 
+    return nodes, parent
+
+
+def _children_of(parent: dict[int, int]) -> dict[int, list[int]]:
     children: dict[int, list[int]] = {}
-    for nid, p in parent.items():
-        children.setdefault(p, []).append(nid)
+    for nid, pid in parent.items():
+        children.setdefault(pid, []).append(nid)
+    return children
 
+
+def cmd_hierarchy(args) -> int:
+    root = find_project(args.project)
+    target = Path(args.asset)
+    if not target.is_absolute():
+        target = root / target
+    text = read_text(target)
+    if not text:
+        raise SystemExit(f"cannot read {target}")
+
+    index = load_index(root)
+    nodes, parent = build_tree(text, index)
+    children = _children_of(parent)
+
+    depth_limit = max(0, int(getattr(args, "depth", 2)))
     rows: list[dict] = []
+    visited = {str(target.resolve())}
 
-    def walk(nid: int, depth: int, path: str):
-        node = nodes[nid]
+    def emit(local_nodes, local_children, nid, depth, path, depth_left):
+        node = local_nodes[nid]
         full = f"{path}/{node['name']}" if path else node["name"]
         rows.append({"depth": depth, "path": full, **node})
-        for child in children.get(nid, []):
-            walk(child, depth + 1, full)
+        for child in local_children.get(nid, []):
+            emit(local_nodes, local_children, child, depth + 1, full, depth_left)
+
+        source = node.get("source")
+        if node.get("kind") == "prefab-instance" and source and depth_left > 0:
+            source_path = (root / source).resolve()
+            key = str(source_path)
+            # Only YAML assets can be expanded; an FBX model has no readable hierarchy here.
+            if source_path.suffix.lower() not in (".prefab", ".unity"):
+                return
+            if key in visited or not source_path.is_file():
+                return
+            visited.add(key)
+            sub_text = read_text(source_path)
+            if not sub_text:
+                return
+            sub_nodes, sub_parent = build_tree(sub_text, index)
+            sub_children = _children_of(sub_parent)
+            for sub_root in sub_nodes:
+                if sub_root not in sub_parent:
+                    emit(sub_nodes, sub_children, sub_root, depth + 1, full, depth_left - 1)
 
     for nid in nodes:
         if nid not in parent:
-            walk(nid, 0, "")
+            emit(nodes, children, nid, 0, "", depth_limit)
 
     if args.json:
         print(json.dumps({"asset": str(target), "nodes": rows}, ensure_ascii=False, indent=2))
@@ -338,17 +374,77 @@ def cmd_refs(args) -> int:
     return 0
 
 
+def vpm_inventory(root: Path) -> tuple[dict[str, str], list[str], str | None]:
+    """Collect VPM packages from every layout a VPM client may leave behind.
+
+    - VCC / ALCOM 2.x: Packages/manifest.json dependencies
+    - legacy vrc-get: Packages/vpm-manifest.json dependencies
+    - either client: packages embedded in Packages/<id>/package.json
+    Returns (packages, sources, lockfile name).
+    """
+    pkg_dir = root / "Packages"
+    packages: dict[str, str] = {}
+    sources: list[str] = []
+    for file_name in ("manifest.json", "vpm-manifest.json"):
+        path = pkg_dir / file_name
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(read_text(path) or "{}")
+        except ValueError:
+            continue
+        found = False
+        for key, value in (data.get("dependencies", {}) or {}).items():
+            if key.startswith("com.unity."):
+                continue
+            if isinstance(value, str):
+                version = value
+            elif isinstance(value, dict):
+                version = str(value.get("version", ""))
+            else:
+                version = ""
+            packages[key] = version
+            found = True
+        if found:
+            sources.append(file_name)
+
+    embedded = 0
+    if pkg_dir.is_dir():
+        for child in pkg_dir.iterdir():
+            manifest = child / "package.json"
+            if not child.is_dir() or not manifest.is_file():
+                continue
+            try:
+                meta = json.loads(read_text(manifest) or "{}")
+            except ValueError:
+                continue
+            name = meta.get("name")
+            if not name or name.startswith("com.unity."):
+                continue
+            embedded += 1
+            packages.setdefault(name, str(meta.get("version", "")))
+    if embedded:
+        sources.append(f"embedded({embedded})")
+
+    lock = None
+    for candidate in ("vpm-lock.json", "vpm-manifest.json"):
+        if (pkg_dir / candidate).is_file():
+            lock = candidate
+            break
+    return packages, sources, lock
+
+
 def cmd_report(args) -> int:
     root = find_project(args.project)
     version = read_text(root / "ProjectSettings" / "ProjectVersion.txt").strip().splitlines()
-    manifest_path = root / "Packages" / "manifest.json"
-    manifest = json.loads(read_text(manifest_path) or "{}")
-    deps = manifest.get("dependencies", {})
-    vpm = {k: v for k, v in deps.items() if not k.startswith("com.unity.")}
-    lock_path = root / "Packages" / "vpm-lock.json"
+    vpm, vpm_sources, lock_name = vpm_inventory(root)
     lock = {}
-    if lock_path.is_file():
-        lock = json.loads(read_text(lock_path) or "{}").get("locked", {}) or {}
+    if lock_name:
+        try:
+            data = json.loads(read_text(root / "Packages" / lock_name) or "{}")
+            lock = data.get("locked", {}) or {}
+        except ValueError:
+            lock = {}
 
     index = load_index(root)
     meta_missing = []
@@ -386,7 +482,8 @@ def cmd_report(args) -> int:
         "unity": {"version": version[0].split(": ", 1)[-1] if version else None},
         "vpm": {
             "packages": vpm,
-            "lock": {"present": lock_path.is_file(), "lockedPackages": len(lock)},
+            "sources": vpm_sources,
+            "lock": {"file": lock_name, "lockedPackages": len(lock)},
         },
         "avatars": sorted(avatars),
         "scripts": {
@@ -404,7 +501,7 @@ def cmd_report(args) -> int:
     print(f"project : {root}")
     print(f"unity   : {report['unity']['version']}")
     print(f"git     : {'yes' if report['git'] else 'NO (git init を提案してください)'}")
-    print(f"vpm     : {len(vpm)} packages, lock {'present' if lock_path.is_file() else 'MISSING'}")
+    print(f"vpm     : {len(vpm)} packages, lock {lock_name or 'MISSING'}")
     for k, v in sorted(vpm.items()):
         print(f"          {k} {v}")
     print(f"avatars : {len(avatars)}")
@@ -444,6 +541,8 @@ def main(argv: list[str]) -> int:
     p_hier = sub.add_parser("hierarchy", help="dump a prefab or scene tree")
     p_hier.add_argument("asset")
     p_hier.add_argument("--project", default=os.getcwd())
+    p_hier.add_argument("--depth", type=int, default=2,
+                        help="how many prefab-instance levels to resolve (default 2, 0 = none)")
     p_hier.add_argument("--json", action="store_true")
     p_hier.set_defaults(func=cmd_hierarchy)
 

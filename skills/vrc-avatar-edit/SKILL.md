@@ -108,6 +108,11 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 | 服が貫通する | 衣装側の PhysBone が未設定 | 衣装 prefab 側を確認 |
 | 髪が動かない | Bone Proxy 未設定 / PhysBone の root が違う | 階層を確認 |
 | アップロード時に警告 | WriteDefaults 混在 / 参照切れ | `vrc-verify` へ |
+| 開いた瞬間 `error CS0246`（`VTPTests.cs` など SDK 内） | SDK が要求する `com.unity.*` が `manifest.json` に無い | `Packages/com.vrchat.base/package.json` の `dependencies` を確認し、不足分を `manifest.json` に追加 |
+| `Packages/vpm-manifest.json` がある | 旧 vrc-get レイアウト | 動作はするが Unity 依存は自動で入らない。上の対処が必要 |
+
+`vrc-get` で入れた直後にコンパイルが落ちる場合、**アセットではなく依存宣言の問題**であることが多い。
+`Assets/` を疑う前に `Packages/` を見る。
 
 ## 9. 委任の切り方
 

@@ -60,6 +60,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 - 1 つでも超えたら、その項目の達成ランクに全体が引き下げられる（最弱の項目で決まる）
 - 例: 三角形 25,000（Excellent）でも Skinned Mesh 2 個なら全体は Good
 
+実測例（Salt v1.0.1）: 68,583 tri / Skinned Mesh 13 / Material Slot 16 /
+Texture 86.5 MB / PhysBone 14 / Constraint 2 → **三角形と Skinned Mesh で Good を超え、
+全体は Medium 相当**。母数としてこの規模感を覚えておくと判断が速い。
+
 ## 3. よく効く改善（コストの低い順）
 
 1. **Avatar Optimizer (AAO) の Trace and Optimize** — 未使用ボーン・ blendshape・

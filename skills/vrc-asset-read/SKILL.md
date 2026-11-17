@@ -27,12 +27,18 @@ python <pkg>/tools/unity_inspect.py report "C:\path\to\Project"
 | 項目 | 意味 |
 |---|---|
 | `unity.version` | `ProjectVersion.txt` の版 |
-| `vpm.packages` | `manifest.json` のうち VPM 由来のもの |
-| `vpm.lock` | `vpm-lock.json` の有無と件数 |
-| `avatars` | `VRC_AvatarDescriptor` を持つ prefab / シーン |
+| `vpm.packages` | 導入済み VPM パッケージ（3 形式をまとめて検出、下記） |
+| `vpm.lock` | `vpm-lock.json` / `vpm-manifest.json` のどちらがあるか |
+| `avatars` | `VRCAvatarDescriptor`（旧 SDK は `VRC_AvatarDescriptor`）を持つ prefab / シーン |
 | `scripts.missing` | 解決できない `m_Script` GUID（**パッケージ不足の証拠**） |
 | `meta.missing` | `.meta` が無いアセット（Unity が GUID を振り直す危険） |
 | `git` | `.git` の有無 |
+
+VPM の検出は 3 形式すべてを見る（クライアントによって書き方が違う）:
+
+1. `Packages/manifest.json` の `dependencies` — VCC / ALCOM 2.x
+2. `Packages/vpm-manifest.json` の `dependencies` — 旧 vrc-get
+3. `Packages/<id>/package.json` — 埋め込みパッケージ（どちらのクライアントでも）
 
 `scripts.missing` が空でないときは、依存パッケージが入っていない。
 インストールを勝手に始めず、まず「何が足りないか」を報告する。
@@ -41,11 +47,15 @@ python <pkg>/tools/unity_inspect.py report "C:\path\to\Project"
 
 ```powershell
 python <pkg>/tools/unity_inspect.py hierarchy "Assets\Avatar.prefab"
+python <pkg>/tools/unity_inspect.py hierarchy "Assets\Avatar.prefab" --depth 0   # 参照解決なし
 ```
 
 各ノードについて `m_Name`、`fileID`、コンポーネント（スクリプト名に解決できたもの）、
-有効/無効を出す。プレハブのインスタンス（`PrefabInstance`）は
-「元 prefab の GUID」として表示し、中身を勝手に展開しない。
+有効/無効を出す。プレハブのインスタンスは元 prefab を解決して展開する（既定 `--depth 2`）。
+
+**FBX モデルのインスタンスは展開できない。** アバターの prefab が `Salt.fbx` のような
+モデル prefab のインスタンスになっている場合、ボーンとメッシュは FBX の中にあり YAML には
+現れない。その場合は `unity-cli` の `DshInspect.Dump`（バッチモード）を使う。
 
 ## 3. 参照をたどる: `refs`
 
@@ -68,6 +78,7 @@ python <pkg>/tools/unity_inspect.py index "C:\path\to\Project"
 
 | 分からない | 代わりに |
 |---|---|
+| FBX モデル内のボーン・メッシュ | `DshInspect.Dump`（バッチモード） |
 | プレハブ override の最終的な値 | Unity で開く（`DshInspect.cs` のバッチダンプ） |
 | 実際の三角形数・マテリアル数 | `vrc-perf-budget`（バッチダンプで計測） |
 | アニメーターの実効状態・遷移 | `vrc-verify`（Gesture Manager など） |

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Checks the prerequisites this preset assumes. Reports PASS / WARN / FAIL and never changes anything.
 
@@ -115,22 +115,48 @@ if ($Project) {
             Add-Check 'project unity' 'FAIL' 'ProjectVersion.txt がありません'
         }
 
-        $manifest = Join-Path $proj 'Packages\manifest.json'
-        if (Test-Path $manifest) {
-            $json = Get-Content $manifest -Raw | ConvertFrom-Json
-            $vpmPkgs = @($json.dependencies.PSObject.Properties | Where-Object { $_.Name -notlike 'com.unity.*' })
-            if ($vpmPkgs.Count -gt 0) {
-                Add-Check 'project vpm packages' 'PASS' (($vpmPkgs | ForEach-Object { "$($_.Name)@$($_.Value)" }) -join ', ')
-            } else {
-                Add-Check 'project vpm packages' 'FAIL' 'VPM パッケージがありません（このプリセットは既存の VRChat プロジェクトを前提にしています）'
+        # VPM packages can live in manifest.json (VCC/ALCOM), vpm-manifest.json (legacy
+        # vrc-get) or as packages embedded under Packages/<id>/package.json.
+        $vpmPkgs = [ordered]@{}
+        foreach ($mf in @('manifest.json', 'vpm-manifest.json')) {
+            $mp = Join-Path $proj "Packages\$mf"
+            if (Test-Path $mp) {
+                try {
+                    $json = Get-Content $mp -Raw -Encoding UTF8 | ConvertFrom-Json
+                    foreach ($prop in $json.dependencies.PSObject.Properties) {
+                        if ($prop.Name -like 'com.unity.*') { continue }
+                        $val = $prop.Value
+                        $ver = if ($val -is [string]) { $val } elseif ($val.version) { [string]$val.version } else { '' }
+                        $vpmPkgs[$prop.Name] = $ver
+                    }
+                } catch { }
             }
+        }
+        foreach ($dir in @(Get-ChildItem (Join-Path $proj 'Packages') -Directory -ErrorAction SilentlyContinue)) {
+            $pkgJson = Join-Path $dir.FullName 'package.json'
+            if (Test-Path $pkgJson) {
+                try {
+                    $meta = Get-Content $pkgJson -Raw -Encoding UTF8 | ConvertFrom-Json
+                    if ($meta.name -and $meta.name -notlike 'com.unity.*' -and -not $vpmPkgs.Contains($meta.name)) {
+                        $vpmPkgs[$meta.name] = [string]$meta.version
+                    }
+                } catch { }
+            }
+        }
+        $vpmList = @($vpmPkgs.Keys | ForEach-Object { "$_@$($vpmPkgs[$_])" })
+        if ($vpmList.Count -gt 0) {
+            Add-Check 'project vpm packages' 'PASS' (($vpmList | Select-Object -First 6) -join ', ')
         } else {
-            Add-Check 'project vpm packages' 'FAIL' 'Packages/manifest.json がありません'
+            Add-Check 'project vpm packages' 'FAIL' 'VPM パッケージがありません（このプリセットは既存の VRChat プロジェクトを前提にしています）'
         }
 
-        $lock = Join-Path $proj 'Packages\vpm-lock.json'
-        if (Test-Path $lock) {
-            Add-Check 'project vpm lock' 'PASS' $lock
+        $lockNames = @('vpm-lock.json', 'vpm-manifest.json')
+        $foundLock = $null
+        foreach ($ln in $lockNames) {
+            if (Test-Path (Join-Path $proj "Packages\$ln")) { $foundLock = $ln }
+        }
+        if ($foundLock) {
+            Add-Check 'project vpm lock' 'PASS' $foundLock
         } else {
             Add-Check 'project vpm lock' 'WARN' 'vpm-lock.json がありません（ALCOM/VCC で一度 resolve してください）'
         }
