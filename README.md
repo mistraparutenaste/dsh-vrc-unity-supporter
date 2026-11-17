@@ -104,6 +104,24 @@ Outfit_Hoodie をメニューから切り替えられるようにして。排他
 そのため **git 管理されていることを前提**にしています。管理されていない場合は、
 最初に `git init` を提案します（勝手には行いません）。
 
+## 公開（メンテナ向け）
+
+```powershell
+npm login
+gh auth login
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\publish.ps1
+```
+
+`publish.ps1` は次を順に実行し、前提が欠けていれば**何も壊さずに止まります**。
+
+1. `verify-package.ps1`（BOM / スキル名 / JSON / `dsh.bundle.patch`）
+2. `npm pack --dry-run` で同梱内容を確認
+3. npm / gh の認証確認（未ログインなら実行すべきコマンドを表示して終了）
+4. `npm publish --access public`（同じ版が既にあれば skip）
+5. `gh repo create ... --push`、`git tag`、タグ push
+
+`-DryRun` を付けると 4 以降を実行せず、何をするかだけ表示します。
+
 ## ライセンス
 
 MIT。サードパーティの扱いは [THIRD-PARTY.md](THIRD-PARTY.md) を参照してください。
