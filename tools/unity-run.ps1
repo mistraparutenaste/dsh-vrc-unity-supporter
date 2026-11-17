@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Runs one Unity Editor method in batch mode against a project.
 

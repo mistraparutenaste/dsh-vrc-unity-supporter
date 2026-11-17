@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Checks the prerequisites this preset assumes. Reports PASS / WARN / FAIL and never changes anything.
 
