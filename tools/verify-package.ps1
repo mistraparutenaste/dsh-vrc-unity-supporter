@@ -25,7 +25,11 @@ $required = @(
     'docs/DETAIL.md', 'docs/DETAIL.ja.md', 'docs/preview.svg',
     'templates/Editor/DshApply.cs', 'templates/Editor/DshInspect.cs',
     'templates/AGENTS.template.md', 'templates/gitignore.template',
-    'tools/doctor.ps1', 'tools/unity-run.ps1', 'tools/unity_inspect.py'
+    'tools/doctor.ps1', 'tools/unity-run.ps1', 'tools/unity_inspect.py',
+    'install.cmd',
+    'installer/install.cmd', 'installer/install.ps1',
+    'installer/uninstall.cmd', 'installer/uninstall.ps1',
+    'installer/README.md'
 )
 foreach ($rel in $required) {
     if (-not (Test-Path (Join-Path $root $rel))) { $problems.Add("missing: $rel") }
@@ -77,6 +81,15 @@ $junk += Get-ChildItem $root -Recurse -Force -Directory -Filter __pycache__ -Err
 $junk += Get-ChildItem $root -Recurse -Force -Filter .DS_Store -ErrorAction SilentlyContinue
 foreach ($item in $junk) {
     $problems.Add("stray build artifact: $($item.FullName.Replace($root, '').TrimStart('\'))")
+}
+
+# 6. .cmd files must be ASCII-only: cmd.exe decodes a batch file with the active code page,
+#    so a UTF-8 Japanese line can be split into broken commands.
+foreach ($cmd in Get-ChildItem $root -Recurse -Filter *.cmd -File | Where-Object { $_.FullName -notmatch '\\node_modules\\' }) {
+    $bytes = [System.IO.File]::ReadAllBytes($cmd.FullName)
+    if (@($bytes | Where-Object { $_ -gt 0x7F }).Count -gt 0) {
+        $problems.Add("non-ASCII bytes in a .cmd (cmd.exe will misparse it): $($cmd.Name)")
+    }
 }
 
 if ($problems.Count -eq 0) {

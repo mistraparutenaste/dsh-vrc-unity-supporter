@@ -31,6 +31,19 @@ DeepSeek Harness のエージェントプリセット。**VRChat アバターの
 
 ## インストール
 
+### 0. かんたんインストール（Windows・プリセットを入れるだけ）
+
+DeepSeek Harness を終了してから **`install.cmd` をダブルクリック**してください。
+同梱の CLI で入れて、依存・実体・有効化の 3 点を検証してから完了を表示します。
+
+```powershell
+# 中身はこれだけです（何をするか読めます）
+dsh plugin --profile desktop add dsh-vrc-unity-supporter
+```
+
+うまくいかないときは [`installer/README.md`](installer/README.md) を見てください。
+削除は `uninstall.cmd`。
+
 ### 1. npm（推奨）
 
 ```
