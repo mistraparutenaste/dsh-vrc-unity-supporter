@@ -51,10 +51,18 @@ foreach ($dir in Get-ChildItem $skillsDir -Directory) {
     }
 }
 
-# 3. JSON parses
-foreach ($json in @('package.json', 'locale/en.json', 'locale/ja.json')) {
-    try { $null = Get-Content (Join-Path $root $json) -Raw -Encoding UTF8 | ConvertFrom-Json }
-    catch { $problems.Add("invalid JSON: $json") }
+# 3. JSON parses, and carries no UTF-8 BOM (a BOM breaks JSON.parse in the Host)
+$jsonFiles = Get-ChildItem $root -Recurse -Include *.json -File |
+    Where-Object { $_.FullName -notmatch '\\(node_modules|\.git)\\' }
+foreach ($jsonFile in $jsonFiles) {
+    $bytes = [System.IO.File]::ReadAllBytes($jsonFile.FullName)
+    $rel = $jsonFile.FullName.Replace($root, '').TrimStart('\')
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $problems.Add("JSON has a UTF-8 BOM (the Host cannot parse it): $rel")
+        continue
+    }
+    try { $null = Get-Content $jsonFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json }
+    catch { $problems.Add("invalid JSON: $rel") }
 }
 
 # 4. the bundle declares a patch and an icon export

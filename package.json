@@ -1,39 +1,39 @@
-﻿{
-    "name":  "dsh-vrc-unity-supporter",
-    "version":  "0.1.1",
-    "description":  "DeepSeek Harness agent preset for VRChat avatar modification: read Unity projects without opening the editor, design the change, apply it through generated Editor scripts in batch mode, and verify the result.",
-    "type":  "module",
-    "license":  "MIT",
-    "keywords":  [
-                     "dsh",
-                     "deepseek-harness",
-                     "agent-preset",
-                     "vrchat",
-                     "unity",
-                     "avatar",
-                     "modular-avatar",
-                     "vrcfury"
-                 ],
-    "exports":  {
-                    "./package.json":  "./package.json",
-                    "./locale/*.json":  "./locale/*.json",
-                    "./icon":  "./icon.svg"
-                },
-    "files":  [
-                  "cordis.patch.yml",
-                  "locale/*.json",
-                  "docs",
-                  "icon.svg",
-                  "skills",
-                  "tools",
-                  "templates",
-                  "README.md",
-                  "LICENSE",
-                  "THIRD-PARTY.md"
-              ],
-    "dsh":  {
-                "bundle":  {
-                               "patch":  "./cordis.patch.yml"
-                           }
-            }
+{
+  "name": "dsh-vrc-unity-supporter",
+  "version": "0.1.1",
+  "description": "DeepSeek Harness agent preset for VRChat avatar modification: read Unity projects without opening the editor, design the change, apply it through generated Editor scripts in batch mode, and verify the result.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "agent-preset",
+    "vrchat",
+    "unity",
+    "avatar",
+    "modular-avatar",
+    "vrcfury"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "skills",
+    "tools",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
 }
