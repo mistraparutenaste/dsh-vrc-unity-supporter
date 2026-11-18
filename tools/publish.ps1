@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Publishes this bundle to npm and pushes it to GitHub.
 
