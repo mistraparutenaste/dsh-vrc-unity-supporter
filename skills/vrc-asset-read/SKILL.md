@@ -29,7 +29,7 @@ python <pkg>/tools/unity_inspect.py report "C:\path\to\Project"
 | `unity.version` | `ProjectVersion.txt` の版 |
 | `vpm.packages` | 導入済み VPM パッケージ（3 形式をまとめて検出、下記） |
 | `vpm.lock` | `vpm-lock.json` / `vpm-manifest.json` のどちらがあるか |
-| `avatars` | `VRCAvatarDescriptor`（旧 SDK は `VRC_AvatarDescriptor`）を持つ prefab / シーン |
+| `avatars` | `Assets/` 内で `VRCAvatarDescriptor`（SDK 3.x は VRCSDK3A.dll 内）を使う prefab / シーンの**候補**。prefab バリアントは親だけが出るので、正確な一覧は `DshInspect.Perf` / `Dump` で取る |
 | `scripts.missing` | 解決できない `m_Script` GUID（**パッケージ不足の証拠**） |
 | `meta.missing` | `.meta` が無いアセット（Unity が GUID を振り直す危険） |
 | `git` | `.git` の有無 |

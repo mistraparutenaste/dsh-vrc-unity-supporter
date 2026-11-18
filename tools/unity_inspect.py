@@ -453,6 +453,12 @@ def cmd_report(args) -> int:
     avatar_script_guids = {
         guid for guid, path in index.items() if path.endswith("VRC_AvatarDescriptor.cs")
     }
+    # SDK 3.x keeps the descriptor inside VRCSDK3A.dll, so the .cs name is not in the index.
+    # A prefab that uses any component from that assembly is an avatar for our purposes.
+    avatar_assembly_guids = {
+        guid for guid, path in index.items() if path.endswith("VRCSDK3A.dll")
+    }
+    avatar_markers = avatar_script_guids | avatar_assembly_guids
 
     for asset in iter_assets(root):
         if asset.suffix == ".meta":
@@ -469,7 +475,8 @@ def cmd_report(args) -> int:
         guids = set(re.findall(r"m_Script: \{fileID: -?\d+, guid: ([0-9a-f]{32})", text))
         script_guids |= guids
         rel = str(asset.relative_to(root)).replace("\\", "/")
-        if avatar_script_guids & guids:
+        # Packages/ holds SDK samples and tool prefabs; a user's avatars live under Assets/.
+        if rel.startswith("Assets/") and avatar_markers & guids:
             avatars.append(rel)
 
     missing_scripts = sorted(
