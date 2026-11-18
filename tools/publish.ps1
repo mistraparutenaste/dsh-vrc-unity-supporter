@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Publishes this bundle to npm and pushes it to GitHub.
 
@@ -16,12 +16,20 @@
 param(
     [switch]$DryRun,
     [string]$Owner,
-    [string]$PackageName = 'dsh-vrc-unity-supporter'
+    [string]$PackageName = 'dsh-vrc-unity-supporter',
+    [string]$Token,
+    [string]$Otp
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+# A token (granular access token with 2FA bypass) makes publishing non-interactive.
+# It is only set for this process and never printed.
+if ($Token) { $env:NODE_AUTH_TOKEN = $Token }
+$usingToken = [bool]($Token -or $env:NODE_AUTH_TOKEN -or $env:NPM_TOKEN)
+if (-not $env:NODE_AUTH_TOKEN -and $env:NPM_TOKEN) { $env:NODE_AUTH_TOKEN = $env:NPM_TOKEN }
 
 function Step([string]$text) { Write-Host "== $text" -ForegroundColor Cyan }
 
@@ -60,8 +68,15 @@ Write-Host ("   " + ($fileLine -replace '\s+', ' ').Trim())
 # --- 2. credentials ----------------------------------------------------------
 Step 'credentials'
 $who = Invoke-Native 'npm whoami'
-if ($who.Code -ne 0 -or -not $who.Output) { Stop-WithHelp 'npm にログインしていません' 'npm login' }
-Write-Host "   npm user: $($who.Output)"
+if ($who.Code -ne 0 -or -not $who.Output) {
+    if ($usingToken) {
+        Write-Host '   npm: トークンで認証（whoami はスキップ）' -ForegroundColor DarkGray
+    } else {
+        Stop-WithHelp 'npm にログインしていません' 'npm login（または -Token でトークンを渡す）'
+    }
+} else {
+    Write-Host "   npm user: $($who.Output)"
+}
 
 $ghStatus = Invoke-Native 'gh auth status'
 if ($ghStatus.Code -ne 0) { Stop-WithHelp 'GitHub CLI が未ログインです' 'gh auth login' }
@@ -79,9 +94,15 @@ if ($view.Code -eq 0 -and $view.Output) {
 } elseif ($DryRun) {
     Write-Host '   [dry-run] npm publish --access public'
 } else {
-    $pub = Invoke-Native 'npm publish --access public'
-    Write-Host $pub.Output
-    if ($pub.Code -ne 0) { Stop-WithHelp 'npm publish に失敗しました' 'npm publish --access public' }
+    # A token must be passed as the registry auth flag; NODE_AUTH_TOKEN alone is not used by
+    # `npm publish` on this npm version, even though `npm whoami` honours it.
+    $publishCommand = 'npm publish --access public'
+    if ($env:NODE_AUTH_TOKEN) { $publishCommand += " --//registry.npmjs.org/:_authToken=$($env:NODE_AUTH_TOKEN)" }
+    if ($Otp) { $publishCommand += " --otp=$Otp" }
+    $pub = Invoke-Native $publishCommand
+    $shown = $pub.Output -replace 'npm_[A-Za-z0-9]+', 'npm_***'
+    Write-Host $shown
+    if ($pub.Code -ne 0) { Stop-WithHelp 'npm publish に失敗しました' 'npm publish --access public（トークンは --//registry.npmjs.org/:_authToken= で渡す）' }
 }
 
 # --- 4. push to GitHub -------------------------------------------------------

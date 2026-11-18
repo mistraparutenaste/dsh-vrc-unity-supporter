@@ -1,9 +1,9 @@
 name: publish
 
+# Manual only: a tag push would run this on every release even before NPM_TOKEN exists,
+# leaving red runs on a repository that friends browse. Run it from the Actions tab.
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
