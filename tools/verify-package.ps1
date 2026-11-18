@@ -62,6 +62,15 @@ $pkgJson = Get-Content (Join-Path $root 'package.json') -Raw -Encoding UTF8 | Co
 if (-not $pkgJson.dsh.bundle.patch) { $problems.Add('package.json: dsh.bundle.patch is missing') }
 if (-not $pkgJson.exports.'./package.json') { $problems.Add('package.json: exports["./package.json"] is required for the skills path') }
 
+# 5. no Python bytecode or editor junk gets packed
+$junk = @()
+$junk += Get-ChildItem $root -Recurse -Force -Filter *.pyc -ErrorAction SilentlyContinue
+$junk += Get-ChildItem $root -Recurse -Force -Directory -Filter __pycache__ -ErrorAction SilentlyContinue
+$junk += Get-ChildItem $root -Recurse -Force -Filter .DS_Store -ErrorAction SilentlyContinue
+foreach ($item in $junk) {
+    $problems.Add("stray build artifact: $($item.FullName.Replace($root, '').TrimStart('\'))")
+}
+
 if ($problems.Count -eq 0) {
     Write-Host 'verify-package: OK' -ForegroundColor Green
     exit 0

@@ -1,0 +1,9 @@
+# Python bytecode from running the tools during development
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+*.log

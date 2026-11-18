@@ -1,0 +1,7 @@
+# Never publish these, even if a broad `files` entry matches them.
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+Thumbs.db
+*.log
