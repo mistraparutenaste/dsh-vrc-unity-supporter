@@ -80,6 +80,11 @@
             config:
               - id: plan-mode
                 name: '@deepseek-ai/dsh-plan-mode'
+                config:
+                  section: |
+                    Inspect the Unity project with read-only tools. Leave files and project settings unchanged while planning.
+                    Identify the target assets, the proposed changes, and how to verify them.
+                    Present the plan with exit_plan_mode for the user's approval before applying changes.
           - id: compaction
             name: cordis:group
             group: true

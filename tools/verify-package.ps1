@@ -8,6 +8,7 @@
   - each skills/<dir>/SKILL.md declares the same name as its directory
   - required runtime files exist
   - package.json and locale files parse
+  - the plan-mode plugin declares non-empty guidance
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File verify-package.ps1
@@ -91,6 +92,19 @@ foreach ($cmd in Get-ChildItem $root -Recurse -Filter *.cmd -File | Where-Object
     $bytes = [System.IO.File]::ReadAllBytes($cmd.FullName)
     if (@($bytes | Where-Object { $_ -gt 0x7F }).Count -gt 0) {
         $problems.Add("non-ASCII bytes in a .cmd (cmd.exe will misparse it): $($cmd.Name)")
+    }
+}
+
+# 7. DSH rejects the preset if plan-mode has no guidance text in config.section.
+$patchPath = Join-Path $root 'cordis.patch.yml'
+if (Test-Path $patchPath -PathType Leaf) {
+    $patch = Get-Content $patchPath -Raw -Encoding UTF8
+    $planSection = '(?m)^(?<indent> *)name: ''@deepseek-ai/dsh-plan-mode''[ \t]*\r?\n' +
+        '\k<indent>config:[ \t]*\r?\n' +
+        '\k<indent>  section: \|[ \t]*\r?\n' +
+        '(?:[ \t]*\r?\n)*\k<indent>    [ \t]*\S'
+    if ($patch -cnotmatch $planSection) {
+        $problems.Add('cordis.patch.yml: plan-mode requires a non-empty config.section block')
     }
 }
 
