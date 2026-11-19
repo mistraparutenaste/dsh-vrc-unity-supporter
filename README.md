@@ -1,123 +1,84 @@
 # dsh-vrc-unity-supporter
 
-DeepSeek Harness のエージェントプリセット。**VRChat アバターの改変を AI に任せる**ためのものです。
+このリポジトリは、DeepSeek Harness（DSH）で VRChat アバターを改変するときに、エージェントが手順に沿って操作できるようにするプラグインです。チャットでアバターの構成を調べたり、シーンに配置した衣装をメニューで切り替えられるようにしたりできます。変更は Unity 経由で適用し、結果と戻し方をチャットで確認できます。
 
-土台を作る道具ではありません。Unity と VCC/ALCOM が入っていて、VRChat プロジェクトが
-開ける状態の人を対象にしています。
+## セットアップ
 
-## これがやること
+Windows で、まだ入っていないものを用意してください。
 
-```
-読む（Unity不要） → 設計 → C# を書く → バッチ適用 → 検証 → git 差分
-```
+| 必要なもの | 準備すること |
+| --- | --- |
+| **DeepSeek Harness Desktop** | 公式サイトの **Download Desktop → Windows (64-bit)** からインストールします。起動後は画面の案内に沿って初期設定を済ませ、チャットを送れることを確認します。 [DSH 公式サイト](https://www.deepseek.com/en/harness/) |
+| **Git for Windows** | Git は改変前の状態を記録し、あとで元に戻すために使います。記録は PC の中で完結します。まず Windows 用のインストーラーで Git を入れます。 [Git のダウンロード](https://git-scm.com/install/win) |
+| **Python 3.10 以上** | アバターの構成を調べるために使います。インストール後、DSH を開き直してください。 [Python の Windows 向けダウンロード](https://www.python.org/downloads/windows/) |
+| **Unity Hub と Unity 2022.3.22f1** | Unity Hub で有効なライセンスを設定し、指定のバージョンでプロジェクトを開けることを確認します。 [VRChat 公式の Unity 導入案内](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
+| **VCC または ALCOM とアバタープロジェクト** | 普段使っている管理アプリをどちらか一つ使用します。作業対象は **VRChat SDK - Avatars** が導入済みで、Unity で開けるプロジェクトです。 [VCC のセットアップ](https://vcc.docs.vrchat.com/guides/getting-started/) · [ALCOM のダウンロード](https://vrc-get.anatawa12.com/alcom/) |
 
-1. **読む** — シーン・プレハブ・`.meta` を解析し、階層・コンポーネント・参照切れを Unity を開かずに報告する
-2. **設計** — 衣装・髪・トグル・メニュー・SPS・最適化の進め方を、実行順序（MA → VRCFury → AAO）を踏まえて組み立てる
-3. **適用** — 改変を Editor スクリプトとして書き、バッチモードで Unity に適用する
-4. **検証** — コンパイル・パフォーマンス試算・非アップロード検証を行い、結果を報告する
+下の例で **衣装トグル** を作る場合は、対象プロジェクトに **VRCFury** を導入し、アバターと衣装を同じシーンに配置して保存してください。実機での動作確認には VRChat クライアントを使います。 [VRCFury の導入手順](https://vrcfury.com/download/) · [VRChat のローカルテスト手順](https://creators.vrchat.com/avatars/#local-avatar-testing)
 
-シーン/プレハブの YAML を直接書き換えることはありません。変更は必ず Unity 経由で、
-`git diff` で全部レビューできます。
+## 動作確認環境
 
-## 前提
+| 項目 | 設定 |
+| --- | --- |
+| アプリ | DeepSeek Harness Desktop（Windows） |
+| モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） |
+| エフォート（推論の強さ） | `MAX` |
 
-| 必要 | 確認 |
-|---|---|
-| Unity 2022.3.22f1（VRChat 対応版） | `tools/doctor.ps1` |
-| 有効な Unity ライセンス | 同上（無効だとバッチモードが動きません） |
-| VCC または ALCOM | どちらか一方で可 |
-| VRChat プロジェクト（SDK 導入済み） | 同上 |
-| `vrc-get` CLI（**任意**） | あるとパッケージ操作を自動化。無ければ GUI 手順を提示します |
+上記以外の組み合わせでの動作は確認していません。
 
-## インストール
+## プラグインのインストール
 
-### 0. かんたんインストール（Windows・プリセットを入れるだけ）
+1. DSH を開き、**Plugins** → **Add plugin** を選びます。
+2. 入力欄に次のパッケージ名を貼り付け、インストールします。
 
-DeepSeek Harness を終了してから **`install.cmd` をダブルクリック**してください。
-同梱の CLI で入れて、依存・実体・有効化の 3 点を検証してから完了を表示します。
+   ```text
+   dsh-vrc-unity-supporter
+   ```
 
-```powershell
-# 中身はこれだけです（何をするか読めます）
-dsh plugin --profile desktop add dsh-vrc-unity-supporter
-```
+3. DSH で **新しいセッション** を作り、プリセットの一覧に **VRChat Avatar** が表示されることを確認します。
 
-うまくいかないときは [`installer/README.md`](installer/README.md) を見てください。
-削除は `uninstall.cmd`。
+### ZIP を使う場合
 
-### 1. npm（推奨）
+1. この GitHub ページの **Code** → **Download ZIP** を選びます。
+2. ダウンロードした ZIP を右クリックして **すべて展開** を選びます。
+3. DSH を終了し、展開したフォルダにある **`install.cmd`** をダブルクリックします。
+4. 「完了しました」と表示されたら、DSH を起動し直して **新しいセッション** で **VRChat Avatar** を選びます。
 
-```
-plugin_manager install_bundle target: "dsh-vrc-unity-supporter"
-```
+`install.cmd` は DSH に同梱されたコマンドを使い、npm から公開版を取得してインストールします。インストール時はインターネットに接続してください。 [インストーラーの詳細と削除方法](installer/README.md)
 
-または **Plugins** 画面でパッケージ名を入力。更新は Update ボタンから。
-
-### 2. GitHub
-
-```
-plugin_manager install_bundle target: "https://github.com/<owner>/dsh-vrc-unity-supporter"
-```
-
-### 3. clone
-
-```powershell
-git clone https://github.com/<owner>/dsh-vrc-unity-supporter
-```
-
-**Plugins** > **Add plugin** でそのディレクトリを指定。
-
-インストール後、**新しいセッション**を作り、プリセットで `VRChat Avatar` を選んでください。
-既存のセッションには反映されません。
-
-## プロジェクトへの初期配置
-
-プリセットはプロジェクトの中に 3 つ置くものがあります。初回だけコピーしてください。
-
-```
-templates/Editor/*.cs        -> <Project>/Assets/DSH/Editor/
-templates/gitignore.template -> <Project>/.gitignore
-templates/AGENTS.template.md -> <Project>/AGENTS.md
-```
-
-`Assets/DSH/Editor/` が無いとバッチモードから `-executeMethod` を呼べません。
-`AGENTS.md` はセッション開始時に読まれ、アバター名・導入済みパッケージ・性能予算を
-エージェントに伝えます（分かる範囲で埋めてください）。
+プラグインのバージョンが **0.2.0** の場合は、Editor スクリプトの初期配置を手動で行います。 [0.2.0 のセットアップ手順](https://github.com/mistraparutenaste/dsh-vrc-unity-supporter/blob/v0.2.0/README.md#プロジェクトへの初期配置)
 
 ## 最初に試す
 
-```
-このプロジェクトのアバター構成を調べて
-```
+1. DSH のワークスペースで、改変したい Unity プロジェクトのフォルダを開きます。`Assets`、`Packages`、`ProjectSettings` が並んでいるフォルダです。
+2. 新しいセッションのプリセットを **VRChat Avatar**、モデルを **DeepSeek V4.1 Flash**、エフォートを **MAX** に設定します。
+3. チャットに次の一文を入力します。最初はプロジェクトのファイルを読み取るだけです。Unity の起動や Git での記録は、改変を適用するときに行います。
 
-```
-Outfit_Hoodie をメニューから切り替えられるようにして。排他は outfit タグで
-```
+   ```text
+   このプロジェクトのアバター構成を調べて
+   ```
 
-```
-いまの三角形数とマテリアル数から、PC のパフォーマンスランクを試算して
-```
+4. アバターと衣装が確認できたら、衣装名を自分のプロジェクトの名前に置き換えて依頼します。適用前に、シーンを保存して Unity を閉じてください。
 
-## やらないこと
+   ```text
+   Outfit_Hoodie を「衣装/パーカー」からオン・オフできるようにして。初期状態はオンで
+   ```
 
-- Unity / ALCOM / VCC のインストール、ライセンス設定
-- プロジェクトの新規作成・修復
-- ワールド制作（World SDK / UdonSharp / ライティング）
-- **アップロード**（チェックリストを出します。実行は人間が行ってください）
-- アセットのリッピングや VRChat ToS に反する操作
+DSH が対象と変更予定を示します。初めて Git を使うプロジェクトでは、PC 上に復元地点を作る手順が案内されます。内容を確認してから適用を進めてください。
 
-## 仕組み（なぜ YAML を触らないのか）
+適用後は Unity でプロジェクトを開き、**VRChat SDK → Show Control Panel → Builder** の **Offline Testing** にある **Build & Test** を選びます。VRChat の **SDK Test Avatars** でテスト用アバターを選び、衣装の切り替えを確認してください。アップロードは Unity からご自身で行います。 [VRChat のローカルテスト手順](https://creators.vrchat.com/avatars/#local-avatar-testing)
 
-シーンやプレハブの YAML を直接編集すると、GUID と参照が壊れて復旧が難しくなります。
-このプリセットは代わりに **Editor スクリプトを生成して Unity に適用させます**。
+## 困ったとき
 
-- 改変がコードとして残る（手作業の順序に依存しない）
-- 失敗したら script ごと revert できる
-- `git diff` で何が変わったか全部見える
+- **VRChat Avatar が表示されない**。Plugins でプラグインが入っていることを確認し、DSH で新しいセッションを作ります。
+- **プロジェクトが見つからない**。DSH で開いているフォルダに `Assets` と `ProjectSettings` があるか確認します。
+- **Git の名前やメールアドレスを求められた**。DSH に「このプロジェクトで Git の名前とメールアドレスを設定する方法を教えて」と聞いてください。
+- **インストーラーが途中で止まる**。DSH をタスクトレイからも終了し、画面に表示されたエラーを確認してください。 [インストーラーのトラブル対処](installer/README.md#うまくいかないとき)
 
-そのため **git 管理されていることを前提**にしています。管理されていない場合は、
-最初に `git init` を提案します（勝手には行いません）。
+<details>
+<summary>メンテナー向けのテストと公開手順</summary>
 
-## 公開（メンテナ向け）
+Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取りと適用 CLI の回帰テストを実行できます。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
 
 ```powershell
 npm login
@@ -134,6 +95,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\publish.ps1
 5. `gh repo create ... --push`、`git tag`、タグ push
 
 `-DryRun` を付けると 4 以降を実行せず、何をするかだけ表示します。
+
+</details>
 
 ## ライセンス
 

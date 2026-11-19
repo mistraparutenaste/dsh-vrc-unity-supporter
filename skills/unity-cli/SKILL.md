@@ -22,7 +22,7 @@ Unity Hub は `C:\Program Files\Unity\Hub\Editor\<version>\Editor\Unity.exe` に
 & "<Unity.exe>" -batchmode -nographics -quit `
   -projectPath "<project>" `
   -executeMethod "<Namespace.Class.Method>" `
-  -logFile "<project>\.dsh\logs\<name>.log"
+  -logFile "<project>\.dsh\runs\<run-id>\<name>.log"
 ```
 
 | 引数 | 意味 |
@@ -37,8 +37,9 @@ Unity Hub は `C:\Program Files\Unity\Hub\Editor\<version>\Editor\Unity.exe` に
 
 | 終了コード | 意味 | 見る場所 |
 |---|---|---|
-| 0 | 成功 | 結果 JSON |
+| 0 | 成功 | 同じ実行ディレクトリの `result.json` |
 | 1 | 失敗（例外・コンパイルエラー・ライセンス） | ログの末尾 |
+| 124 | タイムアウト | ログの末尾 |
 | その他 | Unity 自体の異常終了 | ログ全体 |
 
 ログで探す文字列:
@@ -57,7 +58,7 @@ Unity がプロジェクトを開いている間は、別プロセスから同�
 検出:
 
 ```
-<project>/Temp/UnityLockfile      ← 存在すれば起動中
+<project>/Temp/UnityLockfile          ← ロックが残っている可能性
 <project>/Library/EditorInstance.json  ← pid が入る
 ```
 
@@ -85,13 +86,5 @@ DSh のジョブ機能（`tool-jobs`）でバックグラウンド実行し、�
 
 ## 7. 初回だけ必要な準備
 
-`templates/` から 3 つをプロジェクトへコピーする。
-
-```
-templates/Editor/*.cs        -> <project>/Assets/DSH/Editor/
-templates/gitignore.template -> <project>/.gitignore
-templates/AGENTS.template.md -> <project>/AGENTS.md
-```
-
-`Editor` 配下でないと `-executeMethod` が「メソッドが見つからない」で失敗する。
-`doctor.ps1` が配置も確認する。
+初回の衣装トグルは `vrc-first-run` の適用コマンドがヘルパーを配置する。独自タスクでは `templates/Editor/` の必要なファイルを `Assets/DSH/Editor/` に配置する。
+旧テンプレートだけを使っているプロジェクトは、新しい `DshApply.cs` を取り込む。独自の結果を返さない既存メソッドでは `-AllowMissingResult` を指定できる。

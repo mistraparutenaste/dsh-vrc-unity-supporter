@@ -22,7 +22,7 @@ description: VRChat アバター改変の設計と手順。衣装・髪の装着
 |---|---|
 | アバターの prefab とシーン | プロジェクト直下の `AGENTS.md` → `unity_inspect.py hierarchy` |
 | 導入済みパッケージと版 | `Packages/manifest.json`、`Packages/vpm-lock.json` |
-| 改変対象（衣装/髪）の prefab | `unity_inspect.py refs <prefab>` |
+| 改変対象（衣装/髪）の prefab | `unity_inspect.py refs --path <prefab>` |
 | 現在の性能値 | `vrc-perf-budget` の手順で計測 |
 
 `AGENTS.md` が無い場合は、判明した事実から `templates/AGENTS.template.md` を元に作ることを提案する

@@ -46,7 +46,7 @@ Mobile は **Medium を超えると表示されない**（Poor / Very Poor は�
 
 ## 2. 数え方
 
-正確な値は Unity に数えさせる（`unity_inspect.py` では概算しか出せない）。
+Unityで元Prefabを数え、ビルド前の参考値として使う。MA、VRCFury、AAOなどのビルド処理後の値とランクはVRChat SDKで確認する。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File `
@@ -54,15 +54,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
   -Method "DSH.Editor.DshInspect.Perf"
 ```
 
-`Assets/DSH/Results/Perf.json` に項目別のカウントが出る。判定ルール:
+今回の `result.json` に項目別のカウントが出る。Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクスチャメモリは概算。未計測の項目がある場合は測った項目ごとの目安を伝える。
 
 - **その項目が Excellent の上限以下なら Excellent を維持**
 - 1 つでも超えたら、その項目の達成ランクに全体が引き下げられる（最弱の項目で決まる）
 - 例: 三角形 25,000（Excellent）でも Skinned Mesh 2 個なら全体は Good
 
-実測例（Salt v1.0.1）: 68,583 tri / Skinned Mesh 13 / Material Slot 16 /
-Texture 86.5 MB / PhysBone 14 / Constraint 2 → **三角形と Skinned Mesh で Good を超え、
-全体は Medium 相当**。母数としてこの規模感を覚えておくと判断が速い。
+例として、三角形68,583はGood、Skinned Mesh 13はPoorの範囲。ビルド後はSDKで全項目を確認する。
 
 ## 3. よく効く改善（コストの低い順）
 

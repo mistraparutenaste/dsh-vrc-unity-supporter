@@ -11,6 +11,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+. (Join-Path $PSScriptRoot 'unity-environment.ps1')
 $results = [System.Collections.Generic.List[object]]::new()
 
 function Add-Check {
@@ -42,23 +44,20 @@ $editorBases += (Join-Path $env:ProgramFiles 'Unity\Hub\Editor')
 $editorBases += 'D:\Unity\Hub\Editor'
 $editorBases += 'E:\Unity\Hub\Editor'
 foreach ($base in $editorBases) {
-    if ($base -and (Test-Path $base)) {
+    if ($base -and (Test-Path -LiteralPath $base -ErrorAction SilentlyContinue)) {
         $editors += Get-ChildItem $base -Directory -ErrorAction SilentlyContinue
     }
 }
-if ($editors.Count -gt 0) {
+if ($env:UNITY_EDITOR_PATH -and (Test-Path -LiteralPath $env:UNITY_EDITOR_PATH -PathType Leaf)) {
+    Add-Check 'unity editors' 'PASS' $env:UNITY_EDITOR_PATH
+} elseif ($editors.Count -gt 0) {
     Add-Check 'unity editors' 'PASS' (($editors | ForEach-Object { $_.Name }) -join ', ')
 } else {
     Add-Check 'unity editors' 'FAIL' 'Unity Editor が見つかりません'
 }
 
-# --- licence ----------------------------------------------------------------
-$lic = Join-Path $env:LOCALAPPDATA 'Unity\licenses'
-if (Test-Path $lic) {
-    Add-Check 'unity licence' 'PASS' $lic
-} else {
-    Add-Check 'unity licence' 'FAIL' 'ライセンスが未認証です。Unity Hub でサインインしてください（バッチモードが動きません）'
-}
+# Unity verifies the active licence when the Editor starts.
+Add-Check 'unity licence' 'WARN' '事前確認では未判定です。Unity 起動時の結果を確認してください'
 
 # --- VCC / ALCOM ------------------------------------------------------------
 $vcc = Join-Path $env:LOCALAPPDATA 'VRChatCreatorCompanion'
@@ -85,34 +84,26 @@ if ($vrcGet) {
 
 # --- project checks ---------------------------------------------------------
 if ($Project) {
-    if (-not (Test-Path $Project)) {
+    if (-not (Test-Path -LiteralPath $Project -PathType Container)) {
         Add-Check 'project' 'FAIL' "パスが存在しません: $Project"
     } else {
-        $proj = (Resolve-Path $Project).Path
+        $proj = (Resolve-Path -LiteralPath $Project).Path
         Add-Check 'project' 'PASS' $proj
 
-        $versionFile = Join-Path $proj 'ProjectSettings\ProjectVersion.txt'
-        if (Test-Path $versionFile) {
-            $line = (Get-Content $versionFile | Where-Object { $_ -match '^m_EditorVersion:' } | Select-Object -First 1)
-            $ver = ($line -split ':', 2)[1].Trim()
+        $ver = Get-DshUnityVersion $proj
+        if ($ver) {
             Add-Check 'project unity' 'PASS' $ver
             if ($ver -ne '2022.3.22f1') {
                 Add-Check 'project unity' 'WARN' "VRChat の現在の対応版は 2022.3.22f1 です（検出: $ver）"
             }
-            $exe = $null
-            foreach ($e in $editors) {
-                if ($e.Name -eq $ver) {
-                    $candidate = Join-Path $e.FullName 'Editor\Unity.exe'
-                    if (Test-Path $candidate) { $exe = $candidate }
-                }
-            }
+            $exe = Find-DshUnityEditor $ver
             if ($exe) {
                 Add-Check 'editor for project' 'PASS' $exe
             } else {
                 Add-Check 'editor for project' 'FAIL' "$ver の Editor が見つかりません（Unity Hub で追加してください）"
             }
         } else {
-            Add-Check 'project unity' 'FAIL' 'ProjectVersion.txt がありません'
+            Add-Check 'project unity' 'FAIL' 'ProjectVersion.txt から Unity のバージョンを読めません'
         }
 
         # VPM packages can live in manifest.json (VCC/ALCOM), vpm-manifest.json (legacy
@@ -120,10 +111,11 @@ if ($Project) {
         $vpmPkgs = [ordered]@{}
         foreach ($mf in @('manifest.json', 'vpm-manifest.json')) {
             $mp = Join-Path $proj "Packages\$mf"
-            if (Test-Path $mp) {
+            if (Test-Path -LiteralPath $mp) {
                 try {
-                    $json = Get-Content $mp -Raw -Encoding UTF8 | ConvertFrom-Json
-                    foreach ($prop in $json.dependencies.PSObject.Properties) {
+                    $json = Get-Content -LiteralPath $mp -Raw -Encoding UTF8 | ConvertFrom-Json
+                    foreach ($prop in @($json.dependencies.PSObject.Properties) + @($json.locked.PSObject.Properties)) {
+                        if (-not $prop) { continue }
                         if ($prop.Name -like 'com.unity.*') { continue }
                         $val = $prop.Value
                         $ver = if ($val -is [string]) { $val } elseif ($val.version) { [string]$val.version } else { '' }
@@ -132,11 +124,11 @@ if ($Project) {
                 } catch { }
             }
         }
-        foreach ($dir in @(Get-ChildItem (Join-Path $proj 'Packages') -Directory -ErrorAction SilentlyContinue)) {
+        foreach ($dir in @(Get-ChildItem -LiteralPath (Join-Path $proj 'Packages') -Directory -ErrorAction SilentlyContinue)) {
             $pkgJson = Join-Path $dir.FullName 'package.json'
-            if (Test-Path $pkgJson) {
+            if (Test-Path -LiteralPath $pkgJson) {
                 try {
-                    $meta = Get-Content $pkgJson -Raw -Encoding UTF8 | ConvertFrom-Json
+                    $meta = Get-Content -LiteralPath $pkgJson -Raw -Encoding UTF8 | ConvertFrom-Json
                     if ($meta.name -and $meta.name -notlike 'com.unity.*' -and -not $vpmPkgs.Contains($meta.name)) {
                         $vpmPkgs[$meta.name] = [string]$meta.version
                     }
@@ -145,15 +137,25 @@ if ($Project) {
         }
         $vpmList = @($vpmPkgs.Keys | ForEach-Object { "$_@$($vpmPkgs[$_])" })
         if ($vpmList.Count -gt 0) {
-            Add-Check 'project vpm packages' 'PASS' (($vpmList | Select-Object -First 6) -join ', ')
+            Add-Check 'project packages' 'INFO' (($vpmList | Select-Object -First 6) -join ', ')
+        }
+        $sdk = 'com.vrchat.avatars'
+        $sdkManifest = Join-Path $proj "Packages\$sdk\package.json"
+        $cache = Join-Path $proj 'Library\PackageCache'
+        $sdkCached = $vpmPkgs.Contains($sdk) -and (Get-ChildItem -LiteralPath $cache -Filter "$sdk@*" -Directory -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'package.json') -PathType Leaf } | Select-Object -First 1)
+        if ((Test-Path -LiteralPath $sdkManifest -PathType Leaf) -or $sdkCached) {
+            Add-Check 'VRChat Avatar SDK' 'PASS' "$sdk $($vpmPkgs[$sdk])"
+        } elseif ($vpmPkgs.Contains($sdk)) {
+            Add-Check 'VRChat Avatar SDK' 'WARN' 'Avatar SDK は宣言されています。VCC / ALCOM でパッケージの解決を確認してください'
         } else {
-            Add-Check 'project vpm packages' 'FAIL' 'VPM パッケージがありません（このプリセットは既存の VRChat プロジェクトを前提にしています）'
+            Add-Check 'VRChat Avatar SDK' 'FAIL' 'com.vrchat.avatars が見つかりません。VCC / ALCOM で確認してください'
         }
 
         $lockNames = @('vpm-lock.json', 'vpm-manifest.json')
         $foundLock = $null
         foreach ($ln in $lockNames) {
-            if (Test-Path (Join-Path $proj "Packages\$ln")) { $foundLock = $ln }
+            if (Test-Path -LiteralPath (Join-Path $proj "Packages\$ln")) { $foundLock = $ln }
         }
         if ($foundLock) {
             Add-Check 'project vpm lock' 'PASS' $foundLock
@@ -161,37 +163,25 @@ if ($Project) {
             Add-Check 'project vpm lock' 'WARN' 'vpm-lock.json がありません（ALCOM/VCC で一度 resolve してください）'
         }
 
-        if (Test-Path (Join-Path $proj '.git')) {
+        if (Test-Path -LiteralPath (Join-Path $proj '.git')) {
             Add-Check 'project git' 'PASS' 'git 管理されています'
         } else {
             Add-Check 'project git' 'WARN' 'git 管理外です。改変前に git init を提案してください（自動では行いません）'
         }
 
-        $apply = Join-Path $proj 'Assets\DSH\Editor\DshApply.cs'
-        if (Test-Path $apply) {
+        $missing = @('DshApply.cs', 'DshInspect.cs', 'DshOutfitToggle.cs') | Where-Object {
+            -not (Test-Path -LiteralPath (Join-Path $proj "Assets\DSH\Editor\$_") -PathType Leaf)
+        }
+        if (-not $missing) {
             Add-Check 'project dsh editor scripts' 'PASS' 'Assets/DSH/Editor 配置済み'
         } else {
-            Add-Check 'project dsh editor scripts' 'WARN' "templates/Editor/ の 2 ファイルを Assets/DSH/Editor/ にコピーしてください"
+            Add-Check 'project dsh editor scripts' 'INFO' '初回の衣装トグル適用時に必要なヘルパーを配置します'
         }
 
-        $lockFile = Join-Path $proj 'Temp\UnityLockfile'
-        $lockAlive = $false
-        if (Test-Path $lockFile) {
-            $instance = Join-Path $proj 'Library\EditorInstance.json'
-            if (Test-Path $instance) {
-                try {
-                    $info = Get-Content $instance -Raw -Encoding UTF8 | ConvertFrom-Json
-                    $editorPid = [int]$info.process_id
-                    $lockAlive = ($editorPid -gt 0) -and ($null -ne (Get-Process -Id $editorPid -ErrorAction SilentlyContinue))
-                } catch {
-                    $lockAlive = $true
-                }
-            }
-        }
-        if ($lockAlive) {
-            Add-Check 'project lock' 'WARN' 'Unity が起動中です。バッチモードを実行する前に閉じてください'
+        if ((Get-DshUnityLock $proj) -ne 'clear') {
+            Add-Check 'project lock' 'WARN' 'Unity でこのプロジェクトが開いている場合は、適用前に閉じてください'
         } else {
-            Add-Check 'project lock' 'PASS' 'バッチモードを実行できます'
+            Add-Check 'project lock' 'PASS' '起動中の Unity によるロックは検出されませんでした'
         }
     }
 }

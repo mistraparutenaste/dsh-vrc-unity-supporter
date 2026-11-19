@@ -18,11 +18,13 @@ namespace DSH
     {
         public static string ResultsDirectory => Path.Combine(Application.dataPath, "DSH", "Results");
 
-        /// <summary>Writes Assets/DSH/Results/&lt;task&gt;.json and returns its path.</summary>
+        /// <summary>Writes the current runner's result, or the legacy file for direct Unity invocations.</summary>
         public static string WriteResult(string task, Dictionary<string, object> data)
         {
-            Directory.CreateDirectory(ResultsDirectory);
-            var path = Path.Combine(ResultsDirectory, task + ".json");
+            data["task"] = task;
+            var path = Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH");
+            if (string.IsNullOrEmpty(path)) path = Path.Combine(ResultsDirectory, task + ".json");
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllText(path, MiniJson.Serialize(data), new UTF8Encoding(false));
             Debug.Log($"[DSH] result written: {path}");
             return path;

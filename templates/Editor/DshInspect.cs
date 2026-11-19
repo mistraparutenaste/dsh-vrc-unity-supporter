@@ -13,7 +13,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace DSH.Editor
@@ -25,7 +24,6 @@ namespace DSH.Editor
         public static void CompileCheck()
         {
             var data = NewResult("CompileCheck");
-            AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
             var failed = EditorUtility.scriptCompilationFailed;
             data["ok"] = !failed;
             data["compileFailed"] = failed;
@@ -47,6 +45,7 @@ namespace DSH.Editor
                     records.Add(MeasureAvatar(prefabPath, data));
                 }
                 data["avatars"] = records;
+                data["measurementStage"] = "source-prefab-before-build";
                 data["ok"] = true;
                 if (records.Count == 0)
                 {
@@ -159,13 +158,11 @@ namespace DSH.Editor
 
                 if (mesh != null)
                 {
-                    try
+                    if (!mesh.isReadable) unreadableMeshes++;
+                    for (var submesh = 0; submesh < mesh.subMeshCount; submesh++)
                     {
-                        triangles += mesh.triangles.LongLength / 3;
-                    }
-                    catch
-                    {
-                        unreadableMeshes++; // Read/Write disabled: VRChat ranks this Very Poor anyway
+                        if (mesh.GetTopology(submesh) == MeshTopology.Triangles)
+                            triangles += mesh.GetIndexCount(submesh) / 3;
                     }
                 }
 

@@ -91,7 +91,8 @@ namespace DSH.Tasks
                 }
 
                 EditorSceneManager.MarkSceneDirty(scene);
-                EditorSceneManager.SaveScene(scene);
+                if (!EditorSceneManager.SaveScene(scene))
+                    throw new IOException($"Could not save {scenePath}");
                 result["ok"] = true;
             }
             catch (Exception e)
@@ -128,7 +129,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 
 ## 4. 結果を読む
 
-- 終了コード 0 + `Assets/DSH/Results/<TaskName>.json` の `ok: true`
+- 終了コード 0 と、ランナーが表示した `.dsh/runs/<run-id>/result.json` の `ok: true` を確認する
+- 保存したシーンやPrefabを再読込して、対象と変更内容を確認する
 - 失敗時は `error` と Unity ログの `error CS` / `Exception` 行を見る
 - コンパイルエラーは「タスクスクリプトの誤り」なので、直して再実行する
   （プロジェクトのアセットを壊したわけではない）

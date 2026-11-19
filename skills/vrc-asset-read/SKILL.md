@@ -19,7 +19,9 @@ python <pkg>/tools/unity_inspect.py --help
 ## 1. まず全体像: `report`
 
 ```powershell
-python <pkg>/tools/unity_inspect.py report "C:\path\to\Project"
+python <pkg>/tools/unity_inspect.py report --json
+# 別のフォルダを指定する場合
+python <pkg>/tools/unity_inspect.py report "C:\path\to\Project" --json
 ```
 
 出力（`--json` で機械可読）:
@@ -29,8 +31,8 @@ python <pkg>/tools/unity_inspect.py report "C:\path\to\Project"
 | `unity.version` | `ProjectVersion.txt` の版 |
 | `vpm.packages` | 導入済み VPM パッケージ（3 形式をまとめて検出、下記） |
 | `vpm.lock` | `vpm-lock.json` / `vpm-manifest.json` のどちらがあるか |
-| `avatars` | `Assets/` 内で `VRCAvatarDescriptor`（SDK 3.x は VRCSDK3A.dll 内）を使う prefab / シーンの**候補**。prefab バリアントは親だけが出るので、正確な一覧は `DshInspect.Perf` / `Dump` で取る |
-| `scripts.missing` | 解決できない `m_Script` GUID（**パッケージ不足の証拠**） |
+| `avatars` | `Assets/` 内で VRChat SDK のスクリプトを使うPrefab・シーンの候補。Prefab参照から継承した候補を含み、Unityで個別のDescriptorを確認する |
+| `scripts.missing` | `Assets/` と `Packages/` の索引で解決できない `m_Script` GUID |
 | `meta.missing` | `.meta` が無いアセット（Unity が GUID を振り直す危険） |
 | `git` | `.git` の有無 |
 
@@ -40,8 +42,7 @@ VPM の検出は 3 形式すべてを見る（クライアントによって書�
 2. `Packages/vpm-manifest.json` の `dependencies` — 旧 vrc-get
 3. `Packages/<id>/package.json` — 埋め込みパッケージ（どちらのクライアントでも）
 
-`scripts.missing` が空でないときは、依存パッケージが入っていない。
-インストールを勝手に始めず、まず「何が足りないか」を報告する。
+`scripts.missing` が空でないときは、参照元と依存パッケージを調べ、Unityの表示で確認する。
 
 ## 2. 階層を見る: `hierarchy`
 
@@ -71,8 +72,8 @@ python <pkg>/tools/unity_inspect.py refs --guid 1a2b3c... --project "C:\path\to\
 python <pkg>/tools/unity_inspect.py index "C:\path\to\Project"
 ```
 
-`<project>/.dsh/guid-index.json` に GUID → パス の対応を書く。`hierarchy` と `refs` は
-索引があれば高速化される。`Packages/` も含めるので、VRChat SDK のスクリプト名も解決できる。
+GUIDとパスの対応をOSの一時フォルダへ書き出す。出力先は `--out` でも指定できる。
+`report`、`hierarchy`、`refs` はその時点の `Assets/` と `Packages/` を読み、初回から単一のJSONを返す。
 
 ## 5. この方法で分からないこと
 

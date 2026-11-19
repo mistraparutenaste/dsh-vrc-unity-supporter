@@ -3,7 +3,7 @@
 
 Commands:
   report      project summary: SDK packages, avatars, missing scripts, missing .meta
-  index       build a GUID -> asset path index under <project>/.dsh/guid-index.json
+  index       export a GUID -> asset path index (defaults to an OS temp file)
   hierarchy   dump the object tree of a .prefab or .unity file
   refs        find files that reference a GUID
 
@@ -26,6 +26,8 @@ SKIP_DIRS = {
 
 DOC_RE = re.compile(r"^--- !u!(\d+) &(-?\d+)(?: stripped)?\s*$", re.M)
 REF_RE = re.compile(r"\{fileID: (-?\d+)(?:, guid: ([0-9a-f]{32}))?(?:, type: \d+)?\}")
+SCRIPT_GUID_RE = re.compile(r"m_Script: \{fileID: -?\d+, guid: ([0-9a-f]{32})")
+PREFAB_GUID_RE = re.compile(r"m_SourcePrefab: \{fileID: -?\d+, guid: ([0-9a-f]{32})")
 GUID_RE = re.compile(r"^guid: ([0-9a-f]{32})\s*$", re.M)
 NAME_RE = re.compile(r"^  m_Name: (.*)$", re.M)
 CLASS_GAMEOBJECT = 1
@@ -68,11 +70,18 @@ BUILTIN_CLASSES = {
 }
 
 
-def find_project(start: str) -> Path:
+def find_project(start: str, search_children: bool = False) -> Path:
     p = Path(start).resolve()
     for candidate in [p, *p.parents]:
         if (candidate / "ProjectSettings" / "ProjectVersion.txt").is_file():
             return candidate
+    if search_children and p.is_dir():
+        candidates = sorted(child for child in p.iterdir()
+                            if (child / "ProjectSettings" / "ProjectVersion.txt").is_file())
+        if len(candidates) == 1:
+            return candidates[0].resolve()
+        if candidates:
+            raise SystemExit("Multiple Unity projects found:\n" + "\n".join(str(path) for path in candidates))
     raise SystemExit(f"not a Unity project (no ProjectSettings/ProjectVersion.txt): {start}")
 
 
@@ -106,11 +115,10 @@ def index_path(root: Path) -> Path:
     return Path(tempfile.gettempdir()) / "dsh-vrc-unity" / f"guid-index-{digest}.json"
 
 
-def cmd_index(args) -> int:
-    root = find_project(args.project)
+def build_index(root: Path, assets) -> tuple[dict[str, str], list[str]]:
     index: dict[str, str] = {}
     no_meta: list[str] = []
-    for asset in iter_assets(root):
+    for asset in assets:
         if asset.suffix == ".meta":
             continue
         meta = asset.with_name(asset.name + ".meta")
@@ -122,6 +130,12 @@ def cmd_index(args) -> int:
         m = GUID_RE.search(read_text(meta, 4096))
         if m:
             index[m.group(1)] = str(asset.relative_to(root)).replace("\\", "/")
+    return index, no_meta
+
+
+def cmd_index(args) -> int:
+    root = find_project(args.project)
+    index, no_meta = build_index(root, iter_assets(root))
     out_path = Path(args.out) if getattr(args, "out", None) else index_path(root)
     try:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -136,7 +150,7 @@ def cmd_index(args) -> int:
                               "path": None, "error": str(e)}))
         else:
             print(f"indexed {len(index)} assets (cache not written: {e})")
-        return 0
+        return 1
     if args.json:
         print(json.dumps({"indexed": len(index), "noMeta": len(no_meta), "path": str(out_path)}))
     else:
@@ -144,17 +158,6 @@ def cmd_index(args) -> int:
         if no_meta:
             print(f"WARNING: {len(no_meta)} assets have no .meta (Unity will assign new GUIDs)")
     return 0
-
-
-def load_index(root: Path) -> dict[str, str]:
-    path = index_path(root)
-    if not path.is_file():
-        cmd_index(argparse.Namespace(project=str(root), json=True, out=None))
-    try:
-        data = json.loads(path.read_text("utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data.get("index", {})
 
 
 def script_docs(text: str):
@@ -288,13 +291,13 @@ def cmd_hierarchy(args) -> int:
     if not text:
         raise SystemExit(f"cannot read {target}")
 
-    index = load_index(root)
+    index, _ = build_index(root, iter_assets(root))
     nodes, parent = build_tree(text, index)
     children = _children_of(parent)
 
     depth_limit = max(0, int(getattr(args, "depth", 2)))
     rows: list[dict] = []
-    visited = {str(target.resolve())}
+    ancestors = {target.resolve()}
 
     def emit(local_nodes, local_children, nid, depth, path, depth_left):
         node = local_nodes[nid]
@@ -306,21 +309,23 @@ def cmd_hierarchy(args) -> int:
         source = node.get("source")
         if node.get("kind") == "prefab-instance" and source and depth_left > 0:
             source_path = (root / source).resolve()
-            key = str(source_path)
             # Only YAML assets can be expanded; an FBX model has no readable hierarchy here.
             if source_path.suffix.lower() not in (".prefab", ".unity"):
                 return
-            if key in visited or not source_path.is_file():
+            if source_path in ancestors:
                 return
-            visited.add(key)
             sub_text = read_text(source_path)
             if not sub_text:
                 return
             sub_nodes, sub_parent = build_tree(sub_text, index)
             sub_children = _children_of(sub_parent)
-            for sub_root in sub_nodes:
-                if sub_root not in sub_parent:
-                    emit(sub_nodes, sub_children, sub_root, depth + 1, full, depth_left - 1)
+            ancestors.add(source_path)
+            try:
+                for sub_root in sub_nodes:
+                    if sub_root not in sub_parent:
+                        emit(sub_nodes, sub_children, sub_root, depth + 1, full, depth_left - 1)
+            finally:
+                ancestors.remove(source_path)
 
     for nid in nodes:
         if nid not in parent:
@@ -341,7 +346,6 @@ def cmd_hierarchy(args) -> int:
 
 def cmd_refs(args) -> int:
     root = find_project(args.project)
-    index = load_index(root)
     guid = args.guid
     if args.path:
         target = Path(args.path)
@@ -354,8 +358,10 @@ def cmd_refs(args) -> int:
         guid = m.group(1)
     if not guid:
         raise SystemExit("pass --guid or --path")
+    assets = list(iter_assets(root))
+    index, _ = build_index(root, assets)
     hits = []
-    for asset in iter_assets(root):
+    for asset in assets:
         if asset.suffix not in (".prefab", ".unity", ".asset", ".mat", ".controller", ".overrideController", ".anim"):
             continue
         text = read_text(asset)
@@ -435,7 +441,7 @@ def vpm_inventory(root: Path) -> tuple[dict[str, str], list[str], str | None]:
 
 
 def cmd_report(args) -> int:
-    root = find_project(args.project)
+    root = find_project(args.project, search_children=True)
     version = read_text(root / "ProjectSettings" / "ProjectVersion.txt").strip().splitlines()
     vpm, vpm_sources, lock_name = vpm_inventory(root)
     lock = {}
@@ -446,10 +452,11 @@ def cmd_report(args) -> int:
         except ValueError:
             lock = {}
 
-    index = load_index(root)
-    meta_missing = []
+    assets = list(iter_assets(root))
+    index, meta_missing = build_index(root, assets)
     script_guids: set[str] = set()
-    avatars = []
+    candidates = set()
+    referenced_by: dict[str, set[str]] = {}
     avatar_script_guids = {
         guid for guid, path in index.items() if path.endswith("VRC_AvatarDescriptor.cs")
     }
@@ -460,24 +467,30 @@ def cmd_report(args) -> int:
     }
     avatar_markers = avatar_script_guids | avatar_assembly_guids
 
-    for asset in iter_assets(root):
-        if asset.suffix == ".meta":
-            continue
-        if not asset.with_name(asset.name + ".meta").is_file():
-            rel = str(asset.relative_to(root)).replace("\\", "/")
-            if rel.startswith("Assets/"):
-                meta_missing.append(rel)
+    for asset in assets:
         if asset.suffix not in (".prefab", ".unity"):
             continue
         text = read_text(asset)
         if not text:
             continue
-        guids = set(re.findall(r"m_Script: \{fileID: -?\d+, guid: ([0-9a-f]{32})", text))
+        guids = set(SCRIPT_GUID_RE.findall(text))
         script_guids |= guids
         rel = str(asset.relative_to(root)).replace("\\", "/")
-        # Packages/ holds SDK samples and tool prefabs; a user's avatars live under Assets/.
-        if rel.startswith("Assets/") and avatar_markers & guids:
-            avatars.append(rel)
+        if avatar_markers & guids:
+            candidates.add(rel)
+        for guid in PREFAB_GUID_RE.findall(text):
+            source = index.get(guid)
+            if source:
+                referenced_by.setdefault(source, set()).add(rel)
+
+    # An instance or variant can inherit its descriptor without an m_Script of its own.
+    pending = list(candidates)
+    while pending:
+        for parent in referenced_by.get(pending.pop(), ()):
+            if parent not in candidates:
+                candidates.add(parent)
+                pending.append(parent)
+    avatars = sorted(path for path in candidates if path.startswith("Assets/"))
 
     missing_scripts = sorted(
         g for g in script_guids
@@ -492,7 +505,7 @@ def cmd_report(args) -> int:
             "sources": vpm_sources,
             "lock": {"file": lock_name, "lockedPackages": len(lock)},
         },
-        "avatars": sorted(avatars),
+        "avatars": avatars,
         "scripts": {
             "missing": [{"guid": g, "references": None} for g in missing_scripts],
             "missingCount": len(missing_scripts),
@@ -535,7 +548,7 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_report = sub.add_parser("report", help="project summary")
-    p_report.add_argument("project")
+    p_report.add_argument("project", nargs="?", default=os.getcwd())
     p_report.add_argument("--json", action="store_true")
     p_report.set_defaults(func=cmd_report)
 
