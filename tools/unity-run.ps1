@@ -37,7 +37,12 @@ function Install-OutfitHelpers([string]$ProjectPath, [string]$RequestPath) {
         }
         $dest = Join-Path $destDir $helper.file
         $before = if (Test-Path -LiteralPath $dest -PathType Leaf) {
-            (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash
+            $sha = [Security.Cryptography.SHA256]::Create()
+            try {
+                [BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($dest))).Replace('-', '')
+            } finally {
+                $sha.Dispose()
+            }
         }
         if ($before -ne $helper.before) { throw "Helper changed after preview: $dest" }
         [pscustomobject]@{ Source = (Join-Path $sourceDir $helper.file); Destination = $dest; New = $null -eq $before }

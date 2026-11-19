@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -44,8 +45,18 @@ class UnityWorkflowTests(unittest.TestCase):
 
     def editor_fixture(self, main):
         editor = self.project / "Library" / "Unity.exe"
-        source = self.write("Library/fake.cs", "using System; using System.IO;\n"
-                            "public class Fixture { public static void Main(string[] args) {\n" + main + "\n} }")
+        source = self.write("Library/fake.cs", r'''
+            using System;
+            using System.IO;
+            public class Fixture {
+                private static string Checksum(string path) {
+                    using (var sha = System.Security.Cryptography.SHA256.Create()) {
+                        return BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path)))
+                            .Replace("-", "").ToLowerInvariant();
+                    }
+                }
+                public static void Main(string[] args) {
+        ''' + main + "\n} }")
         environment = dict(os.environ, UNITY_EDITOR_PATH=str(editor))
         build = subprocess.run([
             "powershell.exe", "-NoProfile", "-Command",
@@ -167,6 +178,123 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertFalse((self.project / "Assets/DSH").exists())
 
     @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_runner_can_upgrade_a_helper_without_get_file_hash(self):
+        destination = self.write("Assets/DSH/Editor/DshOutfitToggle.cs", "old helper\n")
+        expected = hashlib.sha256(destination.read_bytes()).hexdigest()
+        request = self.write("request.json", json.dumps({"helpers": [
+            {"file": destination.name, "before": expected}
+        ]}))
+        environment = self.editor_fixture(r'''
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"Upgrade\"}");
+        ''')
+        run = subprocess.run([
+            "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+            "function Get-FileHash { throw 'Get-FileHash is unavailable' }; "
+            "& $env:DSH_TEST_RUNNER -Project $env:DSH_TEST_PROJECT -Method Example.Run "
+            "-RequestFile $env:DSH_TEST_REQUEST -InstallOutfitHelpers -ExpectedTask Upgrade",
+        ], env=dict(environment, DSH_TEST_RUNNER=str(TOOLS / "unity-run.ps1"),
+                    DSH_TEST_PROJECT=str(self.project), DSH_TEST_REQUEST=str(request)),
+            capture_output=True, encoding="utf-8", errors="replace", timeout=20)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        bundled = TOOLS.parent / "templates" / "Editor" / destination.name
+        self.assertEqual(destination.read_bytes(), bundled.read_bytes())
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_targets_lists_duplicate_outfits_before_applying(self):
+        scene = self.write("Assets/Avatar.unity", "saved scene\n")
+        args = ("--scene", "Assets/Avatar.unity", "--query", "Hoodie")
+        environment = self.editor_fixture(r'''
+            if (Array.IndexOf(args, "DSH.Editor.DshOutfitToggle.Targets") < 0) Environment.Exit(4);
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"OutfitTargets\",\"outfits\":[" +
+                "{\"path\":\"Avatar/Hoodie\",\"id\":\"first\"},{\"path\":\"Avatar/Hoodie\",\"id\":\"second\"}]}" );
+        ''')
+        blocked = self.cli("unity_toggle.py", "targets", *args, env=environment)
+        self.assertEqual(json.loads(blocked.stdout)["status"], "setup-required")
+        self.assertFalse((self.project / "Assets/DSH").exists())
+        output = self.json_output(self.cli("unity_toggle.py", "targets", *args, "--prepare", env=environment))
+        self.assertEqual([target["id"] for target in output["unity"]["outfits"]], ["first", "second"])
+        self.assertEqual(scene.read_text(), "saved scene\n")
+        self.assertFalse((self.project / ".git").exists())
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_second_toggle_keeps_the_first_and_blocks_a_manual_scene_edit(self):
+        scene = self.write("Assets/Avatar.unity", "original\n")
+        baseline = self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        environment = self.editor_fixture(r'''
+            File.AppendAllText("Assets/Avatar.unity", "toggle\n");
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"OutfitToggle\",\"verified\":true,\"saved\":true,\"sceneDigest\":\"" +
+                Checksum("Assets/Avatar.unity") + "\"}");
+        ''')
+        def target(name):
+            return ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--outfit", "Avatar/" + name,
+                    "--menu", "衣装/" + name)
+
+        for name in ("Hoodie", "Coat"):
+            args = target(name)
+            plan = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+            applied = self.json_output(self.cli("unity_toggle.py", "apply", *args,
+                                               "--approved-preview", plan["preview"], env=environment))
+            self.assertEqual(applied["checkpoint"], baseline["git"]["head"])
+        self.assertEqual(scene.read_text(), "original\ntoggle\ntoggle\n")
+
+        scene.write_text("edited by user\n", encoding="utf-8")
+        args = target("Shirt")
+        plan = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+        blocked = self.cli("unity_toggle.py", "apply", *args, "--approved-preview", plan["preview"], env=environment)
+        self.assertNotEqual(blocked.returncode, 0)
+        self.assertIn("Assets/Avatar.unity", [row["path"] for row in json.loads(blocked.stdout)["blockingChanges"]])
+        self.assertEqual(scene.read_text(), "edited by user\n")
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_external_edit_after_unity_verifies_the_scene_is_not_adopted(self):
+        scene = self.write("Assets/Avatar.unity", "original\n")
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--outfit", "Avatar/Hoodie",
+                "--menu", "衣装/Hoodie")
+        environment = self.editor_fixture(r'''
+            File.AppendAllText("Assets/Avatar.unity", "toggle\n");
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"OutfitToggle\",\"verified\":true,\"saved\":true,\"sceneDigest\":\"" +
+                Checksum("Assets/Avatar.unity") + "\"}");
+            File.AppendAllText("Assets/Avatar.unity", "external edit\n");
+        ''')
+        plan = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+        result = self.cli("unity_toggle.py", "apply", *args, "--approved-preview", plan["preview"], env=environment)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("scene changed", json.loads(result.stdout)["error"])
+        self.assertFalse((self.project / ".dsh/outfits").exists())
+        self.assertEqual(scene.read_text(), "original\ntoggle\nexternal edit\n")
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_sdk_verification_failure_is_reported_separately_from_the_saved_change(self):
+        scene = self.write("Assets/Avatar.unity", "original\n")
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--outfit", "Avatar/Hoodie",
+                "--menu", "衣装/Hoodie")
+        environment = self.editor_fixture(r'''
+            string request = File.ReadAllText(Environment.GetEnvironmentVariable("DSH_UNITY_REQUEST_PATH"));
+            if (!request.Contains("\"verifySdk\": true")) Environment.Exit(4);
+            File.AppendAllText("Assets/Avatar.unity", "saved\n");
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"OutfitToggle\",\"verified\":true,\"saved\":true,\"sceneDigest\":\"" +
+                Checksum("Assets/Avatar.unity") + "\",\"sdkVerification\":{\"status\":\"failed\",\"error\":\"SDK rejected the test copy\"}}");
+        ''')
+        plain = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+        stale = self.cli("unity_toggle.py", "apply", *args, "--verify-sdk",
+                         "--approved-preview", plain["preview"], env=environment)
+        self.assertNotEqual(stale.returncode, 0)
+        self.assertFalse((self.project / "Assets/DSH").exists())
+        plan = self.json_output(self.cli("unity_toggle.py", "preview", *args, "--verify-sdk"))
+        applied = self.json_output(self.cli("unity_toggle.py", "apply", *args, "--verify-sdk",
+                                           "--approved-preview", plan["preview"], env=environment))
+        self.assertTrue(applied["unity"]["saved"])
+        self.assertEqual(applied["unity"]["sdkVerification"]["status"], "failed")
+        self.assertEqual(scene.read_text(), "original\nsaved\n")
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
     def test_apply_declines_stale_previews_and_can_repeat_a_verified_request(self):
         scene = self.write("Assets/試着.unity", "original\n")
         self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
@@ -177,7 +305,8 @@ class UnityWorkflowTests(unittest.TestCase):
             if (!request.Contains("衣装/パーカー")) Environment.Exit(4);
             File.AppendAllText("Assets/試着.unity", "saved\n");
             File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
-                "{\"ok\":true,\"task\":\"OutfitToggle\",\"verified\":true,\"saved\":true}");
+                "{\"ok\":true,\"task\":\"OutfitToggle\",\"verified\":true,\"saved\":true,\"sceneDigest\":\"" +
+                Checksum("Assets/試着.unity") + "\"}");
         ''')
         before = self.json_output(self.cli("unity_toggle.py", "preview", *target))
         scene.write_text("user edited since preview\n", encoding="utf-8")

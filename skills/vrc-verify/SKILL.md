@@ -29,6 +29,8 @@ python <pkg>/tools/unity_inspect.py hierarchy "Assets\Avatar.prefab"
 
 ## 3. 動作の確認（人間が行う）
 
+衣装トグルの適用で `--verify-sdk` を使った場合は、まず `unity.sdkVerification` を読む。SDKの前処理で生成されたメニュー項目・初期値・対象衣装のオンとオフのキーを確認する。シーンへの保存結果、SDKの前処理結果、VRChatクライアントでの動作確認を報告し、クライアントで試すメニュー名と操作を具体的に伝える。
+
 | 方法 | 何が分かる | 手順 |
 |---|---|---|
 | **VRCFury: Build an Editor Test Copy** | **最終形に最も近い**。SDK 前処理を実ビルドと同じ順で通す | アバターを選択 → `Tools > VRCFury > Build an Editor Test Copy` |

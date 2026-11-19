@@ -64,9 +64,9 @@ Windows で、まだ入っていないものを用意してください。
    Outfit_Hoodie を「衣装/パーカー」からオン・オフできるようにして。初期状態はオンで
    ```
 
-DSH が対象と変更予定を示します。初めて Git を使うプロジェクトでは、PC 上に復元地点を作る手順が案内されます。内容を確認してから適用を進めてください。
+DSH が対象と変更予定を示します。衣装名が曖昧な場合は、保存済みのシーンから候補を取得し、チャットで選びます。初めて Git を使うプロジェクトでは、PC 上に復元地点を作る手順が案内されます。DSH が保存・検証したシーンは、手作業による変更が加わるまでは、コミットを挟まずに続けて改変できます。
 
-適用後は Unity でプロジェクトを開き、**VRChat SDK → Show Control Panel → Builder** の **Offline Testing** にある **Build & Test** を選びます。VRChat の **SDK Test Avatars** でテスト用アバターを選び、衣装の切り替えを確認してください。アップロードは Unity からご自身で行います。 [VRChat のローカルテスト手順](https://creators.vrchat.com/avatars/#local-avatar-testing)
+適用後は、保存結果とSDKの前処理でメニュー・アニメーションを確認できたかがチャットに表示されます。VRChat内で試すには、Unityで **VRChat SDK → Show Control Panel → Builder → Offline Testing → Build & Test** を選びます。VRChatの **SDK Test Avatars** でテスト用アバターを選び、チャットに表示されたメニューから衣装をオン・オフしてください。 [VRChat のローカルテスト手順](https://creators.vrchat.com/avatars/#local-avatar-testing)
 
 ## 困ったとき
 

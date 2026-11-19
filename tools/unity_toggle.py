@@ -20,9 +20,11 @@ EDITOR = Path("Assets/DSH/Editor")
 LEGACY = {
     "DshApply.cs": "ab033a2fb00088a7ac7b1716c5c098ac1deeea71",
     "DshInspect.cs": "92de7704a6e547f8fdbb6a8abb2c543de0f3b4cc",
+    "DshOutfitToggle.cs": "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",
 }
-HELPERS = (*LEGACY, "DshOutfitToggle.cs")
+HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
+VRCFURY_BUILDS = "Packages/com.vrcfury.temp/Builds"
 
 
 class WorkflowError(Exception):
@@ -111,6 +113,12 @@ def checkpoint(root, confirmed):
     return {"ok": True, "git": git_state(root)}
 
 
+def git_blob_hash(data):
+    normalized = data.replace(b"\r\n", b"\n")
+    git_blob = b"blob " + str(len(normalized)).encode("ascii") + b"\0" + normalized
+    return hashlib.sha1(git_blob).hexdigest()
+
+
 def helper_plan(root):
     helpers = []
     for name in HELPERS:
@@ -124,8 +132,7 @@ def helper_plan(root):
         normalized = actual.replace(b"\r\n", b"\n")
         if normalized == source.replace(b"\r\n", b"\n"):
             continue
-        git_blob = b"blob " + str(len(normalized)).encode("ascii") + b"\0" + normalized
-        if hashlib.sha1(git_blob).hexdigest() == LEGACY.get(name):
+        if git_blob_hash(actual) == LEGACY[name]:
             helpers.append((path, source, actual))
         elif name != "DshInspect.cs":
             raise WorkflowError(f"Custom helper {path.as_posix()} needs a manual merge with the bundled template.")
@@ -133,14 +140,23 @@ def helper_plan(root):
 
 
 def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    checksum = hashlib.sha256()
+    with path.open("rb") as data:
+        for chunk in iter(lambda: data.read(1024 * 1024), b""):
+            checksum.update(chunk)
+    return checksum.hexdigest()
+
+
+def scene_asset(root, path):
+    scene = inside(root, path)
+    relative = scene.relative_to(root).as_posix()
+    if not relative.startswith("Assets/") or scene.suffix.lower() != ".unity" or not scene.is_file():
+        raise WorkflowError("Choose a saved .unity scene under Assets.")
+    return scene, relative
 
 
 def preview(root, args):
-    scene = inside(root, args.scene)
-    scene_path = scene.relative_to(root).as_posix()
-    if not scene_path.startswith("Assets/") or scene.suffix.lower() != ".unity" or not scene.is_file():
-        raise WorkflowError("Choose a saved .unity scene under Assets.")
+    scene, scene_path = scene_asset(root, args.scene)
     if not all(part.strip() for part in args.menu.split("/")):
         raise WorkflowError("Specify a menu name and nonempty submenu names.")
     if not args.avatar.strip() or not args.outfit.startswith(args.avatar + "/"):
@@ -148,8 +164,13 @@ def preview(root, args):
     request = {"scene": scene_path, "avatar": args.avatar, "outfit": args.outfit,
                "avatarId": args.avatar_id, "outfitId": args.outfit_id,
                "menu": args.menu, "defaultOn": args.default_on}
+    if args.verify_sdk:
+        request["verifySdk"] = True
     helpers = helper_plan(root)
     state = git_state(root)
+    owned = owned_scene_changes(root, state)
+    state["managedScenes"] = sorted(owned)
+    state["blockingChanges"] = list(pending_user_changes(root, state["changes"], owned))
     scene_in_checkpoint = bool(state["head"] and
                                git(root, "cat-file", "-e", f"HEAD:{scene_path}", check=False).returncode == 0)
     planned = [scene_path, *(path.as_posix() for path, _, _ in helpers)]
@@ -158,10 +179,11 @@ def preview(root, args):
         meta_paths.update(f"{path.as_posix()}.meta" for path in (EDITOR, EDITOR.parent)
                           if not inside(root, f"{path.as_posix()}.meta").exists())
     packages, _, _ = vpm_inventory(root)
-    contents = {"project": str(root), "request": request, "head": state["head"], "sceneDigest": digest(scene),
+    scene_digest = digest(scene)
+    contents = {"project": str(root), "request": request, "head": state["head"], "sceneDigest": scene_digest,
                 "helpers": {p.as_posix(): hashlib.sha256(source).hexdigest() for p, source, _ in helpers}}
     token = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
-    return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
+    return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token, "sceneDigest": scene_digest,
             "plannedPaths": planned, "unityMayCreate": sorted(meta_paths), "sceneInCheckpoint": scene_in_checkpoint,
             "vrcFury": packages.get("com.vrcfury.vrcfury")}, helpers
 
@@ -183,19 +205,40 @@ def workflow_lock(path):
         yield
 
 
-def add_local_ignore(root):
-    if git(root, "check-ignore", "--no-index", ".dsh/probe", check=False).returncode == 0:
+def ensure_local_ignore(root, example, rule):
+    if git(root, "check-ignore", "--no-index", example, check=False).returncode == 0:
         return
     exclude = git(root, "rev-parse", "--git-path", "info/exclude").stdout.strip()
     try:
-        append_rules(inside(root, exclude), LOCAL_IGNORE)
+        append_rules(inside(root, exclude), rule)
     except WorkflowError:
-        raise WorkflowError("Add /.dsh/ to this project's local Git excludes and retry.") from None
-    if git(root, "check-ignore", "--no-index", ".dsh/probe", check=False).returncode:
-        raise WorkflowError("Git rules still include .dsh/. Ignore that local directory and retry.")
+        raise WorkflowError(f"Add {rule.decode('ascii')} to this project's local Git excludes and retry.") from None
+    if git(root, "check-ignore", "--no-index", example, check=False).returncode:
+        raise WorkflowError(f"Git rules still include {example}. Review the local Git excludes and retry.")
 
 
-def pending_user_changes(root, changes, allowed_scene=None):
+def owned_scene_changes(root, state):
+    """Match only unstaged scene contents from successful runs at the current HEAD."""
+    modified = {entry["path"] for entry in state["changes"]
+                if entry["status"] == " M" and entry["path"].lower().endswith(".unity")}
+    if not modified or not state["head"]:
+        return {}
+    digests = {path: digest(inside(root, path)) for path in modified}
+    owned = {}
+    for file in inside(root, ".dsh/outfits").glob("*.json"):
+        receipt = read_result(file)
+        output = receipt.get("output")
+        unity = output.get("unity") if isinstance(output, dict) and output.get("ok") is True else None
+        if not isinstance(unity, dict) or unity.get("verified") is not True:
+            continue
+        scene = receipt.get("scene") or unity.get("scene")  # older receipts recorded it in the Unity result
+        if (isinstance(scene, str) and scene in digests and receipt.get("checkpoint") == state["head"] and
+                receipt.get("sceneDigest") == digests[scene]):
+            owned[scene] = digests[scene]
+    return owned
+
+
+def pending_user_changes(root, changes, allowed_scenes=()):
     helper_files = {path: (TEMPLATES / "Editor" / path.name).read_bytes().replace(b"\r\n", b"\n")
                     for path in (EDITOR / name for name in HELPERS)}
     meta_files = {f"{path.as_posix()}.meta" for path in (*helper_files, EDITOR, EDITOR.parent)}
@@ -203,11 +246,12 @@ def pending_user_changes(root, changes, allowed_scene=None):
         path, status = entry["path"], entry["status"]
         if status == "??" and (path.startswith(".dsh/") or path in meta_files):
             continue
-        if status == " M" and path == allowed_scene:
+        if status == " M" and path in allowed_scenes:
             continue
         expected = helper_files.get(Path(path))
         if status in ("??", " M") and expected is not None:
-            if inside(root, path).read_bytes().replace(b"\r\n", b"\n") == expected:
+            actual = inside(root, path).read_bytes()
+            if actual.replace(b"\r\n", b"\n") == expected or git_blob_hash(actual) == LEGACY[Path(path).name]:
                 continue
         yield entry
 
@@ -232,18 +276,91 @@ def apply_with_lock(root, args):
         raise WorkflowError("The preview changed. Preview again before applying.")
     request, state = plan["request"], plan["git"]
     scene = inside(root, request["scene"])
+    owned = owned_scene_changes(root, state)
     receipt_id = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
     receipt = inside(root, f".dsh/outfits/{receipt_id}.json")
     last = read_result(receipt)
     previous = last.get("output")
-    if (isinstance(previous, dict) and previous.get("ok") is True and
-            last.get("checkpoint") == state["head"] and last.get("sceneDigest") == digest(scene) and
-            not list(pending_user_changes(root, state["changes"], request["scene"]))):
+    blocking = list(pending_user_changes(root, state["changes"], owned))
+    if (not args.verify_sdk and isinstance(previous, dict) and previous.get("ok") is True and not blocking and
+            last.get("checkpoint") == state["head"] and last.get("sceneDigest") == plan["sceneDigest"]):
         return dict(previous, alreadyApplied=True, changes=state["changes"])
-    if list(pending_user_changes(root, state["changes"])):
-        raise WorkflowError("The project has existing Git changes. Record or set them aside, then preview again.")
-    add_local_ignore(root)
+    if blocking:
+        return {"ok": False, "blockingChanges": blocking,
+                "error": "The project has existing Git changes. Record or set them aside, then preview again."}
+    ensure_local_ignore(root, ".dsh/probe", LOCAL_IGNORE)
+    skipped_sdk = None
+    if args.verify_sdk:
+        if git(root, "ls-files", "-z", "--", VRCFURY_BUILDS, f"{VRCFURY_BUILDS}.meta").stdout:
+            skipped_sdk = "VRCFury's temporary build outputs are tracked in Git. Verify in Build & Test."
+        else:
+            try:
+                ensure_local_ignore(root, f"{VRCFURY_BUILDS}/probe", f"/{VRCFURY_BUILDS}/".encode("ascii"))
+                ensure_local_ignore(root, f"{VRCFURY_BUILDS}.meta", f"/{VRCFURY_BUILDS}.meta".encode("ascii"))
+            except WorkflowError as error:
+                skipped_sdk = str(error)
 
+    unity_request = dict(request, expectedSceneDigest=plan["sceneDigest"])
+    if skipped_sdk:
+        unity_request["verifySdk"] = False
+    run, result, log = run_task(root, unity_request, helpers, "Apply", "OutfitToggle", "outfit-toggle")
+    if skipped_sdk and result.get("verified") is True:
+        result["sdkVerification"] = {"status": "inconclusive", "reason": skipped_sdk, "clientTested": False}
+    after = git_state(root)
+    allowed = {path for path, before in owned.items() if path != request["scene"] and
+               inside(root, path).is_file() and digest(inside(root, path)) == before}
+    allowed.add(request["scene"])
+    unexpected = list(pending_user_changes(root, after["changes"], allowed))
+    saved_digest = digest(scene) if scene.is_file() else None
+    matches_saved_scene = saved_digest is not None and result.get("sceneDigest") == saved_digest
+    sdk_reported = not args.verify_sdk or isinstance(result.get("sdkVerification"), dict)
+    ok = (run.returncode == 0 and result.get("verified") is True and matches_saved_scene and sdk_reported and
+          not unexpected and after["head"] == state["head"])
+    output = {"ok": ok, "checkpoint": state["head"], "changes": after["changes"],
+              "log": str(log), "unity": result, "unexpectedChanges": unexpected}
+    if not ok:
+        if unexpected or after["head"] != state["head"]:
+            output["error"] = "Additional Git paths changed or HEAD moved. Review Git status before retrying."
+        elif result.get("verified") is True and not matches_saved_scene:
+            output["error"] = "The saved scene changed after Unity verification. Review the scene before retrying."
+        elif result.get("verified") is True and not sdk_reported:
+            output["error"] = "The requested SDK verification result is missing. Review the Unity log."
+        else:
+            output["error"] = result.get("error") or run_error(run)
+    else:
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        receipt.write_text(json.dumps({"checkpoint": state["head"], "scene": request["scene"],
+                                       "sceneDigest": saved_digest, "output": output}), encoding="utf-8")
+    return output
+
+
+def targets(root, args):
+    if os.name != "nt":
+        raise WorkflowError("Exact Unity target discovery requires Windows.")
+    scene, scene_path = scene_asset(root, args.scene)
+    helpers = helper_plan(root)
+    if helpers and not args.prepare:
+        return {"ok": False, "status": "setup-required",
+                "plannedPaths": [path.as_posix() for path, _, _ in helpers],
+                "error": "Confirm the Editor helper setup and rerun with --prepare to query Unity."}
+    request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "query": args.query}
+    with workflow_lock(inside(root, ".dsh/outfit.lock")):
+        before = digest(scene)
+        request["expectedSceneDigest"] = before
+        run, result, log = run_task(root, request, helpers, "Targets", "OutfitTargets", "outfit-targets")
+        unchanged = scene.is_file() and digest(scene) == before
+    ok = run.returncode == 0 and result.get("ok") is True and unchanged
+    output = {"ok": ok, "status": "ready" if ok else "failed", "log": str(log), "unity": result}
+    if not ok:
+        output["error"] = (result.get("error") or run_error(run)) if unchanged else "The saved scene changed during discovery. Review it before applying."
+    return output
+
+
+def run_error(run):
+    return (run.stderr.strip() or run.stdout.strip())[-4000:]
+
+
+def run_task(root, request, helpers, method, task, name):
     run_id = uuid.uuid4().hex
     request_path = inside(root, f".dsh/requests/{run_id}.json")
     request_path.parent.mkdir(parents=True, exist_ok=True)
@@ -254,44 +371,36 @@ def apply_with_lock(root, args):
     result_path = run_dir / "result.json"
     run = subprocess.run([
         "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(TOOLS / "unity-run.ps1"),
-        "-Project", str(root), "-Method", "DSH.Editor.DshOutfitToggle.Apply", "-Name", "outfit-toggle",
-        "-RunId", run_id, "-RequestFile", str(request_path), "-ExpectedTask", "OutfitToggle",
+        "-Project", str(root), "-Method", f"DSH.Editor.DshOutfitToggle.{method}", "-Name", name,
+        "-RunId", run_id, "-RequestFile", str(request_path), "-ExpectedTask", task,
         "-InstallOutfitHelpers",
     ], capture_output=True, encoding="utf-8", errors="replace", check=False)
-    result = read_result(result_path)
-    after = git_state(root)
-    unexpected = list(pending_user_changes(root, after["changes"], request["scene"]))
-    ok = run.returncode == 0 and result.get("verified") is True and not unexpected and after["head"] == state["head"]
-    output = {"ok": ok, "checkpoint": state["head"], "changes": after["changes"],
-              "log": str(run_dir / "outfit-toggle.log"), "unity": result,
-              "unexpectedChanges": unexpected}
-    if not ok:
-        output["error"] = result.get("error") or (
-            "Additional Git paths changed or HEAD moved. Review Git status before retrying."
-            if unexpected or after["head"] != state["head"] else (run.stderr.strip() or run.stdout.strip())[-4000:]
-        )
-    else:
-        receipt.parent.mkdir(parents=True, exist_ok=True)
-        receipt.write_text(json.dumps({"checkpoint": state["head"], "sceneDigest": digest(scene), "output": output}),
-                           encoding="utf-8")
-    return output
+    return run, read_result(result_path), run_dir / f"{name}.log"
 
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("preview", "apply", "checkpoint"):
+    for command in ("preview", "apply", "targets", "checkpoint"):
         action = commands.add_parser(command)
         action.add_argument("--project", default=os.getcwd())
         if command == "checkpoint":
             action.add_argument("--confirm", action="store_true")
+            continue
+        if command == "targets":
+            action.add_argument("--scene", required=True)
+            action.add_argument("--avatar", default="")
+            action.add_argument("--avatar-id", default="")
+            action.add_argument("--query", default="")
+            action.add_argument("--prepare", action="store_true")
             continue
         for name in ("scene", "avatar", "outfit", "menu"):
             action.add_argument("--" + name, required=True)
         action.add_argument("--avatar-id", default="")
         action.add_argument("--outfit-id", default="")
         action.add_argument("--default-on", action="store_true")
+        action.add_argument("--verify-sdk", action="store_true")
         if command == "apply":
             action.add_argument("--approved-preview", required=True)
     args = parser.parse_args()
@@ -303,6 +412,8 @@ def main():
             output = checkpoint(root, args.confirm)
         elif args.command == "preview":
             output, _ = preview(root, args)
+        elif args.command == "targets":
+            output = targets(root, args)
         else:
             output = apply(root, args)
     except (WorkflowError, OSError, ValueError, SystemExit) as error:
