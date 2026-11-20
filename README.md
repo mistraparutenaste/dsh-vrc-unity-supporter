@@ -18,13 +18,13 @@ Windows で、まだ入っていないものを用意してください。
 
 ## 動作確認環境
 
-| 項目 | 設定 |
-| --- | --- |
-| アプリ | DeepSeek Harness Desktop（Windows） |
-| モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） |
-| エフォート（推論の強さ） | `MAX` |
+| 項目 | DSH | Claude Code |
+| --- | --- | --- |
+| アプリ | DeepSeek Harness Desktop（Windows） | Claude desktop |
+| モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） | Opus 5.5 |
+| エフォート（推論の強さ） | `MAX` | 中～ |
 
-上記以外の組み合わせでの動作は確認していません。Claude Code 版はプラグインの形式を検証済みですが、Unity プロジェクトでの動作確認はまだです。
+上記以外の組み合わせでの動作は確認していません。
 
 ## プラグインのインストール
 
