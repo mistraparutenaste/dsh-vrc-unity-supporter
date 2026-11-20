@@ -82,6 +82,22 @@ if ($vrcGet) {
     Add-Check 'vrc-get' 'WARN' '未導入（任意）。パッケージ操作は GUI 手順になります'
 }
 
+# --- PhotoCraft CLI (optional, for color variants) --------------------------
+$photocraft = @($env:PHOTOCRAFT_CLI,
+    (Join-Path $env:LOCALAPPDATA 'Programs\ArtCraft\PhotoCraft\photocraft-cli.exe'),
+    (Join-Path $env:ProgramFiles 'ArtCraft\PhotoCraft\photocraft-cli.exe')) |
+    Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+if (-not $photocraft) {
+    $command = Get-Command photocraft-cli -ErrorAction SilentlyContinue
+    if ($command) { $photocraft = $command.Source }
+}
+if ($photocraft) {
+    $ver = (& $photocraft --version 2>$null | Select-Object -First 1)
+    Add-Check 'photocraft cli' 'PASS' "$photocraft  $ver"
+} else {
+    Add-Check 'photocraft cli' 'WARN' '未導入（任意）。PSD からの色替えに使います: https://getartcraft.com/apps/photocraft'
+}
+
 # --- project checks ---------------------------------------------------------
 if ($Project) {
     if (-not (Test-Path -LiteralPath $Project -PathType Container)) {

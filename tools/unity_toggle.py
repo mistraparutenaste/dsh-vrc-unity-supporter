@@ -25,10 +25,19 @@ LEGACY = {
         "727506060aeef9224f5aa0a8eb6b21054bda6ad3",  # 0.3.0 - 0.4.1
     ),
     "DshOutfitToggle.cs": ("eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",),
+    "DshTextureVariant.cs": (),
+    "DshCapture.cs": (),
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
 VRCFURY_BUILDS = "Packages/com.vrcfury.temp/Builds"
+# Folders that SDK preprocessing of a verification copy writes to; kept out of Git locally.
+SDK_OUTPUTS = (VRCFURY_BUILDS, "Packages/nadena.dev.ndmf/__Generated")
+# Color variants (recipes, rendered textures, copied materials, clips) live here; DSH owns this folder.
+VARIANTS = "Assets/DSH/Variants"
+# Package files that Unity rewrites whenever it opens the project. lilToon records the graphics API,
+# which differs between batch runs with and without -nographics.
+UNITY_REWRITES = {"Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt"}
 
 
 class WorkflowError(Exception):
@@ -221,6 +230,20 @@ def ensure_local_ignore(root, example, rule):
         raise WorkflowError(f"Git rules still include {example}. Review the local Git excludes and retry.")
 
 
+def prepare_sdk_outputs(root):
+    """Keep SDK verification outputs out of Git; return why verification must be skipped, if it must."""
+    for folder in SDK_OUTPUTS:
+        if git(root, "ls-files", "-z", "--", folder, f"{folder}.meta").stdout:
+            return f"Build outputs in {folder} are tracked in Git. Verify in Build & Test."
+    try:
+        for folder in SDK_OUTPUTS:
+            ensure_local_ignore(root, f"{folder}/probe", f"/{folder}/".encode("ascii"))
+            ensure_local_ignore(root, f"{folder}.meta", f"/{folder}.meta".encode("ascii"))
+    except WorkflowError as error:
+        return str(error)
+    return None
+
+
 def owned_scene_changes(root, state):
     """Match only unstaged scene contents from successful runs at the current HEAD."""
     modified = {entry["path"] for entry in state["changes"]
@@ -249,6 +272,10 @@ def pending_user_changes(root, changes, allowed_scenes=()):
     for entry in changes:
         path, status = entry["path"], entry["status"]
         if status == "??" and (path.startswith(".dsh/") or path in meta_files):
+            continue
+        if status in ("??", " M") and (path.startswith(VARIANTS + "/") or path == VARIANTS + ".meta"):
+            continue
+        if status == " M" and path in UNITY_REWRITES:
             continue
         if status == " M" and path in allowed_scenes:
             continue
@@ -293,16 +320,7 @@ def apply_with_lock(root, args):
         return {"ok": False, "blockingChanges": blocking,
                 "error": "The project has existing Git changes. Record or set them aside, then preview again."}
     ensure_local_ignore(root, ".dsh/probe", LOCAL_IGNORE)
-    skipped_sdk = None
-    if args.verify_sdk:
-        if git(root, "ls-files", "-z", "--", VRCFURY_BUILDS, f"{VRCFURY_BUILDS}.meta").stdout:
-            skipped_sdk = "VRCFury's temporary build outputs are tracked in Git. Verify in Build & Test."
-        else:
-            try:
-                ensure_local_ignore(root, f"{VRCFURY_BUILDS}/probe", f"/{VRCFURY_BUILDS}/".encode("ascii"))
-                ensure_local_ignore(root, f"{VRCFURY_BUILDS}.meta", f"/{VRCFURY_BUILDS}.meta".encode("ascii"))
-            except WorkflowError as error:
-                skipped_sdk = str(error)
+    skipped_sdk = prepare_sdk_outputs(root) if args.verify_sdk else None
 
     unity_request = dict(request, expectedSceneDigest=plan["sceneDigest"])
     if skipped_sdk:
@@ -364,7 +382,7 @@ def run_error(run):
     return (run.stderr.strip() or run.stdout.strip())[-4000:]
 
 
-def run_task(root, request, helpers, method, task, name):
+def run_task(root, request, helpers, method, task, name, helper_class="DshOutfitToggle", graphics=False):
     run_id = uuid.uuid4().hex
     request_path = inside(root, f".dsh/requests/{run_id}.json")
     request_path.parent.mkdir(parents=True, exist_ok=True)
@@ -373,12 +391,15 @@ def run_task(root, request, helpers, method, task, name):
     request_path.write_text(json.dumps(dict(request, helpers=copy_plan), ensure_ascii=False), encoding="utf-8")
     run_dir = inside(root, f".dsh/runs/{run_id}")
     result_path = run_dir / "result.json"
-    run = subprocess.run([
+    command = [
         "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(TOOLS / "unity-run.ps1"),
-        "-Project", str(root), "-Method", f"DSH.Editor.DshOutfitToggle.{method}", "-Name", name,
+        "-Project", str(root), "-Method", f"DSH.Editor.{helper_class}.{method}", "-Name", name,
         "-RunId", run_id, "-RequestFile", str(request_path), "-ExpectedTask", task,
         "-InstallOutfitHelpers",
-    ], capture_output=True, encoding="utf-8", errors="replace", check=False)
+    ]
+    if graphics:
+        command.append("-AllowGraphics")
+    run = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", check=False)
     return run, read_result(result_path), run_dir / f"{name}.log"
 
 

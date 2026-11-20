@@ -118,6 +118,7 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 
 - 構造の変更を伴う → `vrc-edit-script` でスクリプト化して適用
 - 読み取りだけで済む → `vrc-asset-read` の `unity_inspect.py`
+- 色違い・肌色・ロゴ（付属 PSD から） → `vrc-texture-variant`
 - 数値の判断 → `vrc-perf-budget`
 - 適用後 → `vrc-verify`
 

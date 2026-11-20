@@ -45,6 +45,7 @@ description: VRChat アバター改変の入口（Claude Code 用）。Unity の
 | 初回診断、配置済み衣装のトグル | `vrc-first-run` |
 | 構造の把握、参照切れの切り分け | `vrc-asset-read` |
 | 改変の設計（衣装・髪・メニュー・PhysBone） | `vrc-avatar-edit` |
+| 色違い・肌・髪・瞳の色、ロゴ（付属 PSD から） | `vrc-texture-variant` |
 | Editor スクリプトでの適用 | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |
 | 性能ランクの試算 | `vrc-perf-budget` |
