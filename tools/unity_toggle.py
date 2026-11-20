@@ -34,9 +34,10 @@ LEGACY = {
         "88d4f3fb624c6083b44436ccd5e29562d8cb8f04",  # 0.6.2
         "0a7da5fd1f1428cc639e6654fca15fbd5eb2a9a7",  # 0.6.3
     ),
-    "DshCapture.cs": (),
+    "DshCapture.cs": ("99e317d29760a8151015a5858e4cf593668ee94e",),  # 0.6.0 - 0.6.4
     # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
     "DshAvatarTools.cs": ("1168f8a1430d88449909e6459cd236f611d0de13",),  # 0.6.2
+    "DshShape.cs": (),
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -45,6 +46,9 @@ VRCFURY_BUILDS = "Packages/com.vrcfury.temp/Builds"
 SDK_OUTPUTS = (VRCFURY_BUILDS, "Packages/nadena.dev.ndmf/__Generated")
 # Color variants (recipes, rendered textures, copied materials, clips) live here; DSH owns this folder.
 VARIANTS = "Assets/DSH/Variants"
+# Shape recipes (blendshape weights, outfit sync, hidden-mesh removal); DSH owns this folder.
+SHAPES = "Assets/DSH/Shapes"
+MANAGED_FOLDERS = (VARIANTS, SHAPES)
 # Package files that Unity rewrites whenever it opens the project. lilToon records the graphics API,
 # which differs between batch runs with and without -nographics.
 UNITY_REWRITES = {"Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt"}
@@ -283,7 +287,8 @@ def pending_user_changes(root, changes, allowed_scenes=()):
         path, status = entry["path"], entry["status"]
         if status == "??" and (path.startswith(".dsh/") or path in meta_files):
             continue
-        if status in ("??", " M", " D") and (path.startswith(VARIANTS + "/") or path == VARIANTS + ".meta"):
+        if status in ("??", " M", " D") and any(path.startswith(folder + "/") or path == folder + ".meta"
+                                                for folder in MANAGED_FOLDERS):
             continue
         if status == " M" and path in UNITY_REWRITES:
             continue
@@ -350,7 +355,11 @@ def apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, help
     unity_request = dict(request, expectedSceneDigest=plan["sceneDigest"])
     if skipped_sdk:
         unity_request["verifySdk"] = False
-    run, result, log = run_task(root, unity_request, helpers, method, task, name, helper_class=helper_class)
+    # Build plugins such as Avatar Optimizer's mesh passes need a graphics device, so SDK verification runs
+    # Unity with graphics (as Build & Test does). Plain saves keep -nographics.
+    graphics = bool(verify_sdk and not skipped_sdk)
+    run, result, log = run_task(root, unity_request, helpers, method, task, name, helper_class=helper_class,
+                                graphics=graphics)
     if skipped_sdk and result.get("verified") is True:
         result["sdkVerification"] = {"status": "inconclusive", "reason": skipped_sdk, "clientTested": False}
     after = git_state(root)
@@ -402,6 +411,76 @@ def targets(root, args):
     if not ok:
         output["error"] = (result.get("error") or run_error(run)) if unchanged else "The saved scene changed during discovery. Review it before applying."
     return output
+
+
+def unity_ready(root, prepare):
+    if os.name != "nt":
+        raise WorkflowError("Unity batch tasks require Windows.")
+    helpers = helper_plan(root)
+    if helpers and not prepare:
+        return helpers, {"ok": False, "status": "setup-required",
+                         "plannedPaths": [path.as_posix() for path, _, _ in helpers],
+                         "error": "Confirm the Editor helper setup and rerun with --prepare to query Unity."}
+    return helpers, None
+
+
+def read_only_task(root, args, request, method, task, name, helper_class, graphics=False):
+    helpers, blocked = unity_ready(root, args.prepare)
+    if blocked:
+        return blocked
+    scene, scene_path = scene_asset(root, args.scene)
+    request = dict(request, scene=scene_path, avatar=args.avatar, avatarId=args.avatar_id)
+    with workflow_lock(inside(root, ".dsh/outfit.lock")):
+        before = digest(scene)
+        request["expectedSceneDigest"] = before
+        run, result, log = run_task(root, request, helpers, method, task, name,
+                                           helper_class=helper_class, graphics=graphics)
+        unchanged = scene.is_file() and digest(scene) == before
+    ok = run.returncode == 0 and result.get("ok") is True and unchanged
+    output = {"ok": ok, "log": str(log), "unity": result}
+    if not ok:
+        output["error"] = (result.get("error") or run_error(run)) if unchanged else \
+            "The saved scene changed during a read-only task. Review it before applying."
+    return output
+
+
+def scene_plan(root, request, scene, planned, fingerprint):
+    """Git state, helper setup and an approval token for a Unity task that saves the scene."""
+    helpers = helper_plan(root)
+    state = git_state(root)
+    owned = owned_scene_changes(root, state)
+    state["managedScenes"] = sorted(owned)
+    state["blockingChanges"] = list(pending_user_changes(root, state["changes"], owned))
+    scene_in_checkpoint = bool(state["head"] and git(root, "cat-file", "-e", f"HEAD:{request['scene']}",
+                                                            check=False).returncode == 0)
+    scene_digest = digest(scene)
+    contents = {"project": str(root), "request": request, "head": state["head"], "sceneDigest": scene_digest,
+                "files": fingerprint,
+                "helpers": {p.as_posix(): hashlib.sha256(source).hexdigest() for p, source, _ in helpers}}
+    token = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
+    return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
+            "sceneDigest": scene_digest, "plannedPaths": [*planned, *(p.as_posix() for p, _, _ in helpers)],
+            "sceneInCheckpoint": scene_in_checkpoint}, helpers
+
+
+def run_approved(root, args, make_plan, method, task, name, helper_class, verify_sdk=False):
+    """Check the approval token and the Git checkpoint, then run the scene task under the workflow lock."""
+    if os.name != "nt":
+        raise WorkflowError("Unity batch application requires Windows.")
+    plan, _ = make_plan()
+    if plan.get("ok") is False:
+        return plan
+    if plan["preview"] != args.approved_preview:
+        raise WorkflowError("The preview changed. Preview again and confirm the new details before applying.")
+    if not plan["git"]["head"]:
+        raise WorkflowError("A project Git checkpoint is required. Run unity_py checkpoint first.")
+    if not plan["sceneInCheckpoint"]:
+        raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
+    with workflow_lock(inside(root, ".dsh/outfit.lock")):
+        plan, helpers = make_plan()
+        if plan["preview"] != args.approved_preview:
+            raise WorkflowError("The preview changed. Preview again before applying.")
+        return apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, helper_class)
 
 
 def run_error(run):

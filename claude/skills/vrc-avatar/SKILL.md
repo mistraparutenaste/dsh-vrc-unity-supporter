@@ -11,7 +11,7 @@ description: VRChat アバター改変の入口（Claude Code 用）。Unity の
 
 ## 範囲
 
-- 対象: アバター改変のみ — 衣装、髪、トグル、メニュー、PhysBone、コンタクト / SPS、マテリアルとシェーダ、最適化、結果の検証
+- 対象: アバター改変のみ — 衣装、髪、トグル、メニュー、PhysBone、コンタクト / SPS、マテリアルとシェーダ、体型の調整、最適化、結果の検証
 - 対象外: Unity とツール類の導入・修復、プロジェクトの作成・修復、ワールド制作、アップロード。頼まれたら対象外だとはっきり伝える
 
 ## 初回の振る舞い
@@ -46,6 +46,7 @@ description: VRChat アバター改変の入口（Claude Code 用）。Unity の
 | 構造の把握、参照切れの切り分け | `vrc-asset-read` |
 | 改変の設計（衣装・髪・メニュー・PhysBone） | `vrc-avatar-edit` |
 | 色違い・肌・髪・瞳の色、ロゴ（付属 PSD から） | `vrc-texture-variant` |
+| 体型・顔の調整、衣装の貫通、隠れる部分の削除 | `vrc-shape-adjust` |
 | Editor スクリプトでの適用 | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |
 | 性能ランクの試算 | `vrc-perf-budget` |

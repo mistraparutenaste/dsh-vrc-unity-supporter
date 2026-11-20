@@ -13,7 +13,7 @@ import sys
 
 import unity_toggle as toggle
 from unity_inspect import find_project
-from unity_toggle import WorkflowError, digest, git_state, inside, read_result
+from unity_toggle import WorkflowError, digest, inside, read_result
 
 
 VARIANTS = Path(toggle.VARIANTS)
@@ -331,39 +331,9 @@ def rendered(root, name):
 
 # --- Unity tasks ---------------------------------------------------------------
 
-def unity_ready(root, prepare):
-    if os.name != "nt":
-        raise WorkflowError("Unity batch tasks require Windows.")
-    helpers = toggle.helper_plan(root)
-    if helpers and not prepare:
-        return helpers, {"ok": False, "status": "setup-required",
-                         "plannedPaths": [path.as_posix() for path, _, _ in helpers],
-                         "error": "Confirm the Editor helper setup and rerun with --prepare to query Unity."}
-    return helpers, None
-
-
-def read_only_task(root, args, request, method, task, name, helper_class="DshTextureVariant", graphics=False):
-    helpers, blocked = unity_ready(root, args.prepare)
-    if blocked:
-        return blocked
-    scene, scene_path = toggle.scene_asset(root, args.scene)
-    request = dict(request, scene=scene_path, avatar=args.avatar, avatarId=args.avatar_id)
-    with toggle.workflow_lock(inside(root, ".dsh/outfit.lock")):
-        before = digest(scene)
-        request["expectedSceneDigest"] = before
-        run, result, log = toggle.run_task(root, request, helpers, method, task, name,
-                                           helper_class=helper_class, graphics=graphics)
-        unchanged = scene.is_file() and digest(scene) == before
-    ok = run.returncode == 0 and result.get("ok") is True and unchanged
-    output = {"ok": ok, "log": str(log), "unity": result}
-    if not ok:
-        output["error"] = (result.get("error") or toggle.run_error(run)) if unchanged else \
-            "The saved scene changed during a read-only task. Review it before applying."
-    return output
-
-
 def materials(root, args):
-    output = read_only_task(root, args, {"filter": args.filter}, "Materials", "TextureMaterials", "texture-materials")
+    output = toggle.read_only_task(root, args, {"filter": args.filter}, "Materials", "TextureMaterials",
+                                   "texture-materials", "DshTextureVariant")
     if output.get("ok"):
         roots = [Path(value) for value in args.psd_dir] + [root / "Assets"]
         textures = output["unity"].get("textures") or []
@@ -398,12 +368,12 @@ def capture_request(root, name):
 
 def capture(root, args):
     request = dict(capture_request(root, args.variant), views=args.views, size=args.size)
-    return read_only_task(root, args, request, "Capture", "Capture", "capture", "DshCapture", graphics=True)
+    return toggle.read_only_task(root, args, request, "Capture", "Capture", "capture", "DshCapture", graphics=True)
 
 
 def uv_map(root, args):
     request = {"texture": args.texture, "size": args.size}
-    return read_only_task(root, args, request, "Uv", "UvMap", "uv-map", "DshCapture")
+    return toggle.read_only_task(root, args, request, "Uv", "UvMap", "uv-map", "DshCapture")
 
 
 def variant_request(root, args):
@@ -439,50 +409,11 @@ def overlapping_variants(root, name, recipe):
     return found
 
 
-def scene_plan(root, request, scene, planned, fingerprint):
-    """Git state, helper setup and an approval token for a Unity task that saves the scene."""
-    helpers = toggle.helper_plan(root)
-    state = git_state(root)
-    owned = toggle.owned_scene_changes(root, state)
-    state["managedScenes"] = sorted(owned)
-    state["blockingChanges"] = list(toggle.pending_user_changes(root, state["changes"], owned))
-    scene_in_checkpoint = bool(state["head"] and toggle.git(root, "cat-file", "-e", f"HEAD:{request['scene']}",
-                                                            check=False).returncode == 0)
-    scene_digest = digest(scene)
-    contents = {"project": str(root), "request": request, "head": state["head"], "sceneDigest": scene_digest,
-                "files": fingerprint,
-                "helpers": {p.as_posix(): hashlib.sha256(source).hexdigest() for p, source, _ in helpers}}
-    token = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
-    return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
-            "sceneDigest": scene_digest, "plannedPaths": [*planned, *(p.as_posix() for p, _, _ in helpers)],
-            "sceneInCheckpoint": scene_in_checkpoint}, helpers
-
-
-def run_approved(root, args, make_plan, method, task, name, verify_sdk=False):
-    """Check the approval token and the Git checkpoint, then run the scene task under the workflow lock."""
-    if os.name != "nt":
-        raise WorkflowError("Unity batch application requires Windows.")
-    plan, _ = make_plan()
-    if plan.get("ok") is False:
-        return plan
-    if plan["preview"] != args.approved_preview:
-        raise WorkflowError("The preview changed. Preview again and confirm the new details before applying.")
-    if not plan["git"]["head"]:
-        raise WorkflowError("A project Git checkpoint is required. Run unity_toggle.py checkpoint first.")
-    if not plan["sceneInCheckpoint"]:
-        raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
-    with toggle.workflow_lock(inside(root, ".dsh/outfit.lock")):
-        plan, helpers = make_plan()
-        if plan["preview"] != args.approved_preview:
-            raise WorkflowError("The preview changed. Preview again before applying.")
-        return toggle.apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, "DshTextureVariant")
-
-
 def preview(root, args):
     request, scene, outputs = variant_request(root, args)
     recipe, _ = load_recipe(root, args.variant)
     overlaps = overlapping_variants(root, args.variant, recipe)
-    output, helpers = scene_plan(root, request, scene,
+    output, helpers = toggle.scene_plan(root, request, scene,
                                  [request["scene"], request["folder"] + "/ (materials, animation clip)"],
                                  [o["sha256"] for o in outputs])
     if overlaps:
@@ -493,8 +424,8 @@ def preview(root, args):
 
 
 def apply(root, args):
-    return run_approved(root, args, lambda: preview(root, args), "Apply", "TextureVariant", "texture-variant",
-                        args.verify_sdk)
+    return toggle.run_approved(root, args, lambda: preview(root, args), "Apply", "TextureVariant",
+                               "texture-variant", "DshTextureVariant", args.verify_sdk)
 
 
 # --- list and remove -------------------------------------------------------------
@@ -591,7 +522,7 @@ def remove_plan(root, args):
     planned = [scene_path] if in_scene else []
     if exists and not args.keep_files:
         planned.append(request["folder"] + "/ (deleted with its .meta files)")
-    output, helpers = scene_plan(root, request, scene, planned, fingerprint)
+    output, helpers = toggle.scene_plan(root, request, scene, planned, fingerprint)
     output.update(toggleInScene=in_scene, deletesFiles=exists and not args.keep_files,
                   fileCount=sum(1 for path in files if not path.endswith(".meta")))
     if references:
@@ -605,8 +536,8 @@ def remove(root, args):
     if not args.approved_preview:
         output, _ = remove_plan(root, args)
         return output
-    output = run_approved(root, args, lambda: remove_plan(root, args), "Remove", "TextureVariantRemove",
-                          "texture-remove")
+    output = toggle.run_approved(root, args, lambda: remove_plan(root, args), "Remove", "TextureVariantRemove",
+                                 "texture-remove", "DshTextureVariant")
     if output.get("ok") and not args.keep_files:
         render_receipt_path(root, args.variant).unlink(missing_ok=True)
     return output

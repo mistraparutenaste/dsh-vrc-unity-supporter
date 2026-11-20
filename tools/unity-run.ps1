@@ -32,7 +32,7 @@ function Install-OutfitHelpers([string]$ProjectPath, [string]$RequestPath) {
     $destDir = Join-Path $ProjectPath 'Assets\DSH\Editor'
     $sourceDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'templates\Editor'
     $copies = foreach ($helper in $request.helpers) {
-        if ($helper.file -cnotin @('DshApply.cs', 'DshInspect.cs', 'DshOutfitToggle.cs', 'DshTextureVariant.cs', 'DshCapture.cs', 'DshAvatarTools.cs')) {
+        if ($helper.file -cnotin @('DshApply.cs', 'DshInspect.cs', 'DshOutfitToggle.cs', 'DshTextureVariant.cs', 'DshCapture.cs', 'DshAvatarTools.cs', 'DshShape.cs')) {
             throw "Unknown DSH helper: $($helper.file)"
         }
         $dest = Join-Path $destDir $helper.file

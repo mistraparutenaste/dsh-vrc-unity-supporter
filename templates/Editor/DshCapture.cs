@@ -44,49 +44,29 @@ namespace DSH.Editor
             var result = new Dictionary<string, object> { { "ok", false } };
             try
             {
-                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
-                    throw new InvalidOperationException("Unity started without graphics. Capture needs a GPU (run without -nographics).");
+                RequireGraphics();
                 var request = DshAvatarScene.ReadRequest<Request>();
-                var views = (request.views ?? "").Split(',').Select(v => v.Trim().ToLowerInvariant())
-                    .Where(v => v.Length > 0).Distinct().ToArray();
-                if (views.Length == 0 || views.Any(v => !KnownViews.Contains(v)))
-                    throw new InvalidOperationException("Choose views from: " + string.Join(", ", KnownViews));
-                var size = Mathf.Clamp(request.size, 64, 2048);
-
+                var views = ParseViews(request.views);
                 var scene = DshAvatarScene.OpenScene(request.scene, request.expectedSceneDigest);
                 var avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
                 result["avatar"] = DshAvatarScene.Describe(avatar.transform);
                 var swaps = DshAvatarScene.LoadSwaps(request.swaps.Select(s => (s.from, s.to)));
 
-                var rows = new List<(string label, Dictionary<Texture, Texture> swaps)> { ("original", null) };
-                if (swaps.Count > 0) rows.Add((request.variant, swaps));
-                var sheet = new Texture2D(size * views.Length, size * rows.Count, TextureFormat.RGBA32, false);
                 var swapped = 0;
-                for (var row = 0; row < rows.Count; row++)
+                var rows = new List<(string label, Func<GameObject, GameObject> make)>
                 {
-                    var copy = UnityEngine.Object.Instantiate(avatar);
-                    try
+                    ("original", source => UnityEngine.Object.Instantiate(source))
+                };
+                if (swaps.Count > 0)
+                    rows.Add((request.variant, source =>
                     {
-                        copy.transform.SetPositionAndRotation(new Vector3(0, -1000, 0), avatar.transform.rotation);
-                        foreach (var t in copy.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = CaptureLayer;
-                        foreach (var animator in copy.GetComponentsInChildren<Animator>(true)) animator.enabled = false;
-                        if (rows[row].swaps != null) swapped = SwapMaterials(copy, rows[row].swaps);
-                        for (var column = 0; column < views.Length; column++)
-                        {
-                            var pixels = Render(copy, avatar, views[column], size);
-                            // Texture rows start at the bottom; put the original row on top.
-                            sheet.SetPixels32(column * size, (rows.Count - 1 - row) * size, size, size, pixels);
-                        }
-                    }
-                    finally
-                    {
-                        UnityEngine.Object.DestroyImmediate(copy);
-                    }
-                }
+                        var copy = UnityEngine.Object.Instantiate(source);
+                        swapped = SwapMaterials(copy, swaps);
+                        return copy;
+                    }));
+                var output = RenderSheet(avatar, views, Mathf.Clamp(request.size, 64, 2048), rows);
                 if (rows.Count > 1 && swapped == 0)
                     throw new InvalidOperationException("No material on this avatar uses the original textures of the variant.");
-                var output = Path.Combine(DshAvatarScene.RunDirectory, "capture.png");
-                File.WriteAllBytes(output, sheet.EncodeToPNG());
                 result["image"] = output;
                 result["columns"] = views;
                 result["rows"] = rows.Select(r => r.label).ToArray();
@@ -98,6 +78,54 @@ namespace DSH.Editor
                 result["error"] = error.GetBaseException().Message;
             }
             DshAvatarScene.Finish("Capture", result);
+        }
+
+        internal static void RequireGraphics()
+        {
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+                throw new InvalidOperationException("Unity started without graphics. Capture needs a GPU (run without -nographics).");
+        }
+
+        internal static string[] ParseViews(string value)
+        {
+            var views = (value ?? "").Split(',').Select(v => v.Trim().ToLowerInvariant())
+                .Where(v => v.Length > 0).Distinct().ToArray();
+            if (views.Length == 0 || views.Any(v => !KnownViews.Contains(v)))
+                throw new InvalidOperationException("Choose views from: " + string.Join(", ", KnownViews));
+            return views;
+        }
+
+        /// <summary>
+        /// Render one row per entry, top to bottom, into capture.png in the run folder. Each entry makes its own copy
+        /// of the avatar (for example a material swap, or an SDK-built copy); the copy is destroyed after rendering.
+        /// </summary>
+        internal static string RenderSheet(GameObject avatar, string[] views, int size,
+            IList<(string label, Func<GameObject, GameObject> make)> rows)
+        {
+            var sheet = new Texture2D(size * views.Length, size * rows.Count, TextureFormat.RGBA32, false);
+            for (var row = 0; row < rows.Count; row++)
+            {
+                var copy = rows[row].make(avatar);
+                try
+                {
+                    copy.transform.SetPositionAndRotation(new Vector3(0, -1000, 0), avatar.transform.rotation);
+                    foreach (var t in copy.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = CaptureLayer;
+                    foreach (var animator in copy.GetComponentsInChildren<Animator>(true)) animator.enabled = false;
+                    for (var column = 0; column < views.Length; column++)
+                    {
+                        var pixels = Render(copy, avatar, views[column], size);
+                        // Texture rows start at the bottom; put the first row on top.
+                        sheet.SetPixels32(column * size, (rows.Count - 1 - row) * size, size, size, pixels);
+                    }
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(copy);
+                }
+            }
+            var output = Path.Combine(DshAvatarScene.RunDirectory, "capture.png");
+            File.WriteAllBytes(output, sheet.EncodeToPNG());
+            return output;
         }
 
         private static int SwapMaterials(GameObject copy, Dictionary<Texture, Texture> swaps)
