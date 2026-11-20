@@ -313,8 +313,9 @@ namespace DSH.Editor
             {
                 copy = DshVrc.PreprocessCopy(avatar);
                 var descriptor = DshAvatarScene.Descriptor(copy);
-                var (_, parameter) = DshVrc.GeneratedToggle(descriptor, request.menu);
+                var (_, parameter, location) = DshVrc.GeneratedToggle(descriptor, request.menu);
                 result["menuGenerated"] = true;
+                result["menuLocation"] = location;
                 result["parameter"] = parameter;
 
                 // Optimizers may rename or merge materials, so look for any variant material in the generated FX.

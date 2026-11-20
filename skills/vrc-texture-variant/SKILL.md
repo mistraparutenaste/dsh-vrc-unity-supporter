@@ -132,6 +132,7 @@ python -B $tex apply @v --approved-preview '<preview の値>'
 - apply は、元テクスチャのインポート設定を書き出した PNG にコピーし、元テクスチャを使うマテリアルを複製して差し替え、
   `DSH Color Variant <名前>` に VRCFury のトグル（マテリアル差し替えのアニメーション）を作る。
 - `unity.sdkVerification.status` が `passed` なら、SDK の前処理でメニューと差し替えが生成された。
+  VRChat で開く位置は `menuLocation`（項目が多いと `Next/Color/...` のように次のページになる）で伝える。
   VRChat での見た目は、ユーザーが **Build & Test** で確認する。
 
 ## 部位ごとの注意

@@ -47,7 +47,7 @@ python -B $tool apply @target --approved-preview '<preview の値>'
 初回のUnityコンパイルに時間がかかる場合は、DSHではジョブ機能、Claude Codeではバックグラウンド実行で回す。結果とログは `.dsh/runs` に保存される。`--verify-sdk` はシーンを保存した後にアバターのコピーをSDKの前処理に通す。ローカルのGit除外には `.dsh/` と、SDK検証時に使うVRCFuryの一時ビルド出力が入る。
 
 3. 適用時に同名候補が返ったら `targets` で対象を確認し、選び直したプレビューを提示する。`changes` は現在のGit差分、`checkpoint` は元のGitコミット。エラー時は `unity.error` と `log` を調べ、シーンが保存済みかも伝える。
-4. 保存結果と `unity.sdkVerification` の結果をそれぞれ報告する。`passed` なら生成済みのメニュー名と衣装のオン・オフを切り替えるキーを確認できたことを伝える。`failed` または `inconclusive` なら理由を示す。SDK検証だけ再試行するときは、保存済みのトグルと同じ依頼を新たにプレビューして実行できる。VRChatクライアントでの動作は、ユーザーが **Build & Test** を実行し、報告されたメニューを開いて衣装の表示・非表示を確認する。
+4. 保存結果と `unity.sdkVerification` の結果をそれぞれ報告する。`passed` なら生成済みのメニュー名と衣装のオン・オフを切り替えるキーを確認できたことを伝える。メニューの項目が多いと VRCFury は残りを「Next」の先のページに回すので、VRChat で開く位置は `menuLocation`（例: `Next/衣装/パーカー`）で伝える。`failed` または `inconclusive` なら理由を示す。SDK検証だけ再試行するときは、保存済みのトグルと同じ依頼を新たにプレビューして実行できる。VRChatクライアントでの動作は、ユーザーが **Build & Test** を実行し、報告されたメニューを開いて衣装の表示・非表示を確認する。
 5. Gitで復元する場合、`git restore --source <checkpoint> -- <scene>` はそのシーン全体を元のコミットまで戻す。連続適用した複数の改変にも影響するので、対象と範囲を確認してから案内する。
 
 この導線は単一衣装のオン・オフ用。Prefab本体の改変、排他設定、衣装の装着などは `vrc-avatar-edit` と `vrc-edit-script` を使い、既存機能との相互作用を確認する。

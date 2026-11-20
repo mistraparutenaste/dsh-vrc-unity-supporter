@@ -214,21 +214,66 @@ namespace DSH.Editor
             return copy;
         }
 
-        /// <summary>The generated menu Toggle at a slash-separated path, and its parameter name.</summary>
-        public static (object control, string parameter) GeneratedToggle(Component descriptor, string path)
+        /// <summary>
+        /// The generated menu Toggle at a slash-separated path, its parameter name, and where it appears in the
+        /// VRChat menu, including any "Next" page links in front of it (for example "Next/Outfit/Hood").
+        /// </summary>
+        public static (object control, string parameter, string location) GeneratedToggle(Component descriptor, string path)
         {
             object control = null;
             var menu = PublicMember(descriptor, "expressionsMenu");
+            var names = Array.Empty<string>();
+            var location = new List<string>();
             foreach (var name in path.Split('/'))
             {
-                var matching = PublicItems(menu, "controls").Where(item => PublicMember(item, "name") as string == name).ToArray();
-                control = matching.Length == 1 ? matching[0] : null;
+                var controls = PagedControls(menu).ToArray();
+                names = controls.Select(item => PublicMember(item.control, "name") as string).ToArray();
+                var matching = controls.Where(item => PublicMember(item.control, "name") as string == name).ToArray();
+                control = matching.Length == 1 ? matching[0].control : null;
                 if (control == null) break;
+                location.AddRange(matching[0].via);
+                location.Add(name);
                 menu = PublicMember(control, "subMenu");
             }
             if (PublicMember(control, "type")?.ToString() != "Toggle")
-                throw new InvalidOperationException($"The SDK did not generate a unique Toggle at '{path}'.");
-            return (control, PublicMember(PublicMember(control, "parameter"), "name") as string);
+                throw new InvalidOperationException($"The SDK did not generate a unique Toggle at '{path}'. " +
+                    $"The generated menu level has: {string.Join(", ", names.Take(24))}");
+            return (control, PublicMember(PublicMember(control, "parameter"), "name") as string, string.Join("/", location));
+        }
+
+        /// <summary>
+        /// Controls of a menu including its continuation pages. When a menu has more controls than fit, VRCFury
+        /// moves the rest to a submenu asset named "&lt;menu&gt; (Page N)" behind a last "Next" control. Build steps
+        /// may rename the menu assets afterwards, and the label can be changed in VRCFury's menu settings, so the
+        /// last submenu counts as a page when its asset name has " (Page " or its label is "Next".
+        /// </summary>
+        public static IEnumerable<(object control, string[] via)> PagedControls(object menu)
+        {
+            var visited = new HashSet<object>();
+            var via = new List<string>();
+            while (menu != null && visited.Add(menu))
+            {
+                var controls = PublicItems(menu, "controls").ToArray();
+                object nextPage = null;
+                string nextLabel = null;
+                if (controls.Length > 0)
+                {
+                    var last = controls[controls.Length - 1];
+                    var subMenu = PublicMember(last, "subMenu");
+                    var subName = PublicMember(subMenu, "name") as string ?? "";
+                    if (subMenu != null && PublicMember(last, "type")?.ToString() == "SubMenu" &&
+                        (subName.Contains(" (Page ") || PublicMember(last, "name") as string == "Next"))
+                    {
+                        nextPage = subMenu;
+                        nextLabel = PublicMember(last, "name") as string ?? "Next";
+                        controls = controls.Take(controls.Length - 1).ToArray();
+                    }
+                }
+                var path = via.ToArray();
+                foreach (var control in controls) yield return (control, path);
+                if (nextLabel != null) via.Add(nextLabel);
+                menu = nextPage;
+            }
         }
 
         /// <summary>Clips of the generated FX controllers that use the parameter.</summary>

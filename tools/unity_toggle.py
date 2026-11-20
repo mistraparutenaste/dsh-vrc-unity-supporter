@@ -27,11 +27,15 @@ LEGACY = {
     "DshOutfitToggle.cs": (
         "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",  # 0.3.0
         "ee86c39b44243ac2c753c81b0828a73a3c8d3e09",  # 0.4.0 - 0.6.1
+        "64a7115bf9450baa18eddcf3b54088d07fa6f568",  # 0.6.2
     ),
-    "DshTextureVariant.cs": ("23cf182d53ef8fc2405305d706ace79403c1bca1",),  # 0.6.0 - 0.6.1
+    "DshTextureVariant.cs": (
+        "23cf182d53ef8fc2405305d706ace79403c1bca1",  # 0.6.0 - 0.6.1
+        "88d4f3fb624c6083b44436ccd5e29562d8cb8f04",  # 0.6.2
+    ),
     "DshCapture.cs": (),
     # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
-    "DshAvatarTools.cs": (),
+    "DshAvatarTools.cs": ("1168f8a1430d88449909e6459cd236f611d0de13",),  # 0.6.2
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"

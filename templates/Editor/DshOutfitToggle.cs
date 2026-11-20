@@ -235,8 +235,9 @@ namespace DSH.Editor
                 });
 
                 var descriptor = DshAvatarScene.Descriptor(copy);
-                var (_, parameter) = DshVrc.GeneratedToggle(descriptor, request.menu);
+                var (_, parameter, location) = DshVrc.GeneratedToggle(descriptor, request.menu);
                 result["menuGenerated"] = true;
+                result["menuLocation"] = location;
 
                 var parameters = DshVrc.PublicItems(DshVrc.PublicMember(descriptor, "expressionParameters"), "parameters")
                     .Where(item => DshVrc.PublicMember(item, "name") as string == parameter).ToArray();
