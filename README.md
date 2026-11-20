@@ -104,13 +104,15 @@ Windows で、まだ入っていないものを用意してください。
 - **VRChat Avatar が表示されない**。Plugins でプラグインが入っていることを確認し、DSH で新しいセッションを作ります。
 - **Claude Code でスキルが使われない**。`/plugin` で `dsh-vrc-unity-supporter` が有効になっているか確認し、`/reload-plugins` を実行するか新しいセッションを始めます。
 - **プロジェクトが見つからない**。DSH または Claude Code で開いているフォルダに `Assets` と `ProjectSettings` があるか確認します。
+- **色違いで「PhotoCraft CLI was not found」と出る**。PhotoCraft をインストールし、DSH または Claude Code を開き直します。別の場所に入れた場合は、環境変数 `PHOTOCRAFT_CLI` に `photocraft-cli.exe` のフルパスを設定します。
+- **撮影（改変前後の画像）が失敗する**。撮影は GPU を使って Unity を起動します。Unity を閉じてから再度依頼し、それでも失敗する場合はチャットに表示されたログの場所を確認してください。
 - **Git の名前やメールアドレスを求められた**。チャットで「このプロジェクトで Git の名前とメールアドレスを設定する方法を教えて」と聞いてください。
 - **インストーラーが途中で止まる**。DSH をタスクトレイからも終了し、画面に表示されたエラーを確認してください。 [インストーラーのトラブル対処](installer/README.md#うまくいかないとき)
 
 <details>
 <summary>メンテナー向けのテストと公開手順</summary>
 
-Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取りと適用 CLI の回帰テストを実行できます。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
+Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取り、衣装トグル、色違いの CLI の回帰テストを実行できます（Unity と PhotoCraft は偽物を使うので不要です）。Claude Code 版のマニフェストは `claude plugin validate . --strict` で確認できます。版を上げるときは `package.json` と `.claude-plugin/plugin.json` を揃えます（`verify-package.ps1` が照合します）。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
 
 ```powershell
 npm login
@@ -120,10 +122,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\publish.ps1
 
 `publish.ps1` は次を順に実行し、前提が欠けていれば**何も壊さずに止まります**。
 
-1. `verify-package.ps1`（BOM / スキル名 / JSON / `dsh.bundle.patch`）
+1. `verify-package.ps1`（BOM / スキル名 / JSON / `dsh.bundle.patch` / プラグインのマニフェスト）
 2. `npm pack --dry-run` で同梱内容を確認
 3. npm / gh の認証確認（未ログインなら実行すべきコマンドを表示して終了）
-4. `npm publish --access public`（同じ版が既にあれば skip）
+4. `npm publish --access public`（同じ版が既にあれば skip。2 段階認証を使わない場合は `-Token` に npm のトークンを渡す）
 5. `gh repo create ... --push`、`git tag`、タグ push
 
 `-DryRun` を付けると 4 以降を実行せず、何をするかだけ表示します。

@@ -24,9 +24,14 @@ LEGACY = {
         "92de7704a6e547f8fdbb6a8abb2c543de0f3b4cc",  # 0.2.x
         "727506060aeef9224f5aa0a8eb6b21054bda6ad3",  # 0.3.0 - 0.4.1
     ),
-    "DshOutfitToggle.cs": ("eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",),
-    "DshTextureVariant.cs": (),
+    "DshOutfitToggle.cs": (
+        "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",  # 0.3.0
+        "ee86c39b44243ac2c753c81b0828a73a3c8d3e09",  # 0.4.0 - 0.6.1
+    ),
+    "DshTextureVariant.cs": ("23cf182d53ef8fc2405305d706ace79403c1bca1",),  # 0.6.0 - 0.6.1
     "DshCapture.cs": (),
+    # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
+    "DshAvatarTools.cs": (),
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -306,26 +311,41 @@ def apply_with_lock(root, args):
     if plan["preview"] != args.approved_preview:
         raise WorkflowError("The preview changed. Preview again before applying.")
     request, state = plan["request"], plan["git"]
-    scene = inside(root, request["scene"])
     owned = owned_scene_changes(root, state)
-    receipt_id = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
-    receipt = inside(root, f".dsh/outfits/{receipt_id}.json")
-    last = read_result(receipt)
+    last = read_result(receipt_path(root, request))
     previous = last.get("output")
     blocking = list(pending_user_changes(root, state["changes"], owned))
     if (not args.verify_sdk and isinstance(previous, dict) and previous.get("ok") is True and not blocking and
             last.get("checkpoint") == state["head"] and last.get("sceneDigest") == plan["sceneDigest"]):
         return dict(previous, alreadyApplied=True, changes=state["changes"])
+    return apply_scene_change(root, plan, helpers, args.verify_sdk,
+                              "Apply", "OutfitToggle", "outfit-toggle", "DshOutfitToggle")
+
+
+def receipt_path(root, request):
+    receipt_id = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
+    return inside(root, f".dsh/outfits/{receipt_id}.json")
+
+
+def apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, helper_class):
+    """Run a Unity task that saves the previewed scene, check what changed in Git, and record a receipt.
+
+    The receipt lets later outfit and color tasks continue on this saved scene without a commit.
+    """
+    request, state = plan["request"], plan["git"]
+    scene = inside(root, request["scene"])
+    owned = owned_scene_changes(root, state)
+    blocking = list(pending_user_changes(root, state["changes"], owned))
     if blocking:
         return {"ok": False, "blockingChanges": blocking,
                 "error": "The project has existing Git changes. Record or set them aside, then preview again."}
     ensure_local_ignore(root, ".dsh/probe", LOCAL_IGNORE)
-    skipped_sdk = prepare_sdk_outputs(root) if args.verify_sdk else None
+    skipped_sdk = prepare_sdk_outputs(root) if verify_sdk else None
 
     unity_request = dict(request, expectedSceneDigest=plan["sceneDigest"])
     if skipped_sdk:
         unity_request["verifySdk"] = False
-    run, result, log = run_task(root, unity_request, helpers, "Apply", "OutfitToggle", "outfit-toggle")
+    run, result, log = run_task(root, unity_request, helpers, method, task, name, helper_class=helper_class)
     if skipped_sdk and result.get("verified") is True:
         result["sdkVerification"] = {"status": "inconclusive", "reason": skipped_sdk, "clientTested": False}
     after = git_state(root)
@@ -335,7 +355,7 @@ def apply_with_lock(root, args):
     unexpected = list(pending_user_changes(root, after["changes"], allowed))
     saved_digest = digest(scene) if scene.is_file() else None
     matches_saved_scene = saved_digest is not None and result.get("sceneDigest") == saved_digest
-    sdk_reported = not args.verify_sdk or isinstance(result.get("sdkVerification"), dict)
+    sdk_reported = not verify_sdk or isinstance(result.get("sdkVerification"), dict)
     ok = (run.returncode == 0 and result.get("verified") is True and matches_saved_scene and sdk_reported and
           not unexpected and after["head"] == state["head"])
     output = {"ok": ok, "checkpoint": state["head"], "changes": after["changes"],
@@ -350,6 +370,7 @@ def apply_with_lock(root, args):
         else:
             output["error"] = result.get("error") or run_error(run)
     else:
+        receipt = receipt_path(root, request)
         receipt.parent.mkdir(parents=True, exist_ok=True)
         receipt.write_text(json.dumps({"checkpoint": state["head"], "scene": request["scene"],
                                        "sceneDigest": saved_digest, "output": output}), encoding="utf-8")

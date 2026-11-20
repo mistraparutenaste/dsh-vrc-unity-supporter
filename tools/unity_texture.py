@@ -480,55 +480,8 @@ def apply(root, args):
         plan, helpers = preview(root, args)
         if plan["preview"] != args.approved_preview:
             raise WorkflowError("The preview changed. Preview again before applying.")
-        return apply_with_lock(root, args, plan, helpers)
-
-
-def apply_with_lock(root, args, plan, helpers):
-    request, state = plan["request"], plan["git"]
-    scene = inside(root, request["scene"])
-    owned = toggle.owned_scene_changes(root, state)
-    blocking = list(toggle.pending_user_changes(root, state["changes"], owned))
-    if blocking:
-        return {"ok": False, "blockingChanges": blocking,
-                "error": "The project has existing Git changes. Record or set them aside, then preview again."}
-    toggle.ensure_local_ignore(root, ".dsh/probe", toggle.LOCAL_IGNORE)
-    skipped_sdk = toggle.prepare_sdk_outputs(root) if args.verify_sdk else None
-    unity_request = dict(request, expectedSceneDigest=plan["sceneDigest"])
-    if skipped_sdk:
-        unity_request["verifySdk"] = False
-    run, result, log = toggle.run_task(root, unity_request, helpers, "Apply", "TextureVariant", "texture-variant",
-                                       helper_class="DshTextureVariant")
-    if skipped_sdk and result.get("verified") is True:
-        result["sdkVerification"] = {"status": "inconclusive", "reason": skipped_sdk, "clientTested": False}
-    after = git_state(root)
-    allowed = {path for path, before in owned.items() if path != request["scene"] and
-               inside(root, path).is_file() and digest(inside(root, path)) == before}
-    allowed.add(request["scene"])
-    unexpected = list(toggle.pending_user_changes(root, after["changes"], allowed))
-    saved_digest = digest(scene) if scene.is_file() else None
-    matches_saved_scene = saved_digest is not None and result.get("sceneDigest") == saved_digest
-    sdk_reported = not args.verify_sdk or isinstance(result.get("sdkVerification"), dict)
-    ok = (run.returncode == 0 and result.get("verified") is True and matches_saved_scene and sdk_reported and
-          not unexpected and after["head"] == state["head"])
-    output = {"ok": ok, "checkpoint": state["head"], "changes": after["changes"],
-              "log": str(log), "unity": result, "unexpectedChanges": unexpected}
-    if not ok:
-        if unexpected or after["head"] != state["head"]:
-            output["error"] = "Additional Git paths changed or HEAD moved. Review Git status before retrying."
-        elif result.get("verified") is True and not matches_saved_scene:
-            output["error"] = "The saved scene changed after Unity verification. Review the scene before retrying."
-        elif result.get("verified") is True and not sdk_reported:
-            output["error"] = "The requested SDK verification result is missing. Review the Unity log."
-        else:
-            output["error"] = result.get("error") or toggle.run_error(run)
-        return output
-    # The outfit receipt format lets both workflows continue on this saved scene without a commit.
-    receipt_id = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
-    receipt = inside(root, f".dsh/outfits/{receipt_id}.json")
-    receipt.parent.mkdir(parents=True, exist_ok=True)
-    receipt.write_text(json.dumps({"checkpoint": state["head"], "scene": request["scene"],
-                                   "sceneDigest": saved_digest, "output": output}), encoding="utf-8")
-    return output
+        return toggle.apply_scene_change(root, plan, helpers, args.verify_sdk, "Apply", "TextureVariant",
+                                         "texture-variant", "DshTextureVariant")
 
 
 # --- command line ---------------------------------------------------------------

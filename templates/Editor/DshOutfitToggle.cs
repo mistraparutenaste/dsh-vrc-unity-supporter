@@ -1,9 +1,7 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
@@ -36,21 +34,21 @@ namespace DSH.Editor
             var result = new Dictionary<string, object> { { "ok", false } };
             try
             {
-                var request = ReadRequest();
-                var scene = OpenScene(request.scene, request.expectedSceneDigest);
+                var request = DshAvatarScene.ReadRequest<Request>();
+                var scene = DshAvatarScene.OpenScene(request.scene, request.expectedSceneDigest);
                 var avatars = SceneAvatars(scene).ToArray();
                 result["scene"] = scene.path;
                 result["avatars"] = avatars.Select(DescribeTarget).ToArray();
                 var selected = avatars.Where(t =>
-                    (string.IsNullOrEmpty(request.avatar) || HierarchyPath(t) == request.avatar) &&
-                    (string.IsNullOrEmpty(request.avatarId) || ObjectId(t.gameObject) == request.avatarId)).ToArray();
+                    (string.IsNullOrEmpty(request.avatar) || DshAvatarScene.HierarchyPath(t) == request.avatar) &&
+                    (string.IsNullOrEmpty(request.avatarId) || DshAvatarScene.ObjectId(t.gameObject) == request.avatarId)).ToArray();
                 if (selected.Length == 1)
                 {
                     var query = request.query ?? "";
                     var outfits = OutfitObjects(selected[0].gameObject)
                         .Where(t => t.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
                         .OrderByDescending(t => t.name.Equals(query, StringComparison.OrdinalIgnoreCase))
-                        .ThenBy(HierarchyPath, StringComparer.Ordinal).ToArray();
+                        .ThenBy(DshAvatarScene.HierarchyPath, StringComparer.Ordinal).ToArray();
                     result["selectedAvatar"] = DescribeTarget(selected[0]);
                     result["outfitMatchCount"] = outfits.Length;
                     result["outfits"] = outfits.Take(50).Select(DescribeTarget).ToArray();
@@ -61,7 +59,7 @@ namespace DSH.Editor
             {
                 result["error"] = error.GetBaseException().Message;
             }
-            Finish("OutfitTargets", result);
+            DshAvatarScene.Finish("OutfitTargets", result);
         }
 
         public static void Apply()
@@ -69,25 +67,24 @@ namespace DSH.Editor
             var result = new Dictionary<string, object> { { "ok", false }, { "saved", false } };
             try
             {
-                var request = ReadRequest();
+                var request = DshAvatarScene.ReadRequest<Request>();
                 if (string.IsNullOrWhiteSpace(request.menu) ||
                     request.menu.Split('/').Any(string.IsNullOrWhiteSpace))
                     throw new InvalidOperationException("Specify a menu name and nonempty submenu names.");
-                var scene = OpenScene(request.scene, request.expectedSceneDigest);
+                var scene = DshAvatarScene.OpenScene(request.scene, request.expectedSceneDigest);
                 var (avatar, outfit) = Resolve(scene, request, result);
                 var holderName = HolderName(outfit);
                 result["holder"] = holderName;
-                var holder = FindHolder(avatar, holderName);
+                var holder = DshVrc.FindHolder(avatar, holderName);
 
                 if (holder == null)
                 {
                     CheckExistingToggles(avatar, outfit, request.menu);
-                    var factory = FindFactory();
                     holder = new GameObject(holderName);
                     holder.transform.SetParent(avatar.transform, false);
-                    CreateToggle(factory, holder, outfit, request);
+                    CreateToggle(holder, outfit, request);
                     VerifyToggle(holder, outfit, request);
-                    RequireSceneDigest(scene.path, request.expectedSceneDigest);
+                    DshAvatarScene.RequireSceneDigest(scene.path, request.expectedSceneDigest);
                     EditorSceneManager.MarkSceneDirty(scene);
                     if (!EditorSceneManager.SaveScene(scene))
                         throw new IOException($"Unity could not save {scene.path}. Check write access and retry.");
@@ -95,12 +92,12 @@ namespace DSH.Editor
                     DshApply.Note(result, $"Added {request.menu} for {request.outfit}");
 
                     EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-                    scene = OpenScene(request.scene);
+                    scene = DshAvatarScene.OpenScene(request.scene);
                     (avatar, outfit) = Resolve(scene, request, result);
-                    holder = FindHolder(avatar, holderName);
+                    holder = DshVrc.FindHolder(avatar, holderName);
                 }
                 VerifyToggle(holder, outfit, request);
-                result["sceneDigest"] = SceneDigest(scene.path);
+                result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
                 result["sdkVerification"] = request.verifySdk ? VerifySdk(avatar, outfit, request) :
                     new Dictionary<string, object> { { "status", "not-requested" }, { "clientTested", false } };
                 result["ok"] = true;
@@ -111,44 +108,7 @@ namespace DSH.Editor
                 result["error"] = error.GetBaseException().Message;
             }
 
-            Finish("OutfitToggle", result);
-        }
-
-        private static Request ReadRequest()
-        {
-            var requestPath = Environment.GetEnvironmentVariable("DSH_UNITY_REQUEST_PATH");
-            return JsonUtility.FromJson<Request>(File.ReadAllText(requestPath))
-                ?? throw new InvalidOperationException("A Unity task request is required.");
-        }
-
-        private static void Finish(string task, Dictionary<string, object> result)
-        {
-            DshApply.WriteResult(task, result);
-            EditorApplication.Exit((bool)result["ok"] ? 0 : 1);
-        }
-
-        private static Scene OpenScene(string path, string expectedDigest = "")
-        {
-            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.Ordinal) ||
-                !path.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) || path.Contains("\\") ||
-                path.Split('/').Any(part => part == ".." || part == ".") ||
-                AssetDatabase.LoadAssetAtPath<SceneAsset>(path) == null)
-                throw new InvalidOperationException($"Select a saved scene underneath Assets: {path}");
-            RequireSceneDigest(path, expectedDigest);
-            return EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
-        }
-
-        private static string SceneDigest(string path)
-        {
-            using (var sha = SHA256.Create())
-            using (var scene = File.OpenRead(path))
-                return BitConverter.ToString(sha.ComputeHash(scene)).Replace("-", "").ToLowerInvariant();
-        }
-
-        private static void RequireSceneDigest(string path, string expectedDigest)
-        {
-            if (!string.IsNullOrEmpty(expectedDigest) && SceneDigest(path) != expectedDigest)
-                throw new InvalidOperationException("The saved scene changed after the preview. Review it and preview again.");
+            DshAvatarScene.Finish("OutfitToggle", result);
         }
 
         private static (GameObject avatar, GameObject outfit) Resolve(
@@ -174,8 +134,8 @@ namespace DSH.Editor
         private static GameObject ResolveTarget(IEnumerable<Transform> objects, string path, string id,
             string label, Dictionary<string, object> result)
         {
-            var matches = objects.Where(t => HierarchyPath(t) == path).ToArray();
-            var selected = string.IsNullOrEmpty(id) ? matches : matches.Where(t => ObjectId(t.gameObject) == id).ToArray();
+            var matches = objects.Where(t => DshAvatarScene.HierarchyPath(t) == path).ToArray();
+            var selected = string.IsNullOrEmpty(id) ? matches : matches.Where(t => DshAvatarScene.ObjectId(t.gameObject) == id).ToArray();
             if (selected.Length == 1) return selected[0].gameObject;
             result["candidates"] = matches.Select(DescribeTarget).ToArray();
             result["targetKind"] = label;
@@ -186,14 +146,9 @@ namespace DSH.Editor
 
         private static Dictionary<string, object> DescribeTarget(Transform target) => new Dictionary<string, object>
         {
-            { "name", target.name }, { "path", HierarchyPath(target) }, { "id", ObjectId(target.gameObject) },
+            { "name", target.name }, { "path", DshAvatarScene.HierarchyPath(target) }, { "id", DshAvatarScene.ObjectId(target.gameObject) },
             { "siblingPath", SiblingPath(target) }, { "active", target.gameObject.activeInHierarchy }
         };
-
-        private static string HierarchyPath(Transform transform)
-        {
-            return transform.parent == null ? transform.name : HierarchyPath(transform.parent) + "/" + transform.name;
-        }
 
         private static string SiblingPath(Transform transform)
         {
@@ -203,14 +158,7 @@ namespace DSH.Editor
 
         private static bool HasDescriptor(GameObject obj)
         {
-            return AvatarDescriptor(obj) != null;
-        }
-
-        private static Component AvatarDescriptor(GameObject obj)
-        {
-            return obj.GetComponents<Component>().FirstOrDefault(c => c != null &&
-                (c.GetType().FullName == "VRC.SDK3.Avatars.Components.VRCAvatarDescriptor" ||
-                 c.GetType().FullName == "VRCSDK2.VRC_AvatarDescriptor"));
+            return DshAvatarScene.Descriptor(obj) != null;
         }
 
         private static GameObject GetAvatar(Transform transform)
@@ -220,80 +168,41 @@ namespace DSH.Editor
             return null;
         }
 
-        private static string ObjectId(GameObject obj) => GlobalObjectId.GetGlobalObjectIdSlow(obj).ToString();
-
         private static string HolderName(GameObject outfit)
         {
             using (var sha = SHA256.Create())
             {
-                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(ObjectId(outfit)));
+                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(DshAvatarScene.ObjectId(outfit)));
                 return "DSH Outfit Toggle " + BitConverter.ToString(hash, 0, 8).Replace("-", "");
             }
         }
 
-        private static GameObject FindHolder(GameObject avatar, string name)
+        private static void CreateToggle(GameObject holder, GameObject outfit, Request request)
         {
-            var matches = avatar.transform.Cast<Transform>().Where(t => t.name == name).ToArray();
-            if (matches.Length > 1) throw new InvalidOperationException($"Several objects use '{name}'.");
-            return matches.Length == 1 ? matches[0].gameObject : null;
-        }
-
-        private static MethodInfo FindFactory()
-        {
-            var factory = LoadedType("com.vrcfury.api.FuryComponents");
-            return factory?.GetMethod("CreateToggle", BindingFlags.Public | BindingFlags.Static,
-                null, new[] { typeof(GameObject) }, null)
-                ?? throw new InvalidOperationException("VRCFury Toggle API is unavailable. Install or update VRCFury in VCC/ALCOM.");
-        }
-
-        private static Type LoadedType(string name) => AppDomain.CurrentDomain.GetAssemblies()
-            .Select(assembly => assembly.GetType(name)).FirstOrDefault(type => type != null);
-
-        private static void CreateToggle(MethodInfo factory, GameObject holder, GameObject outfit, Request request)
-        {
-            var toggle = factory.Invoke(null, new object[] { holder });
-            CallPublic(toggle, "SetMenuPath", request.menu);
-            if (request.defaultOn) CallPublic(toggle, "SetDefaultOn");
-            var actions = CallPublic(toggle, "GetActions");
-            CallPublic(actions, "AddTurnOn", outfit);
-        }
-
-        private static object CallPublic(object target, string name, params object[] args)
-        {
-            var method = target?.GetType().GetMethod(name, args.Select(arg => arg.GetType()).ToArray())
-                ?? throw new InvalidOperationException($"VRCFury API method {name} is unavailable. Update VRCFury in VCC/ALCOM.");
-            return method.Invoke(target, args);
-        }
-
-        private static bool IsFury(Component component) => component != null &&
-            component.GetType().FullName == "VF.Model.VRCFury";
-
-        private static SerializedProperty ToggleData(Component component)
-        {
-            var data = new SerializedObject(component).FindProperty("content");
-            return data != null && data.propertyType == SerializedPropertyType.ManagedReference &&
-                data.managedReferenceFullTypename.EndsWith(" VF.Model.Feature.Toggle", StringComparison.Ordinal)
-                ? data : null;
+            var toggle = DshVrc.CreateFuryToggle(holder);
+            DshVrc.CallPublic(toggle, "SetMenuPath", request.menu);
+            if (request.defaultOn) DshVrc.CallPublic(toggle, "SetDefaultOn");
+            DshVrc.CallPublic(DshVrc.CallPublic(toggle, "GetActions"), "AddTurnOn", outfit);
         }
 
         private static void CheckExistingToggles(GameObject avatar, GameObject outfit, string menu)
         {
-            foreach (var component in avatar.GetComponentsInChildren<Component>(true).Where(IsFury))
+            foreach (var component in avatar.GetComponentsInChildren<Component>(true).Where(DshVrc.IsFury))
             {
-                var data = ToggleData(component);
+                var data = DshVrc.ToggleData(component);
                 if (data == null) continue;
                 var actions = data.FindPropertyRelative("state.actions");
                 if (data.FindPropertyRelative("name")?.stringValue == menu ||
                     (actions != null && Enumerable.Range(0, actions.arraySize).Any(i =>
                         actions.GetArrayElementAtIndex(i).FindPropertyRelative("obj")?.objectReferenceValue == outfit)))
-                    throw new InvalidOperationException($"An existing VRCFury toggle on '{HierarchyPath(component.transform)}' uses that menu or outfit.");
+                    throw new InvalidOperationException($"An existing VRCFury toggle on '{DshAvatarScene.HierarchyPath(component.transform)}' uses that menu or outfit.");
             }
         }
 
         private static void VerifyToggle(GameObject holder, GameObject outfit, Request request)
         {
-            var components = holder == null ? Array.Empty<Component>() : holder.GetComponents<Component>().Where(IsFury).ToArray();
-            var data = components.Length == 1 ? ToggleData(components[0]) : null;
+            var components = holder == null ? Array.Empty<Component>() : holder.GetComponents<Component>().Where(DshVrc.IsFury).ToArray();
+            var data = components.Length == 1 ? DshVrc.ToggleData(components[0]) : null;
             var actions = data?.FindPropertyRelative("state.actions");
             var action = actions != null && actions.arraySize == 1 ? actions.GetArrayElementAtIndex(0) : null;
             var mode = action?.FindPropertyRelative("mode");
@@ -314,36 +223,25 @@ namespace DSH.Editor
             GameObject copy = null;
             try
             {
-                var callback = LoadedType("VRC.SDKBase.Editor.BuildPipeline.VRCBuildPipelineCallbacks")?
-                    .GetMethod("OnPreprocessAvatar", BindingFlags.Public | BindingFlags.Static, null,
-                        new[] { typeof(GameObject) }, null)
-                    ?? throw new InvalidOperationException("The VRChat SDK avatar preprocessing API is unavailable.");
-                if (!AssetDatabase.IsValidFolder("Packages/com.vrcfury.temp"))
-                    throw new InvalidOperationException("Open the project in Unity once to let VRCFury initialize its temporary package, then close it and retry verification.");
-
                 // Sibling indices preserve the identity of same-name children in the copy.
                 var indices = new Stack<int>();
                 for (var node = outfit.transform; node != avatar.transform; node = node.parent)
                     indices.Push(node.GetSiblingIndex());
-                copy = UnityEngine.Object.Instantiate(avatar);
-                copy.name = avatar.name + " (DSH Verification)";
-                var copyOutfit = copy.transform;
-                foreach (var index in indices) copyOutfit = copyOutfit.GetChild(index);
-                if (!(callback.Invoke(null, new object[] { copy }) is bool built) || !built)
-                    throw new InvalidOperationException("VRChat SDK preprocessing did not complete. See the Unity log.");
+                Transform copyOutfit = null;
+                copy = DshVrc.PreprocessCopy(avatar, clone =>
+                {
+                    copyOutfit = clone.transform;
+                    foreach (var index in indices) copyOutfit = copyOutfit.GetChild(index);
+                });
 
-                var descriptor = AvatarDescriptor(copy);
-                var menu = PublicMember(descriptor, "expressionsMenu");
-                var control = FindMenuControl(menu, request.menu);
-                if (PublicMember(control, "type")?.ToString() != "Toggle")
-                    throw new InvalidOperationException($"The SDK did not generate a unique Toggle at '{request.menu}'.");
+                var descriptor = DshAvatarScene.Descriptor(copy);
+                var (_, parameter) = DshVrc.GeneratedToggle(descriptor, request.menu);
                 result["menuGenerated"] = true;
 
-                var parameter = PublicMember(PublicMember(control, "parameter"), "name") as string;
-                var parameters = PublicItems(PublicMember(descriptor, "expressionParameters"), "parameters")
-                    .Where(item => PublicMember(item, "name") as string == parameter).ToArray();
+                var parameters = DshVrc.PublicItems(DshVrc.PublicMember(descriptor, "expressionParameters"), "parameters")
+                    .Where(item => DshVrc.PublicMember(item, "name") as string == parameter).ToArray();
                 if (string.IsNullOrEmpty(parameter) || parameters.Length != 1 ||
-                    !(PublicMember(parameters[0], "defaultValue") is float defaultValue) ||
+                    !(DshVrc.PublicMember(parameters[0], "defaultValue") is float defaultValue) ||
                     !Mathf.Approximately(defaultValue, request.defaultOn ? 1f : 0f))
                     throw new InvalidOperationException("The generated menu parameter is missing or does not have the requested default.");
                 result["parameter"] = parameter;
@@ -363,12 +261,7 @@ namespace DSH.Editor
                     result["reason"] = "Several objects share the generated animation path, or it cannot be resolved uniquely. Rename the conflicting objects in Unity before testing.";
                     return result;
                 }
-                var controllers = PublicItems(descriptor, "baseAnimationLayers")
-                    .Where(layer => PublicMember(layer, "type")?.ToString() == "FX")
-                    .Select(layer => PublicMember(layer, "animatorController")).OfType<AnimatorController>()
-                    .Where(controller => controller.parameters.Any(p => p.name == parameter));
-                var values = controllers.SelectMany(controller => controller.animationClips).Distinct()
-                    .Where(clip => clip != null)
+                var values = DshVrc.FxClips(descriptor, parameter)
                     .SelectMany(clip => AnimationUtility.GetCurveBindings(clip)
                         .Where(binding => binding.path == relativePath && binding.propertyName == "m_IsActive")
                         .SelectMany(binding => AnimationUtility.GetEditorCurve(clip, binding).keys)
@@ -393,28 +286,6 @@ namespace DSH.Editor
                 if (copy != null) UnityEngine.Object.DestroyImmediate(copy);
             }
             return result;
-        }
-
-        private static object FindMenuControl(object menu, string path)
-        {
-            object control = null;
-            foreach (var name in path.Split('/'))
-            {
-                var matching = PublicItems(menu, "controls").Where(item => PublicMember(item, "name") as string == name).ToArray();
-                if (matching.Length != 1) return null;
-                control = matching[0];
-                menu = PublicMember(control, "subMenu");
-            }
-            return control;
-        }
-
-        private static IEnumerable<object> PublicItems(object target, string name) =>
-            PublicMember(target, name) is IEnumerable items ? items.Cast<object>() : Enumerable.Empty<object>();
-
-        private static object PublicMember(object target, string name)
-        {
-            var type = target?.GetType();
-            return type?.GetField(name)?.GetValue(target) ?? type?.GetProperty(name)?.GetValue(target);
         }
     }
 }

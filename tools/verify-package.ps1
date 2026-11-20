@@ -30,6 +30,7 @@ $required = @(
     'tools/doctor.ps1', 'tools/unity-run.ps1', 'tools/unity_inspect.py',
     'tools/unity-environment.ps1', 'tools/unity_toggle.py', 'tools/unity_texture.py',
     'templates/Editor/DshTextureVariant.cs', 'templates/Editor/DshCapture.cs',
+    'templates/Editor/DshAvatarTools.cs',
     'skills/vrc-texture-variant/SKILL.md', 'docs/PHOTOCRAFT.md',
     'install.cmd',
     'installer/install.cmd', 'installer/install.ps1',

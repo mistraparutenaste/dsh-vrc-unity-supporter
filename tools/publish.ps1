@@ -123,7 +123,7 @@ if ($DryRun) {
     Write-Host '   [dry-run] git push -u origin HEAD'
     Write-Host "   [dry-run] git tag v$version && git push origin v$version"
 } else {
-    if ((-Invoke-Native 'git remote get-url origin').Code -eq 0) {
+    if ((Invoke-Native 'git remote get-url origin').Code -eq 0) {
         $push = Invoke-Native 'git push -u origin HEAD'
         if ($push.Code -ne 0) { Stop-WithHelp 'push に失敗しました' 'git push -u origin HEAD' }
     }
