@@ -6,7 +6,8 @@ import sys
 import tempfile
 import unittest
 
-import test_unity_workflow as base
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_unity_workflow as base  # noqa: E402
 
 
 GIT_IDENTITIES = base.GIT_IDENTITIES
@@ -146,6 +147,20 @@ class TextureWorkflowTests(unittest.TestCase):
         self.assertIn("changed after rendering",
                       json.loads(self.cli("unity_texture.py", "preview", *args, env=env).stdout)["error"])
 
+    def test_preview_warns_when_variants_on_the_same_texture_can_be_on_together(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        env = self.photocraft_env()
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 30}], name="Skin", exclusiveTag="skin")
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 90}], name="Eyes", exclusiveTag="eyes")
+        self.json_output(self.cli("unity_texture.py", "render", "--variant", "Eyes", env=env))
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Eyes")
+        plan = self.json_output(self.cli("unity_texture.py", "preview", *args, env=env))
+        self.assertEqual(plan["overlappingVariants"],
+                         [{"variant": "Skin", "textures": ["Assets/Tex/Costume.png"], "exclusiveTag": "skin"}])
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 90}], name="Eyes", exclusiveTag="skin")
+        self.json_output(self.cli("unity_texture.py", "render", "--variant", "Eyes", env=env))
+        self.assertNotIn("overlappingVariants", self.json_output(self.cli("unity_texture.py", "preview", *args, env=env)))
+
     @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
     def test_apply_saves_the_variant_and_a_later_outfit_toggle_continues_on_that_scene(self):
         scene = self.write("Assets/Avatar.unity", "original\n")
@@ -177,5 +192,4 @@ class TextureWorkflowTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(Path(__file__).parent))
     unittest.main()

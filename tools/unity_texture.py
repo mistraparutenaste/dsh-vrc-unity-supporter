@@ -418,8 +418,31 @@ def variant_request(root, args):
     return request, scene, outputs
 
 
+def overlapping_variants(root, name, recipe):
+    """Other variants that replace one of the same textures but can be switched on together with this one.
+
+    Both would animate the same material slots, so only one of them would show in VRChat.
+    """
+    replaced = {texture["replace"] for texture in recipe["textures"]}
+    tag = recipe.get("exclusiveTag", "")
+    found = []
+    for path in sorted(inside(root, VARIANTS.as_posix()).glob("*/recipe.json")):
+        if path.parent.name == name:
+            continue
+        try:
+            other = json.loads(path.read_text(encoding="utf-8-sig"))
+            shared = sorted(replaced & {t.get("replace") for t in other.get("textures", []) if isinstance(t, dict)})
+        except (OSError, ValueError, AttributeError, TypeError):
+            continue
+        if shared and (not tag or other.get("exclusiveTag", "") != tag):
+            found.append({"variant": path.parent.name, "textures": shared, "exclusiveTag": other.get("exclusiveTag", "")})
+    return found
+
+
 def preview(root, args):
     request, scene, outputs = variant_request(root, args)
+    recipe, _ = load_recipe(root, args.variant)
+    overlaps = overlapping_variants(root, args.variant, recipe)
     helpers = toggle.helper_plan(root)
     state = git_state(root)
     owned = toggle.owned_scene_changes(root, state)
@@ -434,8 +457,13 @@ def preview(root, args):
     token = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
     planned = [request["scene"], request["folder"] + "/ (materials, animation clip)",
                *(path.as_posix() for path, _, _ in helpers)]
-    return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
-            "sceneDigest": scene_digest, "plannedPaths": planned, "sceneInCheckpoint": scene_in_checkpoint}, helpers
+    output = {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
+              "sceneDigest": scene_digest, "plannedPaths": planned, "sceneInCheckpoint": scene_in_checkpoint}
+    if overlaps:
+        output["overlappingVariants"] = overlaps
+        output["warning"] = ("These variants replace the same textures and can be on at the same time, so only one "
+                             "would show. Give them the same exclusiveTag, or combine the changes into one recipe.")
+    return output, helpers
 
 
 def apply(root, args):

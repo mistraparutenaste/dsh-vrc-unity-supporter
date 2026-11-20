@@ -25,6 +25,12 @@
 - `layer.select` + `hueSaturation(clipToPrevious)` は、そのレイヤーにだけ効く。
 - `file.placeEmbedded` + `layer.createClippingMask` で、ロゴが衣装の形で切り抜かれる。
 - PSD に `UV` レイヤーが表示状態で入っていることがある（Salt）。書き出し前に隠す（レシピの `hideUv`、既定で有効）。
+- Salt の髪（400MB、43 レイヤー）と顔（142 レイヤー）の PSD も、`info` は約 3 秒、書き出しは約 5 秒。
+  大容量 PSD 用の `--approve-high-memory` は不要だった。
+- 顔の PSD をそのまま書き出した PNG は、同梱のテクスチャと同じ色になった（色の再現に問題なし）。
+- 色プリセット（`Hair_Color`、`Eye_Color` グループ）の表示切り替えで、髪と瞳の色違いが作者の陰影のまま作れた。
+- 肌は相対的な色相・彩度のずらしだと、体（`Skin_Tone` の彩度レイヤーあり）と顔で結果が揃わなかった。
+  `colorize` で同じ色を指定すると揃った。
 - レイヤー ID は保存し直すと振り直されるので、レシピには ID ではなくパスを書き、書き出しのたびに `info` から引き直す。
 
 ## Unity 側で確かめたこと（Unity 2022.3.22f1、lilToon、VRCFury 1.1474.0、MA 1.18.7）
