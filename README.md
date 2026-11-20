@@ -1,6 +1,6 @@
 # dsh-vrc-unity-supporter
 
-このリポジトリは、DeepSeek Harness（DSH）で VRChat アバターを改変するときに、エージェントが手順に沿って操作できるようにするプラグインです。チャットでアバターの構成を調べたり、シーンに配置した衣装をメニューで切り替えられるようにしたりできます。変更は Unity 経由で適用し、結果と戻し方をチャットで確認できます。
+このリポジトリは、VRChat アバターを改変するときに、AI エージェントが手順に沿って操作できるようにするプラグインです。**DeepSeek Harness（DSH）** と **Claude Code** の両方に対応しています（Claude Code は 0.5.0 から）。チャットでアバターの構成を調べたり、シーンに配置した衣装をメニューで切り替えられるようにしたりできます。変更は Unity 経由で適用し、結果と戻し方をチャットで確認できます。
 
 ## セットアップ
 
@@ -8,9 +8,9 @@ Windows で、まだ入っていないものを用意してください。
 
 | 必要なもの | 準備すること |
 | --- | --- |
-| **DeepSeek Harness Desktop** | 公式サイトの **Download Desktop → Windows (64-bit)** からインストールします。起動後は画面の案内に沿って初期設定を済ませ、チャットを送れることを確認します。 [DSH 公式サイト](https://www.deepseek.com/en/harness/) |
+| **DeepSeek Harness Desktop または Claude Code** | どちらか一つを使います。DSH は公式サイトの **Download Desktop → Windows (64-bit)** からインストールし、画面の案内に沿って初期設定を済ませます。Claude Code はデスクトップアプリかターミナル版を使います。どちらも、チャットを送れることを確認してください。 [DSH 公式サイト](https://www.deepseek.com/en/harness/) · [Claude Code の概要](https://code.claude.com/docs/en/overview) |
 | **Git for Windows** | Git は改変前の状態を記録し、あとで元に戻すために使います。記録は PC の中で完結します。まず Windows 用のインストーラーで Git を入れます。 [Git のダウンロード](https://git-scm.com/install/win) |
-| **Python 3.10 以上** | アバターの構成を調べるために使います。インストール後、DSH を開き直してください。 [Python の Windows 向けダウンロード](https://www.python.org/downloads/windows/) |
+| **Python 3.10 以上** | アバターの構成を調べるために使います。インストール後、DSH または Claude Code を開き直してください。 [Python の Windows 向けダウンロード](https://www.python.org/downloads/windows/) |
 | **Unity Hub と Unity 2022.3.22f1** | Unity Hub で有効なライセンスを設定し、指定のバージョンでプロジェクトを開けることを確認します。 [VRChat 公式の Unity 導入案内](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC または ALCOM とアバタープロジェクト** | 普段使っている管理アプリをどちらか一つ使用します。作業対象は **VRChat SDK - Avatars** が導入済みで、Unity で開けるプロジェクトです。 [VCC のセットアップ](https://vcc.docs.vrchat.com/guides/getting-started/) · [ALCOM のダウンロード](https://vrc-get.anatawa12.com/alcom/) |
 
@@ -24,9 +24,13 @@ Windows で、まだ入っていないものを用意してください。
 | モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） |
 | エフォート（推論の強さ） | `MAX` |
 
-上記以外の組み合わせでの動作は確認していません。
+上記以外の組み合わせでの動作は確認していません。Claude Code 版はプラグインの形式を検証済みですが、Unity プロジェクトでの動作確認はまだです。
 
 ## プラグインのインストール
+
+使うアプリに合わせて、どちらか一方の手順でインストールします。
+
+### DSH で使う場合
 
 1. DSH を開き、**Plugins** → **Add plugin** を選びます。
 2. 入力欄に次のパッケージ名を貼り付け、インストールします。
@@ -37,7 +41,7 @@ Windows で、まだ入っていないものを用意してください。
 
 3. DSH で **新しいセッション** を作り、プリセットの一覧に **VRChat Avatar** が表示されることを確認します。
 
-### ZIP を使う場合
+#### ZIP を使う場合
 
 1. この GitHub ページの **Code** → **Download ZIP** を選びます。
 2. ダウンロードした ZIP を右クリックして **すべて展開** を選びます。
@@ -45,6 +49,8 @@ Windows で、まだ入っていないものを用意してください。
 4. 「完了しました」と表示されたら、DSH を起動し直して **新しいセッション** で **VRChat Avatar** を選びます。
 
 `install.cmd` は DSH に同梱されたコマンドを使い、npm から公開版を取得してインストールします。インストール時はインターネットに接続してください。 [インストーラーの詳細と削除方法](installer/README.md)
+
+プラグインのバージョンが **0.2.0** の場合は、Editor スクリプトの初期配置を手動で行います。 [0.2.0 のセットアップ手順](https://github.com/mistraparutenaste/dsh-vrc-unity-supporter/blob/v0.2.0/README.md#プロジェクトへの初期配置)
 
 ### Claude Code で使う場合
 
@@ -57,12 +63,10 @@ Windows で、まだ入っていないものを用意してください。
 
 ターミナルからは `claude plugin marketplace add mistraparutenaste/dsh-vrc-unity-supporter` のあと `claude plugin install dsh-vrc-unity-supporter@dsh-vrc-unity-supporter` でも入ります。Unity プロジェクトのフォルダで Claude Code を開き、下の「最初に試す」と同じ一文から始めてください。入口の `vrc-avatar` スキルが、読み取りから始めて適用前に確認を取る DSH 版と同じ手順に沿わせます。
 
-プラグインのバージョンが **0.2.0** の場合は、Editor スクリプトの初期配置を手動で行います。 [0.2.0 のセットアップ手順](https://github.com/mistraparutenaste/dsh-vrc-unity-supporter/blob/v0.2.0/README.md#プロジェクトへの初期配置)
-
 ## 最初に試す
 
-1. DSH のワークスペースで、改変したい Unity プロジェクトのフォルダを開きます。`Assets`、`Packages`、`ProjectSettings` が並んでいるフォルダです。
-2. 新しいセッションのプリセットを **VRChat Avatar**、モデルを **DeepSeek V4.1 Flash**、エフォートを **MAX** に設定します。
+1. DSH のワークスペース（Claude Code では作業フォルダ）で、改変したい Unity プロジェクトのフォルダを開きます。`Assets`、`Packages`、`ProjectSettings` が並んでいるフォルダです。
+2. DSH では、新しいセッションのプリセットを **VRChat Avatar**、モデルを **DeepSeek V4.1 Flash**、エフォートを **MAX** に設定します。Claude Code では、プラグインを入れた状態で新しいセッションを始めるだけです。
 3. チャットに次の一文を入力します。最初はプロジェクトのファイルを読み取るだけです。Unity の起動や Git での記録は、改変を適用するときに行います。
 
    ```text
@@ -75,15 +79,16 @@ Windows で、まだ入っていないものを用意してください。
    Outfit_Hoodie を「衣装/パーカー」からオン・オフできるようにして。初期状態はオンで
    ```
 
-DSH が対象と変更予定を示します。衣装名が曖昧な場合は、保存済みのシーンから候補を取得し、チャットで選びます。初めて Git を使うプロジェクトでは、PC 上に復元地点を作る手順が案内されます。DSH が保存・検証したシーンは、手作業による変更が加わるまでは、コミットを挟まずに続けて改変できます。
+エージェントが対象と変更予定を示します。衣装名が曖昧な場合は、保存済みのシーンから候補を取得し、チャットで選びます。初めて Git を使うプロジェクトでは、PC 上に復元地点を作る手順が案内されます。このプラグインで保存・検証したシーンは、手作業による変更が加わるまでは、コミットを挟まずに続けて改変できます。
 
 適用後は、保存結果とSDKの前処理でメニュー・アニメーションを確認できたかがチャットに表示されます。VRChat内で試すには、Unityで **VRChat SDK → Show Control Panel → Builder → Offline Testing → Build & Test** を選びます。VRChatの **SDK Test Avatars** でテスト用アバターを選び、チャットに表示されたメニューから衣装をオン・オフしてください。 [VRChat のローカルテスト手順](https://creators.vrchat.com/avatars/#local-avatar-testing)
 
 ## 困ったとき
 
 - **VRChat Avatar が表示されない**。Plugins でプラグインが入っていることを確認し、DSH で新しいセッションを作ります。
-- **プロジェクトが見つからない**。DSH で開いているフォルダに `Assets` と `ProjectSettings` があるか確認します。
-- **Git の名前やメールアドレスを求められた**。DSH に「このプロジェクトで Git の名前とメールアドレスを設定する方法を教えて」と聞いてください。
+- **Claude Code でスキルが使われない**。`/plugin` で `dsh-vrc-unity-supporter` が有効になっているか確認し、`/reload-plugins` を実行するか新しいセッションを始めます。
+- **プロジェクトが見つからない**。DSH または Claude Code で開いているフォルダに `Assets` と `ProjectSettings` があるか確認します。
+- **Git の名前やメールアドレスを求められた**。チャットで「このプロジェクトで Git の名前とメールアドレスを設定する方法を教えて」と聞いてください。
 - **インストーラーが途中で止まる**。DSH をタスクトレイからも終了し、画面に表示されたエラーを確認してください。 [インストーラーのトラブル対処](installer/README.md#うまくいかないとき)
 
 <details>
