@@ -26,6 +26,7 @@ python <pkg>/tools/unity_inspect.py hierarchy "Assets\Avatar.prefab"
 ```
 
 意図したオブジェクト・コンポーネントが増えているか、参照切れが無いかを確認する。
+シーンや大きな prefab では `--filter <対象名>` で変更箇所に絞る（既定は 300 ノードまで。`truncated` を確認する）。
 
 ## 3. 動作の確認（人間が行う）
 

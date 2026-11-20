@@ -88,3 +88,14 @@ DSh のジョブ機能（`tool-jobs`）でバックグラウンド実行し、�
 
 初回の衣装トグルは `vrc-first-run` の適用コマンドがヘルパーを配置する。独自タスクでは `templates/Editor/` の必要なファイルを `Assets/DSH/Editor/` に配置する。
 旧テンプレートだけを使っているプロジェクトは、新しい `DshApply.cs` を取り込む。独自の結果を返さない既存メソッドでは `-AllowMissingResult` を指定できる。
+
+`DshInspect.Dump` は任意のリクエストを受け取る。省略時は全アバター prefab を 1 prefab あたり 4000 ノードまで出す。
+
+```powershell
+'{"prefab":"Assets/Avatar.fbx","maxNodes":2000,"filter":"Armature"}' | Set-Content req.json -Encoding utf8
+& "<pkg>\tools\unity-run.ps1" -Project "C:\path\to\Project" `
+  -Method "DSH.Editor.DshInspect.Dump" -ExpectedTask Dump -RequestFile req.json
+```
+
+`prefab` は GameObject として読める任意のアセット（FBX も可）、`maxNodes` は 0 で無制限、`filter` はフルパスへの部分一致。
+ノードは `result.json` と同じフォルダの `dump.ndjson` に 1 行ずつ書かれる。読み方は `vrc-asset-read` §5。

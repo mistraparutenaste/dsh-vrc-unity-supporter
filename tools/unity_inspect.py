@@ -70,6 +70,17 @@ BUILTIN_CLASSES = {
 }
 
 
+DEFAULT_MAX_NODES = 300
+MAX_REFERENCES = 200
+MAX_MISSING_SCRIPTS = 50
+MAX_AVATARS = 200
+
+
+def compact_json(value) -> str:
+    """Agents read stdout as context, so JSON output carries no indentation."""
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 def find_project(start: str, search_children: bool = False) -> Path:
     p = Path(start).resolve()
     for candidate in [p, *p.parents]:
@@ -331,8 +342,21 @@ def cmd_hierarchy(args) -> int:
         if nid not in parent:
             emit(nodes, children, nid, 0, "", depth_limit)
 
+    # Collect everything first, then narrow and cap only what is printed.
+    max_tree_depth = getattr(args, "max_depth", None)
+    if max_tree_depth is not None and max_tree_depth >= 0:
+        rows = [r for r in rows if r["depth"] <= max_tree_depth]
+    needle = (getattr(args, "filter", None) or "").casefold()
+    if needle:
+        rows = [r for r in rows if needle in r["path"].casefold()]
+    total = len(rows)
+    max_nodes = max(0, int(getattr(args, "max_nodes", DEFAULT_MAX_NODES)))
+    truncated = bool(max_nodes) and total > max_nodes
+    if truncated:
+        rows = rows[:max_nodes]
+
     if args.json:
-        print(json.dumps({"asset": str(target), "nodes": rows}, ensure_ascii=False, indent=2))
+        print(compact_json({"asset": str(target), "nodes": rows, "nodeCount": total, "truncated": truncated}))
     else:
         for r in rows:
             indent = "  " * r["depth"]
@@ -341,6 +365,8 @@ def cmd_hierarchy(args) -> int:
             for c in r["components"]:
                 off = "" if c["enabled"] in (True, None) else " (disabled)"
                 print(f"{indent}    . {c['name']}{off}")
+        if truncated:
+            print(f"(showing {len(rows)} of {total} nodes; use --filter or --max-nodes)")
     return 0
 
 
@@ -370,13 +396,16 @@ def cmd_refs(args) -> int:
         if f"guid: {guid}" in text:
             hits.append(str(asset.relative_to(root)).replace("\\", "/"))
     if args.json:
-        print(json.dumps({"guid": guid, "target": index.get(guid), "referencedBy": hits}, ensure_ascii=False, indent=2))
+        print(compact_json({"guid": guid, "target": index.get(guid), "referencedBy": hits[:MAX_REFERENCES],
+                            "referencedByCount": len(hits), "truncated": len(hits) > MAX_REFERENCES}))
     else:
         print(f"{guid} -> {index.get(guid, '<not in index>')}")
         if not hits:
             print("  (no references found)")
-        for h in hits:
+        for h in hits[:MAX_REFERENCES]:
             print(f"  <- {h}")
+        if len(hits) > MAX_REFERENCES:
+            print(f"  (showing {MAX_REFERENCES} of {len(hits)} references)")
     return 0
 
 
@@ -505,9 +534,11 @@ def cmd_report(args) -> int:
             "sources": vpm_sources,
             "lock": {"file": lock_name, "lockedPackages": len(lock)},
         },
-        "avatars": avatars,
+        "avatars": avatars[:MAX_AVATARS],
+        "avatarCount": len(avatars),
+        "avatarsTruncated": len(avatars) > MAX_AVATARS,
         "scripts": {
-            "missing": [{"guid": g, "references": None} for g in missing_scripts],
+            "missing": [{"guid": g, "references": None} for g in missing_scripts[:MAX_MISSING_SCRIPTS]],
             "missingCount": len(missing_scripts),
         },
         "meta": {"missing": meta_missing[:200], "missingCount": len(meta_missing)},
@@ -515,7 +546,7 @@ def cmd_report(args) -> int:
     }
 
     if args.json:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        print(compact_json(report))
         return 0
 
     print(f"project : {root}")
@@ -563,6 +594,11 @@ def main(argv: list[str]) -> int:
     p_hier.add_argument("--project", default=os.getcwd())
     p_hier.add_argument("--depth", type=int, default=2,
                         help="how many prefab-instance levels to resolve (default 2, 0 = none)")
+    p_hier.add_argument("--max-nodes", type=int, default=DEFAULT_MAX_NODES,
+                        help=f"print at most this many nodes (default {DEFAULT_MAX_NODES}, 0 = all)")
+    p_hier.add_argument("--filter", help="only nodes whose full path contains this text (case-insensitive)")
+    p_hier.add_argument("--max-depth", type=int,
+                        help="only nodes at this tree depth or shallower (0 = roots)")
     p_hier.add_argument("--json", action="store_true")
     p_hier.set_defaults(func=cmd_hierarchy)
 

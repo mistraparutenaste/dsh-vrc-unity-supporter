@@ -100,6 +100,51 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertEqual([node["name"] for node in hierarchy["nodes"]],
                          ["[prefab] Avatar", "Avatar", "[prefab] Avatar", "Avatar"])
 
+    def chain_scene(self, count):
+        parts = []
+        for i in range(count):
+            go, tr = 1000 + i * 2, 1001 + i * 2
+            father = 0 if i == 0 else 1001 + (i - 1) * 2
+            parts.append(f"--- !u!1 &{go}\nGameObject:\n  m_Name: Node{i:04d}\n")
+            parts.append(f"--- !u!4 &{tr}\nTransform:\n  m_GameObject: {{fileID: {go}}}\n"
+                         f"  m_Father: {{fileID: {father}}}\n")
+        self.write("Assets/Big.unity", "".join(parts))
+        self.write("Assets/Big.unity.meta", f"guid: {'4' * 32}\n")
+
+    def test_large_hierarchy_is_capped_and_can_be_filtered(self):
+        self.chain_scene(350)
+        result = self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity", "--json")
+        capped = self.json_output(result)
+        self.assertEqual((capped["nodeCount"], capped["truncated"], len(capped["nodes"])), (350, True, 300))
+        self.assertLessEqual(result.stdout.strip().count("\n"), 0)
+
+        full = self.json_output(self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity", "--json",
+                                         "--max-nodes", "0"))
+        self.assertEqual((full["truncated"], len(full["nodes"])), (False, 350))
+
+        # The chain nests every node under Node0000, so match a name deeper down.
+        found = self.json_output(self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity", "--json",
+                                          "--filter", "node0340"))
+        self.assertEqual(found["nodeCount"], 10)  # Node0340 and its nine descendants
+        self.assertTrue(all("node0340" in node["path"].lower() for node in found["nodes"]))
+        self.assertEqual(found["nodes"][0]["name"], "Node0340")
+
+        shallow = self.json_output(self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity", "--json",
+                                            "--max-depth", "4"))
+        self.assertEqual(shallow["nodeCount"], 5)
+
+        text = self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity")
+        self.assertIn("(showing 300 of 350 nodes", text.stdout)
+
+    def test_refs_lists_are_capped_with_a_total(self):
+        self.avatar_scene()
+        for i in range(250):
+            self.write(f"Assets/Materials/M{i}.mat", f"  m_Shader: {{fileID: 7, guid: {PREFAB_GUID}, type: 3}}\n")
+        refs = self.json_output(self.cli("unity_inspect.py", "refs", "--guid", PREFAB_GUID, "--json"))
+        self.assertEqual(refs["referencedByCount"], 251)  # 250 materials and the scene
+        self.assertEqual(len(refs["referencedBy"]), 200)
+        self.assertTrue(refs["truncated"])
+
     def test_guid_resolution_refreshes_after_add_and_move(self):
         self.json_output(self.cli("unity_inspect.py", "index", ".", "--json"))
         self.avatar_scene()
@@ -137,6 +182,46 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertEqual(self.git("ls-files", "Library", ".dsh"), "")
         self.assertEqual(self.git("show", "HEAD:AGENTS.md"), "Existing project instructions")
         self.assertTrue((self.project / ".gitignore").read_text().startswith("# Rules\n/custom/\n"))
+
+    def test_unignored_library_lists_are_capped_but_the_checkpoint_still_excludes_them(self):
+        self.avatar_scene()
+        for i in range(150):
+            self.write(f"Library/Artifacts/{i:03d}.bin", "cache")
+        self.git("init", "-q")
+
+        pending = self.json_output(self.cli("unity_toggle.py", "checkpoint"))
+        self.assertTrue(pending["needsConfirmation"])
+        self.assertGreaterEqual(pending["git"]["changeCount"], 150)
+        self.assertEqual(len(pending["git"]["changes"]), 100)
+
+        plan = self.json_output(self.cli("unity_toggle.py", "preview", "--scene", "Assets/試着.unity",
+                                         "--avatar", "Avatar", "--outfit", "Avatar/服", "--menu", "衣装/服"))
+        self.assertGreaterEqual(plan["git"]["blockingChangeCount"], 150)
+        self.assertEqual(len(plan["git"]["blockingChanges"]), 100)
+
+        done = self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        self.assertEqual(done["git"]["state"], "ready")
+        self.assertEqual(done["git"]["changeCount"], 0)
+        self.assertEqual(self.git("ls-files", "Library"), "")
+        self.assertIn("Assets/Avatar.prefab", self.git("ls-files", "Assets").splitlines())
+
+    def test_helpers_from_earlier_releases_are_planned_for_upgrade_and_do_not_block(self):
+        self.avatar_scene()
+        templates = TOOLS.parent / "templates" / "Editor"
+        for name in ("DshApply.cs", "DshOutfitToggle.cs"):
+            (self.project / "Assets/DSH/Editor").mkdir(parents=True, exist_ok=True)
+            (self.project / "Assets/DSH/Editor" / name).write_bytes((templates / name).read_bytes())
+        old = TOOLS.parent / "tests" / "fixtures" / "DshInspect.0.4.1.cs"
+        (self.project / "Assets/DSH/Editor/DshInspect.cs").write_bytes(old.read_bytes())
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        self.git("rm", "-q", "--cached", "-r", "Assets/DSH")
+        self.git("commit", "-qm", "Leave DSH helpers untracked like the runner does")
+
+        plan = self.json_output(self.cli("unity_toggle.py", "preview", "--scene", "Assets/試着.unity",
+                                         "--avatar", "Avatar", "--outfit", "Avatar/服", "--menu", "衣装/服"))
+        self.assertIn("Assets/DSH/Editor/DshInspect.cs", plan["plannedPaths"])
+        self.assertNotIn("Assets/DSH/Editor/DshApply.cs", plan["plannedPaths"])
+        self.assertEqual(plan["git"]["blockingChanges"], [])
 
     @unittest.skipUnless(os.name == "nt", "Doctor uses Windows PowerShell")
     def test_doctor_distinguishes_other_packages_from_the_avatar_sdk(self):

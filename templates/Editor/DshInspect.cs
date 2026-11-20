@@ -5,13 +5,15 @@
 //     -executeMethod DSH.Editor.DshInspect.CompileCheck
 //
 //   ... -executeMethod DSH.Editor.DshInspect.Perf
-//   ... -executeMethod DSH.Editor.DshInspect.Dump
+//   ... -executeMethod DSH.Editor.DshInspect.Dump   (nodes go to dump.ndjson beside the result)
 //
 // Nothing here modifies the project.
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 
@@ -60,18 +62,37 @@ namespace DSH.Editor
             Finish("Perf", data);
         }
 
+        // Writes one node per line to dump.ndjson next to result.json; result.json stays a small summary
+        // with the line range of each prefab so an agent can page through the dump.
+        // Optional request (-RequestFile): {"prefab":"Assets/A.prefab","maxNodes":4000,"filter":"Hoodie"}
         public static void Dump()
         {
             var data = NewResult("Dump");
             try
             {
+                var request = ReadDumpRequest();
+                var paths = string.IsNullOrEmpty(request.prefab)
+                    ? AvatarPrefabPaths().ToList()
+                    : new List<string> { request.prefab };
+                var dumpFile = DumpFilePath();
+                Directory.CreateDirectory(Path.GetDirectoryName(dumpFile));
                 var assets = new List<object>();
-                foreach (var path in AvatarPrefabPaths())
+                var line = 0;
+                using (var writer = new StreamWriter(dumpFile, false, new UTF8Encoding(false)))
                 {
-                    assets.Add(DumpPrefab(path));
+                    writer.NewLine = "\n";
+                    foreach (var path in paths)
+                    {
+                        assets.Add(DumpPrefab(path, request, writer, ref line));
+                    }
                 }
+                data["dumpFile"] = dumpFile;
                 data["assets"] = assets;
                 data["ok"] = true;
+                if (paths.Count == 0)
+                {
+                    data["warning"] = "VRC_AvatarDescriptor を持つ prefab が見つかりませんでした。";
+                }
             }
             catch (Exception e)
             {
@@ -217,26 +238,87 @@ namespace DSH.Editor
             };
         }
 
-        private static Dictionary<string, object> DumpPrefab(string prefabPath)
+        [Serializable]
+        private class DumpRequest
+        {
+            public string prefab = "";
+            public int maxNodes = 4000;
+            public string filter = "";
+        }
+
+        private static DumpRequest ReadDumpRequest()
+        {
+            // Direct Unity invocations have no request file, so every field is optional.
+            var request = new DumpRequest();
+            var requestPath = Environment.GetEnvironmentVariable("DSH_UNITY_REQUEST_PATH");
+            if (!string.IsNullOrEmpty(requestPath) && File.Exists(requestPath))
+            {
+                JsonUtility.FromJsonOverwrite(File.ReadAllText(requestPath), request);
+            }
+            return request;
+        }
+
+        private static string DumpFilePath()
+        {
+            var resultPath = Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH");
+            var directory = string.IsNullOrEmpty(resultPath)
+                ? DSH.DshApply.ResultsDirectory
+                : Path.GetDirectoryName(resultPath);
+            return Path.Combine(directory, "dump.ndjson");
+        }
+
+        private static Dictionary<string, object> DumpPrefab(string prefabPath, DumpRequest request,
+            StreamWriter writer, ref int line)
         {
             var root = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-            var nodes = new List<object>();
-            void Walk(Transform t, int depth)
+            if (root == null)
             {
-                nodes.Add(new Dictionary<string, object>
-                {
-                    { "depth", depth },
-                    { "name", t.name },
-                    { "active", t.gameObject.activeSelf },
-                    { "components", t.GetComponents<Component>()
-                        .Where(c => c != null)
-                        .Select(c => (object)c.GetType().Name)
-                        .ToList() },
-                });
-                foreach (Transform child in t) Walk(child, depth + 1);
+                throw new InvalidOperationException($"Cannot load a GameObject from {prefabPath}");
             }
-            Walk(root.transform, 0);
-            return new Dictionary<string, object> { { "prefab", prefabPath }, { "nodes", nodes } };
+            var startLine = line + 1;
+            var nodeCount = 0;
+            var matchCount = 0;
+            var written = 0;
+            var current = line;
+            void Walk(Transform t, int depth, string parentPath)
+            {
+                nodeCount++;
+                var path = parentPath == null ? t.name : parentPath + "/" + t.name;
+                if (string.IsNullOrEmpty(request.filter) ||
+                    path.IndexOf(request.filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    matchCount++;
+                    if (request.maxNodes <= 0 || written < request.maxNodes)
+                    {
+                        writer.WriteLine(DSH.MiniJson.Serialize(new Dictionary<string, object>
+                        {
+                            { "depth", depth },
+                            { "path", path },
+                            { "name", t.name },
+                            { "active", t.gameObject.activeSelf },
+                            { "components", t.GetComponents<Component>()
+                                .Where(c => c != null)
+                                .Select(c => (object)c.GetType().Name)
+                                .ToList() },
+                        }));
+                        written++;
+                        current++;
+                    }
+                }
+                foreach (Transform child in t) Walk(child, depth + 1, path);
+            }
+            Walk(root.transform, 0, null);
+            line = current;
+            return new Dictionary<string, object>
+            {
+                { "prefab", prefabPath },
+                { "nodeCount", nodeCount },
+                { "matchCount", matchCount },
+                { "written", written },
+                { "startLine", startLine },
+                { "lineCount", written },
+                { "truncated", written < matchCount },
+            };
         }
     }
 }

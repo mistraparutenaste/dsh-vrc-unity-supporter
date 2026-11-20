@@ -17,10 +17,14 @@ from unity_inspect import find_project, vpm_inventory
 TOOLS = Path(__file__).resolve().parent
 TEMPLATES = TOOLS.parent / "templates"
 EDITOR = Path("Assets/DSH/Editor")
+# Git blob hashes of earlier bundled helpers that may be replaced without a manual merge.
 LEGACY = {
-    "DshApply.cs": "ab033a2fb00088a7ac7b1716c5c098ac1deeea71",
-    "DshInspect.cs": "92de7704a6e547f8fdbb6a8abb2c543de0f3b4cc",
-    "DshOutfitToggle.cs": "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",
+    "DshApply.cs": ("ab033a2fb00088a7ac7b1716c5c098ac1deeea71",),
+    "DshInspect.cs": (
+        "92de7704a6e547f8fdbb6a8abb2c543de0f3b4cc",  # 0.2.x
+        "727506060aeef9224f5aa0a8eb6b21054bda6ad3",  # 0.3.0 - 0.4.1
+    ),
+    "DshOutfitToggle.cs": ("eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",),
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -132,7 +136,7 @@ def helper_plan(root):
         normalized = actual.replace(b"\r\n", b"\n")
         if normalized == source.replace(b"\r\n", b"\n"):
             continue
-        if git_blob_hash(actual) == LEGACY[name]:
+        if git_blob_hash(actual) in LEGACY[name]:
             helpers.append((path, source, actual))
         elif name != "DshInspect.cs":
             raise WorkflowError(f"Custom helper {path.as_posix()} needs a manual merge with the bundled template.")
@@ -251,7 +255,7 @@ def pending_user_changes(root, changes, allowed_scenes=()):
         expected = helper_files.get(Path(path))
         if status in ("??", " M") and expected is not None:
             actual = inside(root, path).read_bytes()
-            if actual.replace(b"\r\n", b"\n") == expected or git_blob_hash(actual) == LEGACY[Path(path).name]:
+            if actual.replace(b"\r\n", b"\n") == expected or git_blob_hash(actual) in LEGACY[Path(path).name]:
                 continue
         yield entry
 
@@ -418,8 +422,33 @@ def main():
             output = apply(root, args)
     except (WorkflowError, OSError, ValueError, SystemExit) as error:
         output = {"ok": False, "error": str(error)}
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    print(json.dumps(bounded_output(output), ensure_ascii=False, separators=(",", ":")))
     return 0 if output["ok"] else 1
+
+
+MAX_LISTED_CHANGES = 100
+COUNT_KEYS = {"changes": "changeCount", "blockingChanges": "blockingChangeCount",
+              "unexpectedChanges": "unexpectedChangeCount"}
+
+
+def bounded_output(output):
+    """Return a printable copy whose Git path lists are capped, with their full counts.
+
+    The workflow itself always works on full lists; receipts on disk keep them too.
+    """
+    def cap(section):
+        section = dict(section)
+        for key, count_key in COUNT_KEYS.items():
+            rows = section.get(key)
+            if isinstance(rows, list):
+                section[key] = rows[:MAX_LISTED_CHANGES]
+                section[count_key] = len(rows)
+        return section
+
+    printable = cap(output)
+    if isinstance(printable.get("git"), dict):
+        printable["git"] = cap(printable["git"])
+    return printable
 
 
 if __name__ == "__main__":

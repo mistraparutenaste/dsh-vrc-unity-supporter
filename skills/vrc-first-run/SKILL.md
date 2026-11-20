@@ -19,7 +19,7 @@ python -B "<pkg>\tools\unity_inspect.py" report --json
 
 ## 衣装トグルを適用する
 
-対象は保存済みのシーンに配置された衣装。`unity_inspect.py hierarchy "Assets/Avatar.unity" --project "<project>" --json` をUnity起動前の候補探しに使う。名前だけで依頼されたときや同名候補があるときは、適用前にUnityから正確な候補を取得する。対象プロジェクトのシーンを保存してUnityを閉じてもらう。
+対象は保存済みのシーンに配置された衣装。`unity_inspect.py hierarchy "Assets/Avatar.unity" --project "<project>" --json --filter "<衣装名の一部>"` をUnity起動前の候補探しに使う（出力は既定 300 ノードまで。`truncated` なら絞り込みを変える）。名前だけで依頼されたときや同名候補があるときは、適用前にUnityから正確な候補を取得する。対象プロジェクトのシーンを保存してUnityを閉じてもらう。
 
 ```powershell
 $tool = '<pkg>\tools\unity_toggle.py'
@@ -37,7 +37,7 @@ $target = @('--project', '<project>', '--scene', 'Assets/Avatar.unity', '--avata
 python -B $tool preview @target
 ```
 
-1. `git.state` が `no-repository` または `no-commit` の場合、`python -B $tool checkpoint --project "<project>"` で内容を確認する。既存の作業もローカルの初回コミットに入ること、記録対象、`.gitignore` に足す除外を説明する。ユーザーが同意してから `checkpoint --confirm --project "<project>"` を実行する。Gitのユーザー名・メールアドレスが未設定なら設定を案内する。`git.managedScenes` はDSHが保存・検証した変更で、コミットを挟まずに次の依頼へ進める。`git.blockingChanges` に項目があれば、該当ファイルをユーザーに伝え、作業を記録してもらってから再プレビューする。
+1. `git.state` が `no-repository` または `no-commit` の場合、`python -B $tool checkpoint --project "<project>"` で内容を確認する。既存の作業もローカルの初回コミットに入ること、記録対象、`.gitignore` に足す除外を説明する。ユーザーが同意してから `checkpoint --confirm --project "<project>"` を実行する。Gitのユーザー名・メールアドレスが未設定なら設定を案内する。`git.managedScenes` はDSHが保存・検証した変更で、コミットを挟まずに次の依頼へ進める。`git.blockingChanges` に項目があれば、該当ファイルをユーザーに伝え、作業を記録してもらってから再プレビューする。Gitのパス一覧は各100件までで、総数は `changeCount`/`blockingChangeCount` に入る。総数が一覧より多いときは `git status --short` で全体を確認して伝える（`Library/` などが大量にある場合は `.gitignore` の不足が原因のことが多い）。
 2. `sceneInCheckpoint` が `false` なら、選んだシーンをGitに含めてから再プレビューする。最新のプレビューからシーン、アバターと衣装のHierarchyパス、メニュー名、初期状態、`plannedPaths` と生成される `.meta` を要約する。明示確認を得たら、そのプレビューに対応する次のコマンドを実行する。Unityで対象プロジェクトが開いている場合は、保存して閉じるよう案内する。
 
 ```powershell
