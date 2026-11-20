@@ -89,6 +89,13 @@ DSH ではジョブ機能（`tool-jobs`）、Claude Code では Bash / PowerShel
 初回の衣装トグルは `vrc-first-run` の適用コマンドがヘルパーを配置する。独自タスクでは `templates/Editor/` の必要なファイルを `Assets/DSH/Editor/` に配置する。
 旧テンプレートだけを使っているプロジェクトは、新しい `DshApply.cs` を取り込む。独自の結果を返さない既存メソッドでは `-AllowMissingResult` を指定できる。
 
+単体の `DshInspect.Dump` などはヘルパーを配置・更新しない。先に版を確認し、`setup-required` なら`plannedPaths` を伝えて確認を取ってから `--prepare` で更新する（Unity は閉じておく。独自に書き換えたヘルパーは `custom` と表示され、上書きしない）。
+
+```powershell
+python -B "<pkg>\tools\unity_toggle.py" helpers --project "C:\path\to\Project"
+python -B "<pkg>\tools\unity_toggle.py" helpers --project "C:\path\to\Project" --prepare
+```
+
 `DshInspect.Dump` は任意のリクエストを受け取る。省略時は全アバター prefab を 1 prefab あたり 4000 ノードまで出す。
 
 ```powershell
@@ -99,3 +106,4 @@ DSH ではジョブ機能（`tool-jobs`）、Claude Code では Bash / PowerShel
 
 `prefab` は GameObject として読める任意のアセット（FBX も可）、`maxNodes` は 0 で無制限、`filter` はフルパスへの部分一致。
 ノードは `result.json` と同じフォルダの `dump.ndjson` に 1 行ずつ書かれる。読み方は `vrc-asset-read` §5。
+`result.json` に `dumpFile` が無い場合は古いヘルパーが動いている。上の `helpers` で更新してから再実行する。

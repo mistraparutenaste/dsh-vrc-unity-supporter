@@ -23,6 +23,7 @@ LEGACY = {
     "DshInspect.cs": (
         "92de7704a6e547f8fdbb6a8abb2c543de0f3b4cc",  # 0.2.x
         "727506060aeef9224f5aa0a8eb6b21054bda6ad3",  # 0.3.0 - 0.4.1
+        "eff2cb9ed8e6b9b442c9e7e18089e72a4496e2b4",  # 0.5.0 - 0.7.0
     ),
     "DshOutfitToggle.cs": (
         "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",  # 0.3.0
@@ -164,6 +165,48 @@ def helper_plan(root):
         elif name != "DshInspect.cs":
             raise WorkflowError(f"Custom helper {path.as_posix()} needs a manual merge with the bundled template.")
     return helpers
+
+
+def helper_status(root, prepare=False):
+    """Report each bundled Editor helper as current, outdated (a known earlier release), missing or custom.
+
+    With prepare, copy the bundled version over missing and outdated helpers (custom ones are left alone).
+    Standalone Unity calls such as DshInspect.Dump do not install helpers, so run this before them.
+    """
+    rows, planned = [], []
+    for name in HELPERS:
+        path = EDITOR / name
+        destination = inside(root, path)
+        source = (TEMPLATES / "Editor" / name).read_bytes()
+        if not destination.exists():
+            status = "missing"
+        else:
+            actual = destination.read_bytes()
+            if actual.replace(b"\r\n", b"\n") == source.replace(b"\r\n", b"\n"):
+                status = "current"
+            elif git_blob_hash(actual) in LEGACY[name]:
+                status = "outdated"
+            else:
+                status = "custom"
+        rows.append({"file": path.as_posix(), "status": status})
+        if status in ("missing", "outdated"):
+            planned.append((destination, source))
+    output = {"ok": True, "helpers": rows, "plannedPaths": [str(d.relative_to(root).as_posix()) for d, _ in planned]}
+    custom = [row["file"] for row in rows if row["status"] == "custom"]
+    if custom:
+        output["custom"] = custom
+        output["warning"] = "Custom helpers are kept as they are. Merge them with the bundled templates by hand."
+    if not planned:
+        output["status"] = "ready"
+    elif not prepare:
+        output.update(status="setup-required",
+                      next="Close Unity for this project, confirm the planned paths, then rerun with --prepare.")
+    else:
+        for destination, source in planned:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source)
+        output.update(status="updated", next="Unity imports the helpers on its next start.")
+    return output
 
 
 def digest(path):
@@ -512,11 +555,14 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("preview", "apply", "targets", "checkpoint"):
+    for command in ("preview", "apply", "targets", "checkpoint", "helpers"):
         action = commands.add_parser(command)
         action.add_argument("--project", default=os.getcwd())
         if command == "checkpoint":
             action.add_argument("--confirm", action="store_true")
+            continue
+        if command == "helpers":
+            action.add_argument("--prepare", action="store_true")
             continue
         if command == "targets":
             action.add_argument("--scene", required=True)
@@ -540,6 +586,8 @@ def main():
         root = find_project(args.project)
         if args.command == "checkpoint":
             output = checkpoint(root, args.confirm)
+        elif args.command == "helpers":
+            output = helper_status(root, args.prepare)
         elif args.command == "preview":
             output, _ = preview(root, args)
         elif args.command == "targets":

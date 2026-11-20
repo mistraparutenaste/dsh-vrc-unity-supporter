@@ -55,7 +55,7 @@ python <pkg>/tools/unity_inspect.py hierarchy "Assets\Avatar.unity" --filter Hoo
 各ノードについて `m_Name`、`fileID`、コンポーネント（スクリプト名に解決できたもの）、
 有効/無効を出す。プレハブのインスタンスは元 prefab を解決して展開する（既定 `--depth 2`）。
 
-出力は既定で先頭 300 ノードまで（`--max-nodes`、0 で無制限）。`--json` は1行のJSONで、
+出力は既定で先頭 300 ノードまで、かつ約 48KB まで（`--max-nodes`、0 で件数も容量も無制限）。`--json` は1行のJSONで、
 `nodeCount`（総数）と `truncated` を持つ。`truncated` が true なら全件を出し直さず、
 `--filter <名前の一部>`（フルパスへの大文字小文字無視の部分一致。一致したノードの子孫も含む）や
 `--max-depth <N>`（ツリーの深さ上限、0 がルート）で絞る。シーンにはアバター階層が丸ごと入るため、
@@ -72,7 +72,8 @@ python <pkg>/tools/unity_inspect.py refs --guid 1a2b3c... --project "C:\path\to\
 ```
 
 「このアセットはどこから参照されているか」を返す。削除や移動の前に必ず使う。
-`referencedBy` は最大 200 件。総数は `referencedByCount` に入る（超えたら `truncated: true`）。
+`referencedBy` は既定で最大 200 件。総数は `referencedByCount` に入る（超えたら `truncated: true`）。
+移動や削除の前に全件が必要なら `--max-refs 0` を付ける（テキスト出力でも同じ）。
 
 ## 4. 索引を作る: `index`
 
@@ -98,7 +99,7 @@ GUIDとパスの対応をOSの一時フォルダへ書き出す。出力先は `
 `DshInspect.Dump` の `result.json` は要約だけを持つ。ノード本体は `dumpFile`（`dump.ndjson`、
 1行1ノードで `depth`/`path`/`name`/`active`/`components`）にある。`assets[]` の
 `startLine`/`lineCount` を使い、read の offset/limit で必要な範囲だけ読むか、grep でパスを探す。
-ファイル全体を一度に読まない。対象 prefab・上限・絞り込みはリクエストで渡す（`unity-cli` §7）。
+ファイル全体を一度に読まない。prefab が 50 件を超えると `assets[]` は先頭 50 件だけになる（`assetsTruncated`）。全件の行範囲は `assetIndexFile`（`dump-index.ndjson`、1 行 1 prefab）を必要な範囲だけ読む。対象 prefab・上限・絞り込みはリクエストで渡す（`unity-cli` §7）。
 
 ## 6. 報告の作法
 

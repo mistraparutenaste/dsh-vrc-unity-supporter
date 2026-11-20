@@ -71,6 +71,9 @@ BUILTIN_CLASSES = {
 
 
 DEFAULT_MAX_NODES = 300
+# Agents read stdout as context. Rows carry full paths, so deep trees grow faster than the node count;
+# capped output also stops at this many UTF-8 bytes. --max-nodes 0 prints everything.
+OUTPUT_BUDGET_BYTES = 48 * 1024
 MAX_REFERENCES = 200
 MAX_MISSING_SCRIPTS = 50
 MAX_AVATARS = 200
@@ -351,22 +354,38 @@ def cmd_hierarchy(args) -> int:
         rows = [r for r in rows if needle in r["path"].casefold()]
     total = len(rows)
     max_nodes = max(0, int(getattr(args, "max_nodes", DEFAULT_MAX_NODES)))
-    truncated = bool(max_nodes) and total > max_nodes
-    if truncated:
+    if max_nodes:
         rows = rows[:max_nodes]
+
+    def text_lines(r):
+        indent = "  " * r["depth"]
+        flag = "" if r["active"] in (True, None) else "  [inactive]"
+        yield f"{indent}- {r['name']}{flag}"
+        for c in r["components"]:
+            off = "" if c["enabled"] in (True, None) else " (disabled)"
+            yield f"{indent}    . {c['name']}{off}"
+
+    if max_nodes:
+        # Keep the leading rows that fit the byte budget (always at least one).
+        size = lambda r: len((compact_json(r) if args.json else "\n".join(text_lines(r))).encode("utf-8")) + 1
+        kept, used = [], 0
+        for r in rows:
+            used += size(r)
+            if kept and used > OUTPUT_BUDGET_BYTES:
+                break
+            kept.append(r)
+        rows = kept
+    truncated = len(rows) < total
 
     if args.json:
         print(compact_json({"asset": str(target), "nodes": rows, "nodeCount": total, "truncated": truncated}))
     else:
         for r in rows:
-            indent = "  " * r["depth"]
-            flag = "" if r["active"] in (True, None) else "  [inactive]"
-            print(f"{indent}- {r['name']}{flag}")
-            for c in r["components"]:
-                off = "" if c["enabled"] in (True, None) else " (disabled)"
-                print(f"{indent}    . {c['name']}{off}")
+            for line in text_lines(r):
+                print(line)
         if truncated:
-            print(f"(showing {len(rows)} of {total} nodes; use --filter or --max-nodes)")
+            print(f"(showing {len(rows)} of {total} nodes; narrow with --filter or --max-depth, "
+                  "or print all with --max-nodes 0)")
     return 0
 
 
@@ -395,17 +414,19 @@ def cmd_refs(args) -> int:
             continue
         if f"guid: {guid}" in text:
             hits.append(str(asset.relative_to(root)).replace("\\", "/"))
+    limit = max(0, int(getattr(args, "max_refs", MAX_REFERENCES)))
+    shown = hits[:limit] if limit else hits
     if args.json:
-        print(compact_json({"guid": guid, "target": index.get(guid), "referencedBy": hits[:MAX_REFERENCES],
-                            "referencedByCount": len(hits), "truncated": len(hits) > MAX_REFERENCES}))
+        print(compact_json({"guid": guid, "target": index.get(guid), "referencedBy": shown,
+                            "referencedByCount": len(hits), "truncated": len(shown) < len(hits)}))
     else:
         print(f"{guid} -> {index.get(guid, '<not in index>')}")
         if not hits:
             print("  (no references found)")
-        for h in hits[:MAX_REFERENCES]:
+        for h in shown:
             print(f"  <- {h}")
-        if len(hits) > MAX_REFERENCES:
-            print(f"  (showing {MAX_REFERENCES} of {len(hits)} references)")
+        if len(shown) < len(hits):
+            print(f"  (showing {len(shown)} of {len(hits)} references; list all with --max-refs 0)")
     return 0
 
 
@@ -607,6 +628,8 @@ def main(argv: list[str]) -> int:
     p_refs.add_argument("--path")
     p_refs.add_argument("--project", default=os.getcwd())
     p_refs.add_argument("--json", action="store_true")
+    p_refs.add_argument("--max-refs", type=int, default=MAX_REFERENCES,
+                        help=f"list at most this many referencing assets (default {MAX_REFERENCES}, 0 = all)")
     p_refs.set_defaults(func=cmd_refs)
 
     args = parser.parse_args(argv)

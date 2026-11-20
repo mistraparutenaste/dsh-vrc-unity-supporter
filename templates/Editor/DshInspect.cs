@@ -65,6 +65,8 @@ namespace DSH.Editor
         // Writes one node per line to dump.ndjson next to result.json; result.json stays a small summary
         // with the line range of each prefab so an agent can page through the dump.
         // Optional request (-RequestFile): {"prefab":"Assets/A.prefab","maxNodes":4000,"filter":"Hoodie"}
+        private const int MaxSummaryAssets = 50;
+
         public static void Dump()
         {
             var data = NewResult("Dump");
@@ -86,8 +88,18 @@ namespace DSH.Editor
                         assets.Add(DumpPrefab(path, request, writer, ref line));
                     }
                 }
+                // result.json stays small: the first assets inline, every asset's line range in an index file.
+                var indexFile = Path.Combine(Path.GetDirectoryName(dumpFile), "dump-index.ndjson");
+                using (var index = new StreamWriter(indexFile, false, new UTF8Encoding(false)))
+                {
+                    index.NewLine = "\n";
+                    foreach (var asset in assets) index.WriteLine(DSH.MiniJson.Serialize(asset));
+                }
                 data["dumpFile"] = dumpFile;
-                data["assets"] = assets;
+                data["assetIndexFile"] = indexFile;
+                data["assetCount"] = assets.Count;
+                data["assets"] = assets.Take(MaxSummaryAssets).ToList();
+                data["assetsTruncated"] = assets.Count > MaxSummaryAssets;
                 data["ok"] = true;
                 if (paths.Count == 0)
                 {

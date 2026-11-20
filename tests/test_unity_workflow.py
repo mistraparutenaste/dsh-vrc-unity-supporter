@@ -115,7 +115,10 @@ class UnityWorkflowTests(unittest.TestCase):
         self.chain_scene(350)
         result = self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity", "--json")
         capped = self.json_output(result)
-        self.assertEqual((capped["nodeCount"], capped["truncated"], len(capped["nodes"])), (350, True, 300))
+        # Paths grow with depth, so the byte budget stops this chain before the 300-node cap.
+        self.assertEqual((capped["nodeCount"], capped["truncated"]), (350, True))
+        self.assertLess(len(capped["nodes"]), 300)
+        self.assertLessEqual(len(result.stdout.encode("utf-8")), 50 * 1024)
         self.assertLessEqual(result.stdout.strip().count("\n"), 0)
 
         full = self.json_output(self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity", "--json",
@@ -134,7 +137,8 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertEqual(shallow["nodeCount"], 5)
 
         text = self.cli("unity_inspect.py", "hierarchy", "Assets/Big.unity")
-        self.assertIn("(showing 300 of 350 nodes", text.stdout)
+        self.assertRegex(text.stdout, r"\(showing \d+ of 350 nodes.*--max-nodes 0\)")
+        self.assertLessEqual(len(text.stdout.encode("utf-8")), 50 * 1024)
 
     def test_refs_lists_are_capped_with_a_total(self):
         self.avatar_scene()
@@ -144,6 +148,36 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertEqual(refs["referencedByCount"], 251)  # 250 materials and the scene
         self.assertEqual(len(refs["referencedBy"]), 200)
         self.assertTrue(refs["truncated"])
+
+        text = self.cli("unity_inspect.py", "refs", "--guid", PREFAB_GUID)
+        self.assertIn("(showing 200 of 251 references; list all with --max-refs 0)", text.stdout)
+        every = self.cli("unity_inspect.py", "refs", "--guid", PREFAB_GUID, "--max-refs", "0")
+        self.assertEqual(every.stdout.count("  <- "), 251)
+        self.assertNotIn("showing", every.stdout)
+        full = self.json_output(self.cli("unity_inspect.py", "refs", "--guid", PREFAB_GUID, "--json", "--max-refs", "0"))
+        self.assertEqual((len(full["referencedBy"]), full["truncated"]), (251, False))
+
+    def test_helpers_reports_outdated_and_custom_helpers_and_updates_only_outdated(self):
+        templates = TOOLS.parent / "templates" / "Editor"
+        old = TOOLS.parent / "tests" / "fixtures" / "DshInspect.0.4.1.cs"
+        self.write("Assets/DSH/Editor/DshInspect.cs", "").write_bytes(old.read_bytes())
+        custom = self.write("Assets/DSH/Editor/DshApply.cs", "// edited by the user\n")
+        status = self.json_output(self.cli("unity_toggle.py", "helpers"))
+        by_file = {row["file"]: row["status"] for row in status["helpers"]}
+        self.assertEqual(by_file["Assets/DSH/Editor/DshInspect.cs"], "outdated")
+        self.assertEqual(by_file["Assets/DSH/Editor/DshApply.cs"], "custom")
+        self.assertEqual(by_file["Assets/DSH/Editor/DshShape.cs"], "missing")
+        self.assertEqual(status["status"], "setup-required")
+        self.assertEqual(status["custom"], ["Assets/DSH/Editor/DshApply.cs"])
+        self.assertEqual((self.project / "Assets/DSH/Editor/DshInspect.cs").read_bytes(), old.read_bytes())
+
+        updated = self.json_output(self.cli("unity_toggle.py", "helpers", "--prepare"))
+        self.assertEqual(updated["status"], "updated")
+        self.assertEqual((self.project / "Assets/DSH/Editor/DshInspect.cs").read_bytes(),
+                         (templates / "DshInspect.cs").read_bytes())
+        self.assertEqual(custom.read_text(encoding="utf-8"), "// edited by the user\n")
+        again = self.json_output(self.cli("unity_toggle.py", "helpers"))
+        self.assertEqual(again["status"], "ready")
 
     def test_guid_resolution_refreshes_after_add_and_move(self):
         self.json_output(self.cli("unity_inspect.py", "index", ".", "--json"))
