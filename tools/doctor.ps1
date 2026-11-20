@@ -82,6 +82,22 @@ if ($vrcGet) {
     Add-Check 'vrc-get' 'WARN' '未導入（任意）。パッケージ操作は GUI 手順になります'
 }
 
+# --- Blender (optional, for making and fitting models) ------------------------
+$blender = $env:DSH_BLENDER
+if (-not $blender) {
+    $command = Get-Command blender -ErrorAction SilentlyContinue
+    if ($command) { $blender = $command.Source }
+}
+if (-not $blender) {
+    $blender = @(Get-ChildItem (Join-Path $env:ProgramFiles 'Blender Foundation') -Filter blender.exe -Recurse -Depth 1 -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName)
+}
+if ($blender -and (Test-Path $blender)) {
+    Add-Check 'blender' 'PASS' $blender
+} else {
+    Add-Check 'blender' 'WARN' '未導入（任意）。小物の作成と衣装の合わせ込みに使います: https://www.blender.org/download/ （別の場所なら DSH_BLENDER を設定）'
+}
+
 # --- PhotoCraft CLI (optional, for color variants) --------------------------
 $photocraft = @($env:PHOTOCRAFT_CLI,
     (Join-Path $env:LOCALAPPDATA 'Programs\ArtCraft\PhotoCraft\photocraft-cli.exe'),

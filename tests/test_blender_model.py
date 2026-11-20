@@ -1,0 +1,113 @@
+import json
+import os
+from pathlib import Path
+import sys
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_unity_workflow as base  # noqa: E402
+
+
+FAKE_BLENDER = r'''
+import json, sys
+args = sys.argv[sys.argv.index("--") + 1:]
+command, request_path, result_path = args
+request = json.load(open(request_path, encoding="utf-8"))
+with open(sys.argv[0] + ".calls", "a", encoding="utf-8") as calls:
+    calls.write(command + "\n")
+if command == "inspect":
+    result = {"ok": True, "meshes": [{"name": "Body"}], "armatures": []}
+else:
+    with open(request["output"], "w", encoding="utf-8") as fbx:
+        fbx.write("fbx " + request["kind"] + " " + json.dumps(request.get("parts", []))[:40])
+    result = {"ok": True, "kind": request["kind"]}
+json.dump(result, open(result_path, "w", encoding="utf-8"))
+'''
+
+
+class BlenderModelTests(unittest.TestCase):
+    setUp = base.UnityWorkflowTests.setUp
+    write = base.UnityWorkflowTests.write
+    cli = base.UnityWorkflowTests.cli
+    json_output = base.UnityWorkflowTests.json_output
+
+    def fake_blender(self):
+        script = self.write("Library/fake_blender.py", FAKE_BLENDER)
+        launcher = self.write("Library/blender.cmd", f'@"{sys.executable}" -B "{script}" %*\n')
+        return dict(os.environ, DSH_BLENDER=str(launcher)), Path(str(script) + ".calls")
+
+    def recipe(self, name="Ribbon", **fields):
+        self.write(f"Assets/DSH/Models/{name}/recipe.json", json.dumps(dict({"name": name}, **fields)))
+
+    def build(self, name="Ribbon", env=None):
+        return self.cli("blender_model.py", "build", "--model", name, "--no-preview", env=env)
+
+    def test_recipe_errors_are_reported_before_blender_runs(self):
+        env, calls = self.fake_blender()
+        self.write("Assets/Items/Outfit.fbx", "fbx\n")
+        cases = [
+            ({}, "'kind'"),
+            ({"kind": "make"}, "'parts'"),
+            ({"kind": "make", "parts": [{"shape": "star"}]}, "'shape'"),
+            ({"kind": "make", "parts": [{"shape": "cube", "size": [0, 1, 1]}]}, "size"),
+            ({"kind": "make", "parts": [{"shape": "cube", "color": "red"}]}, "#RRGGBB"),
+            ({"kind": "make", "parts": [{"shape": "cube", "position": [0, 5, 0]}]}, "position"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Missing.fbx"}, "does not exist"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.png", "avatar": "Assets/Items/Outfit.fbx"}, ".fbx or .blend"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "weights": "auto"}, "'weights'"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "push": 0.5}, "push"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "scale": 3}, "scale"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "offset": [0, 1, 0]}, "offset"),
+        ]
+        for fields, message in cases:
+            self.recipe(**fields)
+            failed = self.build(env=env)
+            self.assertNotEqual(failed.returncode, 0, fields)
+            self.assertIn(message, json.loads(failed.stdout)["error"], fields)
+        self.assertFalse(calls.exists())
+        missing = self.build("Other", env=env)
+        self.assertIn("Write the recipe first", json.loads(missing.stdout)["error"])
+
+    def test_missing_blender_is_reported(self):
+        self.recipe(kind="make", parts=[{"shape": "cube"}])
+        env = dict(os.environ, DSH_BLENDER=str(self.project / "nope" / "blender.exe"))
+        failed = self.build(env=env)
+        self.assertIn("DSH_BLENDER points to a missing file", json.loads(failed.stdout)["error"])
+
+    def test_build_writes_the_fbx_and_tracks_whether_it_is_current(self):
+        env, calls = self.fake_blender()
+        self.recipe(kind="make", parts=[{"shape": "sphere", "size": [0.03, 0.03, 0.03], "color": "#e05a7a"}])
+        built = self.json_output(self.build(env=env))
+        self.assertEqual(built["output"], "Assets/DSH/Models/Ribbon/Ribbon.fbx")
+        fbx = self.project / built["output"]
+        self.assertTrue(fbx.read_text().startswith("fbx make"))
+        self.assertEqual(list((self.project / "Assets/DSH/Models/Ribbon").glob("*.partial*")), [])
+        listed = self.json_output(self.cli("blender_model.py", "list"))
+        self.assertEqual(listed["models"][0]["fbx"], "current")
+
+        self.recipe(kind="make", parts=[{"shape": "cube"}])
+        self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "stale")
+        self.json_output(self.build(env=env))
+
+        fbx.write_text("edited by hand")
+        self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "edited")
+        refused = self.build(env=env)
+        self.assertIn("changed outside this tool", json.loads(refused.stdout)["error"])
+        self.assertEqual(fbx.read_text(), "edited by hand")
+        self.assertEqual(calls.read_text().split(), ["make", "make"])
+
+    def test_inspect_reads_a_project_file(self):
+        env, calls = self.fake_blender()
+        self.write("Assets/Items/Outfit.fbx", "fbx\n")
+        result = self.json_output(self.cli("blender_model.py", "inspect", "Assets/Items/Outfit.fbx",
+                                           "--project", str(self.project), env=env))
+        self.assertEqual(result["meshes"], [{"name": "Body"}])
+        self.assertEqual(calls.read_text().split(), ["inspect"])
+
+
+if __name__ == "__main__":
+    unittest.main()

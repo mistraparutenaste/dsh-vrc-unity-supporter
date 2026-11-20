@@ -39,6 +39,7 @@ LEGACY = {
     # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
     "DshAvatarTools.cs": ("1168f8a1430d88449909e6459cd236f611d0de13",),  # 0.6.2
     "DshShape.cs": (),
+    "DshAccessory.cs": (),
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -49,7 +50,11 @@ SDK_OUTPUTS = (VRCFURY_BUILDS, "Packages/nadena.dev.ndmf/__Generated")
 VARIANTS = "Assets/DSH/Variants"
 # Shape recipes (blendshape weights, outfit sync, hidden-mesh removal); DSH owns this folder.
 SHAPES = "Assets/DSH/Shapes"
-MANAGED_FOLDERS = (VARIANTS, SHAPES)
+# Accessory recipes (which prefab or model is attached where); DSH owns this folder.
+ACCESSORIES = "Assets/DSH/Accessories"
+# Models made or fitted in Blender (FBX, textures, the .blend and its recipe); DSH owns this folder.
+MODELS = "Assets/DSH/Models"
+MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS)
 # Package files that Unity rewrites whenever it opens the project. lilToon records the graphics API,
 # which differs between batch runs with and without -nographics.
 UNITY_REWRITES = {"Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt"}

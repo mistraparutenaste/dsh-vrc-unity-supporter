@@ -100,4 +100,4 @@ python -B $shape apply @a --approved-preview '<preview の値>'
 ## 注意
 
 - AAO のメッシュ処理はグラフィックス有りでないと動かないため、`--verify-sdk` と撮影ではグラフィックス有りで Unity を起動する。
-- 衣装に対応キーが無い体型変更は、衣装が体に追従しない。その場合はボーンの大きさ（MA Scale Adjuster）か Blender での調整が必要になる。
+- 衣装に対応キーが無い体型変更は、衣装が体に追従しない。その場合はボーンの大きさ（MA Scale Adjuster）か Blender での調整（`vrc-blender-model`）が必要になる。
