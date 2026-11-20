@@ -1,0 +1,17 @@
+{
+  "name": "dsh-vrc-unity-supporter",
+  "description": "VRChat avatar modification skills and Unity batch-mode tools.",
+  "owner": {
+    "name": "mistraparutenaste",
+    "url": "https://github.com/mistraparutenaste"
+  },
+  "plugins": [
+    {
+      "name": "dsh-vrc-unity-supporter",
+      "source": "./",
+      "description": "Read a VRChat Unity project, apply avatar changes through Editor scripts in batch mode, and verify the result.",
+      "category": "development",
+      "tags": ["vrchat", "unity", "avatar"]
+    }
+  ]
+}

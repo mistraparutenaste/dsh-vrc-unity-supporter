@@ -10,7 +10,7 @@ description: Unity プロジェクトを開かずに読む手順。.meta の GUI
 
 ## 0. ツールの場所
 
-このスキルの 2 階層上がパッケージルート。
+このスキルの 2 階層上がパッケージルート（`<pkg>`）。Claude Code では `${CLAUDE_PLUGIN_ROOT}`。
 
 ```powershell
 python <pkg>/tools/unity_inspect.py --help

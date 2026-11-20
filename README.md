@@ -46,6 +46,17 @@ Windows で、まだ入っていないものを用意してください。
 
 `install.cmd` は DSH に同梱されたコマンドを使い、npm から公開版を取得してインストールします。インストール時はインターネットに接続してください。 [インストーラーの詳細と削除方法](installer/README.md)
 
+### Claude Code で使う場合
+
+同じスキルとツールを Claude Code のプラグインとしても使えます。Git、Python、Unity などの準備は上の表と同じです（DSH は不要）。Claude Code で次を順に実行します。
+
+```text
+/plugin marketplace add mistraparutenaste/dsh-vrc-unity-supporter
+/plugin install dsh-vrc-unity-supporter@dsh-vrc-unity-supporter
+```
+
+ターミナルからは `claude plugin marketplace add mistraparutenaste/dsh-vrc-unity-supporter` のあと `claude plugin install dsh-vrc-unity-supporter@dsh-vrc-unity-supporter` でも入ります。Unity プロジェクトのフォルダで Claude Code を開き、下の「最初に試す」と同じ一文から始めてください。入口の `vrc-avatar` スキルが、読み取りから始めて適用前に確認を取る DSH 版と同じ手順に沿わせます。
+
 プラグインのバージョンが **0.2.0** の場合は、Editor スクリプトの初期配置を手動で行います。 [0.2.0 のセットアップ手順](https://github.com/mistraparutenaste/dsh-vrc-unity-supporter/blob/v0.2.0/README.md#プロジェクトへの初期配置)
 
 ## 最初に試す

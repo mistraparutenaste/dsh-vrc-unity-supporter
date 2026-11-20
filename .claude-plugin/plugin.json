@@ -1,0 +1,15 @@
+{
+  "name": "dsh-vrc-unity-supporter",
+  "displayName": "VRChat Avatar (Unity)",
+  "version": "0.5.0",
+  "description": "VRChat avatar modification in an existing Unity 2022.3.22f1 project: read the project without opening the editor, design the change, apply it through generated Editor scripts in batch mode, and verify the result.",
+  "author": {
+    "name": "mistraparutenaste",
+    "url": "https://github.com/mistraparutenaste"
+  },
+  "homepage": "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter",
+  "repository": "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter",
+  "license": "MIT",
+  "keywords": ["vrchat", "unity", "avatar", "modular-avatar", "vrcfury"],
+  "skills": "./claude/skills"
+}

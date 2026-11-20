@@ -23,7 +23,11 @@ description: アバター改変を Unity Editor スクリプトとして書き�
 <pkg>/templates/Editor/DshApply.cs
 ```
 
-`<pkg>` は通常 `%USERPROFILE%\.dsh\profiles\<profile>\node_modules\dsh-vrc-unity-supporter`。
+`<pkg>` はパッケージ（プラグイン）のルート。
+
+- DSH: 通常 `%USERPROFILE%\.dsh\profiles\<profile>\node_modules\dsh-vrc-unity-supporter`
+- Claude Code: `${CLAUDE_PLUGIN_ROOT}`（プラグインのインストール先）
+
 分からなければ `doctor.ps1` が表示する。
 
 スクリプトは署名されていないため、Windows の既定（RemoteSigned）では**直接実行できない**。

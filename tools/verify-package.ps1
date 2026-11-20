@@ -48,8 +48,11 @@ foreach ($ps1 in Get-ChildItem $root -Filter *.ps1 -Recurse) {
 }
 
 # 2. skill directory names must match the SKILL.md name
-$skillsDir = Join-Path $root 'skills'
-foreach ($dir in Get-ChildItem $skillsDir -Directory) {
+#    (skills/ is shared by DSH and Claude Code; claude/skills/ is Claude Code only)
+$skillDirs = @(Get-ChildItem (Join-Path $root 'skills') -Directory)
+$claudeSkills = Join-Path $root 'claude/skills'
+if (Test-Path $claudeSkills) { $skillDirs += Get-ChildItem $claudeSkills -Directory }
+foreach ($dir in $skillDirs) {
     $skill = Join-Path $dir.FullName 'SKILL.md'
     if (-not (Test-Path $skill)) { $problems.Add("missing SKILL.md in $($dir.Name)"); continue }
     $head = (Get-Content $skill -TotalCount 6 -Encoding UTF8) -join "`n"
@@ -106,6 +109,26 @@ if (Test-Path $patchPath -PathType Leaf) {
     if ($patch -cnotmatch $planSection) {
         $problems.Add('cordis.patch.yml: plan-mode requires a non-empty config.section block')
     }
+}
+
+# 8. the Claude Code plugin manifest matches package.json and its marketplace entry.
+$pluginPath = Join-Path $root '.claude-plugin/plugin.json'
+$marketPath = Join-Path $root '.claude-plugin/marketplace.json'
+if (-not (Test-Path $pluginPath) -or -not (Test-Path $marketPath)) {
+    $problems.Add('missing: .claude-plugin/plugin.json or .claude-plugin/marketplace.json')
+} else {
+    try {
+        $plugin = Get-Content $pluginPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $market = Get-Content $marketPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($plugin.name -ne $pkgJson.name) { $problems.Add('plugin.json: name differs from package.json') }
+        if ($plugin.version -ne $pkgJson.version) { $problems.Add("plugin.json: version $($plugin.version) differs from package.json $($pkgJson.version)") }
+        $entry = @($market.plugins | Where-Object { $_.name -eq $plugin.name })
+        if ($entry.Count -ne 1) { $problems.Add('marketplace.json: no single plugins[] entry named like plugin.json') }
+        elseif ($entry[0].source -notmatch '^\./?$') { $problems.Add('marketplace.json: plugin source must be "./"') }
+        foreach ($p in @($plugin.skills)) {
+            if ($p -and -not (Test-Path (Join-Path $root $p))) { $problems.Add("plugin.json: skills path not found: $p") }
+        }
+    } catch { }  # invalid JSON is already reported by check 3
 }
 
 if ($problems.Count -eq 0) {

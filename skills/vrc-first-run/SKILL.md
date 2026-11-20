@@ -1,13 +1,13 @@
 ---
 name: vrc-first-run
-description: DSHでの初回診断と、配置済み衣装にVRCFuryトグルを追加する手順。プロジェクトを調べたい、対象を選びたい、服をメニューで切り替えたいときに使う。
+description: 初回のプロジェクト診断と、配置済み衣装にVRCFuryトグルを追加する手順。プロジェクトを調べたい、対象を選びたい、服をメニューで切り替えたいときに使う。
 ---
 
 # 初回診断と衣装トグル
 
 ## プロジェクトを調べる
 
-このスキルの `skills/vrc-first-run/` の親の親がプラグインルート。パスを取得できない場合は、`$env:DSH_PROFILE_DIR`、または `%USERPROFILE%\.dsh\profiles\<profile>` の `node_modules/dsh-vrc-unity-supporter` を確認する。`<pkg>`、`<project>` は実際のパスに置き換え、引用符で囲む。Python 3.10 以上を使う。`python` が使えなければ `py -3` も確認する。
+このスキルの `skills/vrc-first-run/` の親の親がプラグインルート（`<pkg>`）。Claude Code では `${CLAUDE_PLUGIN_ROOT}`。DSH でパスを取得できない場合は、`$env:DSH_PROFILE_DIR`、または `%USERPROFILE%\.dsh\profiles\<profile>` の `node_modules/dsh-vrc-unity-supporter` を確認する。`<pkg>`、`<project>` は実際のパスに置き換え、引用符で囲む。Python 3.10 以上を使う。`python` が使えなければ `py -3` も確認する。
 
 ```powershell
 python -B "<pkg>\tools\unity_inspect.py" report --json
@@ -44,7 +44,7 @@ python -B $tool preview @target
 python -B $tool apply @target --approved-preview '<preview の値>'
 ```
 
-初回のUnityコンパイルに時間がかかる場合は、DSHのジョブ機能で実行する。結果とログは `.dsh/runs` に保存される。`--verify-sdk` はシーンを保存した後にアバターのコピーをSDKの前処理に通す。ローカルのGit除外には `.dsh/` と、SDK検証時に使うVRCFuryの一時ビルド出力が入る。
+初回のUnityコンパイルに時間がかかる場合は、DSHではジョブ機能、Claude Codeではバックグラウンド実行で回す。結果とログは `.dsh/runs` に保存される。`--verify-sdk` はシーンを保存した後にアバターのコピーをSDKの前処理に通す。ローカルのGit除外には `.dsh/` と、SDK検証時に使うVRCFuryの一時ビルド出力が入る。
 
 3. 適用時に同名候補が返ったら `targets` で対象を確認し、選び直したプレビューを提示する。`changes` は現在のGit差分、`checkpoint` は元のGitコミット。エラー時は `unity.error` と `log` を調べ、シーンが保存済みかも伝える。
 4. 保存結果と `unity.sdkVerification` の結果をそれぞれ報告する。`passed` なら生成済みのメニュー名と衣装のオン・オフを切り替えるキーを確認できたことを伝える。`failed` または `inconclusive` なら理由を示す。SDK検証だけ再試行するときは、保存済みのトグルと同じ依頼を新たにプレビューして実行できる。VRChatクライアントでの動作は、ユーザーが **Build & Test** を実行し、報告されたメニューを開いて衣装の表示・非表示を確認する。
