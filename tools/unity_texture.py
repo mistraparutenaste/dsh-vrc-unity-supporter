@@ -439,10 +439,8 @@ def overlapping_variants(root, name, recipe):
     return found
 
 
-def preview(root, args):
-    request, scene, outputs = variant_request(root, args)
-    recipe, _ = load_recipe(root, args.variant)
-    overlaps = overlapping_variants(root, args.variant, recipe)
+def scene_plan(root, request, scene, planned, fingerprint):
+    """Git state, helper setup and an approval token for a Unity task that saves the scene."""
     helpers = toggle.helper_plan(root)
     state = git_state(root)
     owned = toggle.owned_scene_changes(root, state)
@@ -452,13 +450,41 @@ def preview(root, args):
                                                             check=False).returncode == 0)
     scene_digest = digest(scene)
     contents = {"project": str(root), "request": request, "head": state["head"], "sceneDigest": scene_digest,
-                "textures": [output["sha256"] for output in outputs],
+                "files": fingerprint,
                 "helpers": {p.as_posix(): hashlib.sha256(source).hexdigest() for p, source, _ in helpers}}
     token = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
-    planned = [request["scene"], request["folder"] + "/ (materials, animation clip)",
-               *(path.as_posix() for path, _, _ in helpers)]
-    output = {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
-              "sceneDigest": scene_digest, "plannedPaths": planned, "sceneInCheckpoint": scene_in_checkpoint}
+    return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token,
+            "sceneDigest": scene_digest, "plannedPaths": [*planned, *(p.as_posix() for p, _, _ in helpers)],
+            "sceneInCheckpoint": scene_in_checkpoint}, helpers
+
+
+def run_approved(root, args, make_plan, method, task, name, verify_sdk=False):
+    """Check the approval token and the Git checkpoint, then run the scene task under the workflow lock."""
+    if os.name != "nt":
+        raise WorkflowError("Unity batch application requires Windows.")
+    plan, _ = make_plan()
+    if plan.get("ok") is False:
+        return plan
+    if plan["preview"] != args.approved_preview:
+        raise WorkflowError("The preview changed. Preview again and confirm the new details before applying.")
+    if not plan["git"]["head"]:
+        raise WorkflowError("A project Git checkpoint is required. Run unity_toggle.py checkpoint first.")
+    if not plan["sceneInCheckpoint"]:
+        raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
+    with toggle.workflow_lock(inside(root, ".dsh/outfit.lock")):
+        plan, helpers = make_plan()
+        if plan["preview"] != args.approved_preview:
+            raise WorkflowError("The preview changed. Preview again before applying.")
+        return toggle.apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, "DshTextureVariant")
+
+
+def preview(root, args):
+    request, scene, outputs = variant_request(root, args)
+    recipe, _ = load_recipe(root, args.variant)
+    overlaps = overlapping_variants(root, args.variant, recipe)
+    output, helpers = scene_plan(root, request, scene,
+                                 [request["scene"], request["folder"] + "/ (materials, animation clip)"],
+                                 [o["sha256"] for o in outputs])
     if overlaps:
         output["overlappingVariants"] = overlaps
         output["warning"] = ("These variants replace the same textures and can be on at the same time, so only one "
@@ -467,21 +493,123 @@ def preview(root, args):
 
 
 def apply(root, args):
-    if os.name != "nt":
-        raise WorkflowError("Unity batch application requires Windows.")
-    plan, _ = preview(root, args)
-    if plan["preview"] != args.approved_preview:
-        raise WorkflowError("The preview changed. Preview again and confirm the new details before applying.")
-    if not plan["git"]["head"]:
-        raise WorkflowError("A project Git checkpoint is required. Run unity_toggle.py checkpoint first.")
-    if not plan["sceneInCheckpoint"]:
-        raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
-    with toggle.workflow_lock(inside(root, ".dsh/outfit.lock")):
-        plan, helpers = preview(root, args)
-        if plan["preview"] != args.approved_preview:
-            raise WorkflowError("The preview changed. Preview again before applying.")
-        return toggle.apply_scene_change(root, plan, helpers, args.verify_sdk, "Apply", "TextureVariant",
-                                         "texture-variant", "DshTextureVariant")
+    return run_approved(root, args, lambda: preview(root, args), "Apply", "TextureVariant", "texture-variant",
+                        args.verify_sdk)
+
+
+# --- list and remove -------------------------------------------------------------
+
+HOLDER = "DSH Color Variant "
+REFERENCING_SUFFIXES = {".unity", ".prefab", ".mat", ".controller", ".anim", ".asset", ".overrideController"}
+
+
+def scenes_with_holder(root, name):
+    """Saved scenes whose YAML names this variant's toggle object (a text search; Unity is not needed)."""
+    needle = f"m_Name: {HOLDER}{name}\n".encode("utf-8")
+    found = []
+    for scene in sorted((root / "Assets").rglob("*.unity")):
+        try:
+            if needle in scene.read_bytes().replace(b"\r\n", b"\n"):
+                found.append(scene.relative_to(root).as_posix())
+        except OSError:
+            continue
+    return found
+
+
+def list_variants(root):
+    folder = inside(root, VARIANTS.as_posix())
+    variants = []
+    for path in sorted(p for p in folder.glob("*") if p.is_dir()) if folder.is_dir() else []:
+        name, entry = path.name, {"variant": path.name}
+        try:
+            recipe, _ = load_recipe(root, name)
+            entry.update(menu=recipe["menu"], exclusiveTag=recipe.get("exclusiveTag", ""),
+                         textures=[texture["replace"] for texture in recipe["textures"]])
+            if not render_receipt_path(root, name).is_file():
+                entry["render"] = "missing"
+            else:
+                try:
+                    rendered(root, name)
+                    entry["render"] = "current"
+                except WorkflowError:
+                    entry["render"] = "stale"  # the recipe, PSD or rendered PNG changed since the last render
+            overlaps = overlapping_variants(root, name, recipe)
+            if overlaps:
+                entry["overlappingVariants"] = [overlap["variant"] for overlap in overlaps]
+        except WorkflowError as error:
+            entry["recipeError"] = str(error)
+        entry["scenes"] = scenes_with_holder(root, name)
+        entry["files"] = sum(1 for item in path.rglob("*") if item.is_file() and item.suffix != ".meta")
+        variants.append(entry)
+    return {"ok": True, "variantCount": len(variants), "variants": variants[:100]}
+
+
+def asset_guids(folder):
+    guids = {}
+    for meta in folder.rglob("*.meta"):
+        for line in meta.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("guid: "):
+                guids[line[6:].strip()] = meta.with_suffix("")
+                break
+    return guids
+
+
+def outside_references(root, folder, scene_path):
+    """Assets outside the variant folder (other than the scene) that still point at its files."""
+    guids = asset_guids(folder)
+    if not guids:
+        return []
+    found = []
+    for path in (root / "Assets").rglob("*"):
+        if (path.suffix not in REFERENCING_SUFFIXES or path.is_relative_to(folder) or
+                path.relative_to(root).as_posix() == scene_path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        used = sorted(guids[guid].relative_to(root).as_posix() for guid in guids if guid in text)
+        if used:
+            found.append({"path": path.relative_to(root).as_posix(), "uses": used[:10]})
+            if len(found) >= 50:
+                break
+    return found
+
+
+def remove_plan(root, args):
+    folder = variant_dir(root, args.variant)
+    scene, scene_path = toggle.scene_asset(root, args.scene)
+    exists = folder.is_dir()
+    in_scene = scene_path in scenes_with_holder(root, args.variant)
+    if not exists and not in_scene:
+        raise WorkflowError(f"No variant named {args.variant} exists in this project or scene.")
+    references = outside_references(root, folder, scene_path) if exists and not args.keep_files else []
+    request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "variant": args.variant,
+               "folder": folder.relative_to(root).as_posix(), "keepFiles": bool(args.keep_files), "remove": True}
+    files = sorted(item.relative_to(root).as_posix() for item in folder.rglob("*") if item.is_file()) if exists else []
+    fingerprint = [[path, digest(root / path)] for path in files]
+    planned = [scene_path] if in_scene else []
+    if exists and not args.keep_files:
+        planned.append(request["folder"] + "/ (deleted with its .meta files)")
+    output, helpers = scene_plan(root, request, scene, planned, fingerprint)
+    output.update(toggleInScene=in_scene, deletesFiles=exists and not args.keep_files,
+                  fileCount=sum(1 for path in files if not path.endswith(".meta")))
+    if references:
+        output.update(ok=False, otherReferences=references,
+                      error="Other assets still use files of this variant. Change them back in Unity first, "
+                            "or keep the files with --keep-files.")
+    return output, helpers
+
+
+def remove(root, args):
+    if not args.approved_preview:
+        output, _ = remove_plan(root, args)
+        return output
+    output = run_approved(root, args, lambda: remove_plan(root, args), "Remove", "TextureVariantRemove",
+                          "texture-remove")
+    if output.get("ok") and not args.keep_files:
+        render_receipt_path(root, args.variant).unlink(missing_ok=True)
+    return output
 
 
 # --- command line ---------------------------------------------------------------
@@ -500,11 +628,14 @@ def main():
     render_parser.add_argument("--project", default=os.getcwd())
     render_parser.add_argument("--variant", required=True)
 
-    for name in ("materials", "capture", "uv", "preview", "apply"):
+    list_parser = commands.add_parser("list", help="List the color variants of a project (read-only)")
+    list_parser.add_argument("--project", default=os.getcwd())
+
+    for name in ("materials", "capture", "uv", "preview", "apply", "remove"):
         action = commands.add_parser(name)
         action.add_argument("--project", default=os.getcwd())
         action.add_argument("--scene", required=True)
-        action.add_argument("--avatar", required=name in ("preview", "apply"), default="")
+        action.add_argument("--avatar", required=name in ("preview", "apply", "remove"), default="")
         action.add_argument("--avatar-id", default="")
         if name in ("materials", "capture", "uv"):
             action.add_argument("--prepare", action="store_true")
@@ -523,6 +654,12 @@ def main():
             action.add_argument("--verify-sdk", action="store_true")
         if name == "apply":
             action.add_argument("--approved-preview", required=True)
+        if name == "remove":
+            action.add_argument("--variant", required=True)
+            action.add_argument("--keep-files", action="store_true",
+                                help="Only take the toggle out of the scene; keep the recipe and generated files")
+            action.add_argument("--approved-preview", default="",
+                                help="Without this, remove only previews what it would change")
 
     args = parser.parse_args()
     try:
@@ -534,6 +671,10 @@ def main():
             root = find_project(args.project)
             if args.command == "render":
                 output = render(root, args.variant)
+            elif args.command == "list":
+                output = list_variants(root)
+            elif args.command == "remove":
+                output = remove(root, args)
             elif args.command == "materials":
                 output = materials(root, args)
             elif args.command == "capture":

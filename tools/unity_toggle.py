@@ -32,6 +32,7 @@ LEGACY = {
     "DshTextureVariant.cs": (
         "23cf182d53ef8fc2405305d706ace79403c1bca1",  # 0.6.0 - 0.6.1
         "88d4f3fb624c6083b44436ccd5e29562d8cb8f04",  # 0.6.2
+        "0a7da5fd1f1428cc639e6654fca15fbd5eb2a9a7",  # 0.6.3
     ),
     "DshCapture.cs": (),
     # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
@@ -282,7 +283,7 @@ def pending_user_changes(root, changes, allowed_scenes=()):
         path, status = entry["path"], entry["status"]
         if status == "??" and (path.startswith(".dsh/") or path in meta_files):
             continue
-        if status in ("??", " M") and (path.startswith(VARIANTS + "/") or path == VARIANTS + ".meta"):
+        if status in ("??", " M", " D") and (path.startswith(VARIANTS + "/") or path == VARIANTS + ".meta"):
             continue
         if status == " M" and path in UNITY_REWRITES:
             continue

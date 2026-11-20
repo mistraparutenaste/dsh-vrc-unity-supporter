@@ -135,6 +135,31 @@ python -B $tex apply @v --approved-preview '<preview の値>'
   VRChat で開く位置は `menuLocation`（項目が多いと `Next/Color/...` のように次のページになる）で伝える。
   VRChat での見た目は、ユーザーが **Build & Test** で確認する。
 
+## 6. 一覧と削除
+
+作った色違いを確認する（Unity 不要、ファイルは変えない）:
+
+```powershell
+python -B $tex list --project '<project>'
+```
+
+`variants[]` に、メニュー名、`exclusiveTag`、差し替えるテクスチャ、書き出しの状態（`render`: `current` / `stale` / `missing`）、
+トグルが入っているシーン（`scenes`）、同時オンで衝突する色違い（`overlappingVariants`）が出る。
+
+色違いを外す。`--approved-preview` を付けないと、何をするかだけを返す:
+
+```powershell
+$r = @('--project', '<project>', '--scene', 'Assets/Avatar.unity', '--avatar', 'Avatar', '--variant', 'Hoodie_Blue')
+python -B $tex remove @r
+python -B $tex remove @r --approved-preview '<preview の値>'
+```
+
+- 既定では、シーンからトグルを外し、`Assets/DSH/Variants/<名前>/`（レシピ、PNG、マテリアル、アニメーション）を
+  Unity 経由で `.meta` ごと削除する。メニューから外すだけでレシピと書き出したファイルを残すなら `--keep-files` を付ける。
+- 削除の前に、`toggleInScene`、`plannedPaths`、`fileCount` を伝えて明示的な確認を取る。Git で記録済みのファイルなら、Git から復元できる。
+- ほかの Prefab やマテリアルが色違いのファイルを使っていると、`otherReferences` を返して止まる。
+  Unity で元に戻してもらうか、`--keep-files` にする。
+
 ## 部位ごとの注意
 
 - **付属の色プリセットを先に探す**: 髪や瞳の色が、非表示のグループ（例: `Hair_Color`、`Eye_Color`）に

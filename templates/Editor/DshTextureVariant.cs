@@ -31,6 +31,7 @@ namespace DSH.Editor
             public string exclusiveTag = "";
             public bool defaultOn = false;
             public bool verifySdk = false;
+            public bool keepFiles = false;
             public Swap[] swaps = Array.Empty<Swap>();
         }
 
@@ -168,6 +169,73 @@ namespace DSH.Editor
                 result["error"] = error.GetBaseException().Message;
             }
             DshAvatarScene.Finish("TextureVariant", result);
+        }
+
+        /// <summary>
+        /// Take a color variant out: remove its menu toggle from the scene and, unless keepFiles is set, delete its
+        /// folder through the AssetDatabase so no .meta file is left behind.
+        /// </summary>
+        public static void Remove()
+        {
+            var result = new Dictionary<string, object> { { "ok", false }, { "saved", false } };
+            try
+            {
+                var request = DshAvatarScene.ReadRequest<Request>();
+                if (string.IsNullOrEmpty(request.variant) || request.folder != "Assets/DSH/Variants/" + request.variant)
+                    throw new InvalidOperationException("The request does not describe a variant under Assets/DSH/Variants.");
+                var scene = DshAvatarScene.OpenScene(request.scene, request.expectedSceneDigest);
+                var avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
+                result["scene"] = scene.path;
+                result["variant"] = request.variant;
+                var holderName = "DSH Color Variant " + request.variant;
+                var holder = DshVrc.FindHolder(avatar, holderName);
+
+                // Refuse before changing anything when the scene uses the variant's materials elsewhere.
+                var folderPrefix = request.folder + "/";
+                var users = scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<Renderer>(true))
+                    .Where(renderer => renderer.sharedMaterials.Any(material => material != null &&
+                        AssetDatabase.GetAssetPath(material).StartsWith(folderPrefix, StringComparison.Ordinal)))
+                    .Select(renderer => DshAvatarScene.HierarchyPath(renderer.transform)).Take(20).ToArray();
+                if (users.Length > 0 && !request.keepFiles)
+                {
+                    result["materialUsers"] = users;
+                    throw new InvalidOperationException("Renderers in the scene use this variant's materials directly. " +
+                        "Set their original materials back in Unity, or keep the files.");
+                }
+
+                result["toggleRemoved"] = holder != null;
+                if (holder != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(holder);
+                    DshAvatarScene.RequireSceneDigest(scene.path, request.expectedSceneDigest);
+                    EditorSceneManager.MarkSceneDirty(scene);
+                    if (!EditorSceneManager.SaveScene(scene))
+                        throw new IOException($"Unity could not save {scene.path}. Check write access and retry.");
+                    result["saved"] = true;
+                    DshApply.Note(result, $"Removed the color variant toggle {request.variant}");
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                    scene = DshAvatarScene.OpenScene(request.scene);
+                    avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
+                    if (DshVrc.FindHolder(avatar, holderName) != null)
+                        throw new InvalidOperationException("The variant toggle is still in the saved scene.");
+                }
+
+                if (!request.keepFiles && AssetDatabase.IsValidFolder(request.folder))
+                {
+                    if (!AssetDatabase.DeleteAsset(request.folder))
+                        throw new IOException($"Unity could not delete {request.folder}.");
+                    DshApply.Note(result, $"Deleted {request.folder}");
+                    result["deleted"] = request.folder;
+                }
+                result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
+                result["ok"] = true;
+                result["verified"] = true;
+            }
+            catch (Exception error)
+            {
+                result["error"] = error.GetBaseException().Message;
+            }
+            DshAvatarScene.Finish("TextureVariantRemove", result);
         }
 
         private static void CopyImportSettings(string from, string to)

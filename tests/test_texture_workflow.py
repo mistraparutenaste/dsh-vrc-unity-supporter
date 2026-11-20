@@ -161,6 +161,66 @@ class TextureWorkflowTests(unittest.TestCase):
         self.json_output(self.cli("unity_texture.py", "render", "--variant", "Eyes", env=env))
         self.assertNotIn("overlappingVariants", self.json_output(self.cli("unity_texture.py", "preview", *args, env=env)))
 
+    def test_list_reports_render_state_scenes_and_overlaps_without_unity(self):
+        env = self.photocraft_env()
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 30}], name="Skin", exclusiveTag="skin")
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 90}], name="Eyes", exclusiveTag="eyes")
+        self.json_output(self.cli("unity_texture.py", "render", "--variant", "Eyes", env=env))
+        self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Color Variant Eyes\n")
+        listed = self.json_output(self.cli("unity_texture.py", "list", env=env))
+        by_name = {entry["variant"]: entry for entry in listed["variants"]}
+        self.assertEqual(by_name["Eyes"]["render"], "current")
+        self.assertEqual(by_name["Skin"]["render"], "missing")
+        self.assertEqual(by_name["Eyes"]["scenes"], ["Assets/Avatar.unity"])
+        self.assertEqual(by_name["Skin"]["scenes"], [])
+        self.assertEqual(by_name["Eyes"]["overlappingVariants"], ["Skin"])
+
+    def test_remove_previews_and_refuses_while_other_assets_use_the_variant(self):
+        self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Color Variant Hoodie_Blue\n")
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 30}])
+        self.write("Assets/DSH/Variants/Hoodie_Blue/Costume.mat", "material")
+        self.write("Assets/DSH/Variants/Hoodie_Blue/Costume.mat.meta", "fileFormatVersion: 2\nguid: " + "a" * 32 + "\n")
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Hoodie_Blue")
+        plan = self.json_output(self.cli("unity_texture.py", "remove", *args))
+        self.assertTrue(plan["toggleInScene"] and plan["deletesFiles"])
+        self.assertIn("Assets/DSH/Variants/Hoodie_Blue/ (deleted with its .meta files)", plan["plannedPaths"])
+        self.write("Assets/Other.prefab", "m_Materials:\n  - {fileID: 2100000, guid: " + "a" * 32 + ", type: 2}\n")
+        blocked = self.cli("unity_texture.py", "remove", *args)
+        self.assertNotEqual(blocked.returncode, 0)
+        self.assertEqual(json.loads(blocked.stdout)["otherReferences"],
+                         [{"path": "Assets/Other.prefab", "uses": ["Assets/DSH/Variants/Hoodie_Blue/Costume.mat"]}])
+        kept = self.json_output(self.cli("unity_texture.py", "remove", *args, "--keep-files"))
+        self.assertFalse(kept["deletesFiles"])
+        self.assertTrue((self.project / "Assets/DSH/Variants/Hoodie_Blue/recipe.json").exists())
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_remove_deletes_a_committed_variant_and_later_tasks_continue(self):
+        scene = self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Color Variant Hoodie_Blue\n")
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 30}])
+        env = self.photocraft_env()
+        self.json_output(self.cli("unity_texture.py", "render", "--variant", "Hoodie_Blue", env=env))
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        unity = self.editor_fixture(r'''
+            if (Array.IndexOf(args, "DSH.Editor.DshTextureVariant.Remove") < 0) Environment.Exit(4);
+            File.WriteAllText("Assets/Avatar.unity", "removed\n");
+            Directory.Delete("Assets/DSH/Variants/Hoodie_Blue", true);
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"TextureVariantRemove\",\"verified\":true,\"saved\":true,\"sceneDigest\":\"" +
+                Checksum("Assets/Avatar.unity") + "\"}");
+        ''')
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Hoodie_Blue")
+        plan = self.json_output(self.cli("unity_texture.py", "remove", *args))
+        removed = self.json_output(self.cli("unity_texture.py", "remove", *args, "--approved-preview", plan["preview"],
+                                            env=unity))
+        self.assertTrue(removed["ok"], removed)
+        self.assertEqual(scene.read_text(), "removed\n")
+        self.assertFalse((self.project / ".dsh/variants/Hoodie_Blue.json").exists())
+        self.assertIn(" D", {row["status"] for row in removed["changes"]})  # committed variant files deleted
+
+        toggle = self.json_output(self.cli("unity_toggle.py", "preview", "--scene", "Assets/Avatar.unity",
+                                           "--avatar", "Avatar", "--outfit", "Avatar/Hoodie", "--menu", "衣装/服"))
+        self.assertEqual(toggle["git"]["blockingChanges"], [])
+
     @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
     def test_apply_saves_the_variant_and_a_later_outfit_toggle_continues_on_that_scene(self):
         scene = self.write("Assets/Avatar.unity", "original\n")
