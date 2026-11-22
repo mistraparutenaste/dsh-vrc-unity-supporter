@@ -1,6 +1,6 @@
 ---
 name: vrc-edit-script
-description: アバター改変を Unity Editor スクリプトとして書き、バッチモードで適用する手順。冪等な書き方、結果 JSON、失敗時の巻き戻し、YAML と .meta を壊さないための制約を扱う。シーンやプレハブの構造を変えるときに使う。
+description: 同梱のコマンドで足りない改変を、Unity Editor スクリプトとして書いてバッチモードで適用する手順。冪等な書き方、結果 JSON、巻き戻し、YAML と .meta を壊さない制約を扱う。
 ---
 
 # Editor スクリプトで改変を適用する
@@ -41,7 +41,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<pkg>\tools\unity-run.ps1" 
 
 | # | 制約 |
 |---|---|
-| C1 | 実行前に `git status` がクリーンであること。汚れていれば commit を促して止まる |
+| C1 | 実行前に `git status` で未記録の変更が無いこと。あれば commit を促して止まる（同梱のコマンドは Git を自分で確かめ、自分が保存・検証したシーンはコミットなしで続ける。独自のタスクではこの例外を使わない） |
 | C2 | 何度実行しても同じ結果になる（冪等）ように書く。`Find` して無ければ作る、有れば更新 |
 | C3 | ファイルの移動・削除は `AssetDatabase.MoveAsset` / `AssetDatabase.DeleteAsset` を使う。`File.Delete` で `.meta` を孤立させない |
 | C4 | プレハブの編集は `PrefabUtility.LoadPrefabContents` / `SaveAsPrefabAsset` を通す |

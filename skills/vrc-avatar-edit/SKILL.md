@@ -1,6 +1,6 @@
 ---
 name: vrc-avatar-edit
-description: VRChat アバター改変の設計と手順。衣装・髪の装着、メニュー/トグルの作成、PhysBone・コンタクト・SPS の追加、WriteDefaults の落とし穴、Modular Avatar / VRCFury / Avatar Optimizer の実行順序と併用禁止事項を扱う。アバターの構成変更を頼まれたときに最初に読む。
+description: 衣装・髪・メニュー・PhysBone・コンタクト / SPS の改変を設計するときに読む。MA / VRCFury / AAO の実行順序、併用の禁止、WriteDefaults の落とし穴を扱う。
 ---
 
 # VRChat アバター改変
@@ -105,7 +105,8 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 |---|---|---|
 | ボーンが二重になる | MA と VRCFury の併用 | 片方を外す |
 | メニューが消える | 排他タグの付け忘れ / Menu Path の重複 | タグと Path を確認 |
-| 服が貫通する | 衣装側の PhysBone が未設定 | 衣装 prefab 側を確認 |
+| 服が貫通する | 体型を変えたのに衣装が追従していない / 服の下の体が残っている / 別アバター用の衣装 | `vrc-shape-adjust`（追従・削除）、非対応衣装なら `vrc-outfit-fit` |
+| スカートや紐が体を突き抜ける | 揺れものの PhysBone コライダーが無い | 衣装 prefab の PhysBone とコライダーを確認 |
 | 髪が動かない | Bone Proxy 未設定 / PhysBone の root が違う | 階層を確認 |
 | アップロード時に警告 | WriteDefaults 混在 / 参照切れ | `vrc-verify` へ |
 | 開いた瞬間 `error CS0246`（`VTPTests.cs` など SDK 内） | SDK が要求する `com.unity.*` が `manifest.json` に無い | `Packages/com.vrchat.base/package.json` の `dependencies` を確認し、不足分を `manifest.json` に追加 |
@@ -120,6 +121,8 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 - 読み取りだけで済む → `vrc-asset-read` の `unity_inspect.py`
 - 色違い・肌色・ロゴ（付属 PSD から） → `vrc-texture-variant`
 - 体型・貫通・隠れる部分の削除（シェイプキー、MA、AAO） → `vrc-shape-adjust`
+- 小物・髪・衣装の取り付け、付け替え、取り外し → `vrc-accessory`
+- 別アバター用の衣装・髪を着せる → `vrc-outfit-fit`
 - 数値の判断 → `vrc-perf-budget`
 - 適用後 → `vrc-verify`
 

@@ -1,6 +1,6 @@
 ---
 name: vrc-accessory
-description: 既存の prefab や FBX（帽子・リボン・髪・小物、アバター用の衣装、Blender で作った・合わせたモデル）をアバターに付ける手順。ボーンに付ける（MA Bone Proxy）か、アーマチュアを統合する（MA Setup Outfit）かを選び、メニューで出し入れでき、元の髪などを隠せる。小物・髪の追加、付け替え、取り外しを頼まれたときに読む。
+description: 帽子・髪・小物・衣装の prefab / FBX を、ボーンに付けるか（MA Bone Proxy）骨組みを統合して（MA Setup Outfit）アバターに付け、メニューで出し入れする。付け替え・取り外しにも使う。
 ---
 
 # 小物・髪・衣装を付ける

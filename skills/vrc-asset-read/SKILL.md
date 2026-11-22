@@ -1,6 +1,6 @@
 ---
 name: vrc-asset-read
-description: Unity プロジェクトを開かずに読む手順。.meta の GUID 索引、シーン/プレハブの階層、参照切れ、VRChat/MA/VRCFury/AAO コンポーネントの検出を unity_inspect.py で行う。アバターの構造把握や「なぜか動かない」の切り分けに使う。
+description: Unity を開かずにプロジェクトを読む（unity_inspect.py）。階層、GUID の参照元、参照切れ、導入済みパッケージを調べる。構造の把握や「なぜか動かない」の切り分けに使う。
 ---
 
 # プロジェクトを開かずに読む

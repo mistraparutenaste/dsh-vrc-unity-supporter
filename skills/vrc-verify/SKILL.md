@@ -1,6 +1,6 @@
 ---
 name: vrc-verify
-description: アップロードせずに改変結果を確認する手順。バッチモードのコンパイル検証、Gesture Manager / VRCFury Test Copy / NDMF Manual Bake の使い分け、アップロード前チェックリスト（人間が実行する項目）を扱う。改変を適用した直後に読む。
+description: 改変を適用した直後に読む。コンパイル確認、SDK 前処理の結果の読み方、人が行う動作確認とアップロード前チェックリストを扱う。
 ---
 
 # 検証（アップロードしない）

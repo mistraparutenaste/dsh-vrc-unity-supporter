@@ -1,6 +1,6 @@
 ---
 name: vrc-shape-adjust
-description: FBX を変えずにアバターの形を調整する手順。シェイプキー（BlendShape）で体型・顔を変える、MA Blendshape Sync で衣装を体型に追従させる、服の下に隠れる体を AAO Remove Mesh By BlendShape でビルド時に削除して貫通を防ぎ軽量化する。体型調整、貫通・はみ出し、隠れる部分の削除を頼まれたときに読む。
+description: FBX を変えずに、シェイプキーで体型・顔を変え、衣装を体型に追従させ（MA Blendshape Sync）、服の下の体をビルド時に消す（AAO）。体型調整・貫通・はみ出しを頼まれたら読む。
 ---
 
 # 形の調整（シェイプキー・衣装の追従・隠れる部分の削除）

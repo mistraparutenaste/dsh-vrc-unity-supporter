@@ -1,6 +1,6 @@
 ---
 name: vrc-perf-budget
-description: VRChat のアバター性能ランク（PC / Mobile）の上限表と試算手順。三角形・マテリアル・メッシュ・PhysBone・コンタクト・テクスチャメモリの数え方、Good を目標にした判断、Avatar Optimizer の使いどころを扱う。
+description: VRChat の性能ランク（PC / Mobile）の上限表と数え方。三角形・マテリアル・PhysBone・コンタクトなどを測り、Good を目標に判断する。
 ---
 
 # 性能予算
