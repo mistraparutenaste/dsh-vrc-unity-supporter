@@ -136,6 +136,35 @@ if (-not (Test-Path $pluginPath) -or -not (Test-Path $marketPath)) {
     } catch { }  # invalid JSON is already reported by check 3
 }
 
+# 9. skill routing stays in step: the Claude Code entry skill names every shared skill,
+#    every skill the DSH persona tells the agent to load exists, and descriptions stay short
+#    (long descriptions crowd the Claude Code skill listing).
+$sharedSkills = @(Get-ChildItem (Join-Path $root 'skills') -Directory | ForEach-Object Name)
+$entryPath = Join-Path $root 'claude/skills/vrc-avatar/SKILL.md'
+if (Test-Path $entryPath) {
+    $entry = Get-Content $entryPath -Raw -Encoding UTF8
+    foreach ($name in $sharedSkills) {
+        if ($entry -cnotmatch ('`' + [regex]::Escape($name) + '`')) {
+            $problems.Add("claude/skills/vrc-avatar/SKILL.md does not route to skill: $name")
+        }
+    }
+}
+if (Test-Path $patchPath -PathType Leaf) {
+    foreach ($m in [regex]::Matches($patch, 'load the (?<name>[a-z0-9-]+) skill')) {
+        if ($sharedSkills -notcontains $m.Groups['name'].Value) {
+            $problems.Add("cordis.patch.yml: persona loads a skill that does not exist: $($m.Groups['name'].Value)")
+        }
+    }
+}
+foreach ($dir in $skillDirs) {
+    $skill = Join-Path $dir.FullName 'SKILL.md'
+    if (-not (Test-Path $skill)) { continue }
+    $line = Get-Content $skill -TotalCount 6 -Encoding UTF8 | Where-Object { $_ -match '^description:' } | Select-Object -First 1
+    if (-not $line) { $problems.Add("SKILL.md has no description: $($dir.Name)"); continue }
+    $length = ($line -replace '^description:\s*', '').Length
+    if ($length -gt 130) { $problems.Add("SKILL.md description is $length characters (keep it to 130): $($dir.Name)") }
+}
+
 if ($problems.Count -eq 0) {
     Write-Host 'verify-package: OK' -ForegroundColor Green
     exit 0
