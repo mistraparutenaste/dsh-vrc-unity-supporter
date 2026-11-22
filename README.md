@@ -31,6 +31,8 @@ Windows の PC で、導入から最初の確認までを次の順に手伝っ�
    「このプロジェクトのアバター構成を調べて」
 
 ここまでの間、Unity プロジェクトのファイルは変更しないでください。
+
+GithubリポジトリURL：https://github.com/mistraparutenaste/dsh-vrc-unity-supporter/tree/master
 ```
 
 プラグインは入れたあとに始めた新しいセッションから使えます。
@@ -61,6 +63,7 @@ Windows の PC で、導入から最初の確認までを次の順に手伝っ�
 ### Claude Code で導入する
 
 Claude Code は**Claude デスクトップアプリの Code タブ** とターミナル版のどちらでも使えます。
+
 **デスクトップアプリを使っている場合**
 
 1. PowerShell を開き、次の 2 つを順に実行します。
