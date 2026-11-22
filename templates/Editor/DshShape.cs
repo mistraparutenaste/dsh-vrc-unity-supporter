@@ -238,6 +238,10 @@ namespace DSH.Editor
                 var remaining = Revert(avatar, undo);
                 if (remaining.Count > 0)
                     throw new InvalidOperationException("The saved scene still holds part of the recipe: " + string.Join("; ", remaining.Take(5)));
+                // Components DSH added that still hold another recipe's keys; that recipe takes them over.
+                var removeType = DshVrc.LoadedType(RemoveType);
+                result["keptRemovers"] = undo.addedRemovers.Distinct()
+                    .Where(r => removeType != null && avatar.transform.Find(r)?.GetComponent(removeType) != null).ToList();
                 result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
                 result["ok"] = true;
                 result["verified"] = true;
@@ -295,12 +299,17 @@ namespace DSH.Editor
                 var component = target == null || removeType == null ? null : target.GetComponent(removeType);
                 if (component == null) continue;
                 var keys = (ICollection<string>)removeType.GetProperty("ShapeKeys").GetValue(component);
-                var changed = false;
-                foreach (var key in undo.removeKeys.Where(k => k.renderer == renderer && keys.Contains(k.shape)).ToArray())
+                var ours = undo.removeKeys.Where(k => k.renderer == renderer && keys.Contains(k.shape)).Select(k => k.shape)
+                    .Distinct().ToArray();
+                var changed = ours.Length > 0;
+                if (changed)
                 {
-                    keys.Remove(key.shape);
-                    changed = true;
-                    changes.Add($"{renderer}: keeps the mesh moved by {key.shape}");
+                    // Rebuild the set instead of calling Remove: in AAO 1.9.x, Remove on a component added in the scene
+                    // keeps only the given keys and drops the others. Clear and Add behave on scene and prefab layers.
+                    var keep = keys.Where(k => !ours.Contains(k)).ToArray();
+                    keys.Clear();
+                    foreach (var key in keep) keys.Add(key);
+                    foreach (var key in ours) changes.Add($"{renderer}: keeps the mesh moved by {key}");
                 }
                 if (keys.Count == 0 && undo.addedRemovers.Contains(renderer) && AddedInScene(component))
                 {

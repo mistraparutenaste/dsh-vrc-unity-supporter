@@ -166,10 +166,29 @@ def remove(root, args):
     output = toggle.run_approved(root, args, lambda: remove_plan(root, args), "Remove", "ShapeRemove", "shape-remove",
                                  HELPER)
     if output.get("ok"):
+        scene = output.get("unity", {}).get("scene") or args.scene
         scenes = read_undo(root, args.recipe)
-        scenes.pop(output.get("unity", {}).get("scene") or args.scene, None)
+        scenes.pop(scene, None)
         undo_path(root, args.recipe).write_text(json.dumps({"recipe": args.recipe, "scenes": scenes}), encoding="utf-8")
+        hand_over_removers(root, args.recipe, scene, output["unity"].get("keptRemovers") or [])
     return output
+
+
+def hand_over_removers(root, removed, scene, kept):
+    """A Remove Mesh By BlendShape that DSH added stays while other recipes still use it. Record it on those
+    recipes, so the last one to be removed also takes the component out."""
+    for path in sorted(inside(root, ".dsh/shapes").glob("*.json")) if kept else ():
+        if path.stem == removed:
+            continue
+        record = toggle.read_result(path)
+        undo = (record.get("scenes") or {}).get(scene)
+        if not isinstance(undo, dict):
+            continue
+        users = {k.get("renderer") for k in undo.get("removeKeys") or []}
+        added = [r for r in kept if r in users and r not in (undo.get("addedRemovers") or [])]
+        if added:
+            undo["addedRemovers"] = [*(undo.get("addedRemovers") or []), *added]
+            path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
 
 
 def main():

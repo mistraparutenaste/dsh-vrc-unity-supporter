@@ -124,6 +124,69 @@ class ShapeWorkflowTests(unittest.TestCase):
         again = self.cli("unity_shape.py", "remove", *ARGS)
         self.assertNotEqual(again.returncode, 0)
 
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_a_remover_still_in_use_passes_to_the_recipe_that_uses_it(self):
+        self.write("Assets/Avatar.unity", "original\n")
+        self.recipe(remove=[{"renderer": "Body", "shapes": ["Chest_1_OFF"]}])
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        scene = "Assets/Avatar.unity"
+        records = {
+            "Fit": {"removeKeys": [{"renderer": "Body", "shape": "Chest_1_OFF"}], "addedRemovers": ["Body"]},
+            "Other": {"removeKeys": [{"renderer": "Body", "shape": "Hip_OFF"}], "addedRemovers": []},
+            "Face": {"weights": [{"renderer": "Face", "shape": "Smile", "weight": 0}], "addedRemovers": []},
+        }
+        for name, undo in records.items():
+            self.write(f".dsh/shapes/{name}.json", json.dumps({"recipe": name, "scenes": {scene: undo}}))
+        unity = self.editor_fixture(r'''
+            File.WriteAllText("Assets/Avatar.unity", "original\nkept\n");
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"ShapeRemove\",\"verified\":true,\"saved\":true,\"scene\":\"Assets/Avatar.unity\"," +
+                "\"keptRemovers\":[\"Body\"],\"sceneDigest\":\"" + Checksum("Assets/Avatar.unity") + "\"}");
+        ''')
+        preview = self.json_output(self.cli("unity_shape.py", "remove", *ARGS))
+        self.json_output(self.cli("unity_shape.py", "remove", *ARGS, "--approved-preview", preview["preview"], env=unity))
+
+        def removers(name):
+            record = json.loads((self.project / f".dsh/shapes/{name}.json").read_text(encoding="utf-8"))
+            return record["scenes"][scene]["addedRemovers"]
+        self.assertEqual(removers("Other"), ["Body"])  # Other's keys keep the component; Other now removes it
+        self.assertEqual(removers("Face"), [])  # no keys on Body: nothing to hand over
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_a_failed_remove_puts_the_scene_back_and_keeps_the_record(self):
+        scene = self.write("Assets/Avatar.unity", "original\n")
+        self.recipe(weights=[{"renderer": "Body", "shape": "Breasts_big", "weight": 60}])
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        unity = self.editor_fixture(r'''
+            bool remove = Array.IndexOf(args, "DSH.Editor.DshShape.Remove") >= 0;
+            if (remove) {
+                // Saved part of the change, then failed its own check after reloading.
+                File.WriteAllText("Assets/Avatar.unity", "half\n");
+                File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                    "{\"ok\":false,\"task\":\"ShapeRemove\",\"saved\":true,\"error\":\"The saved scene still holds part of the recipe\"}");
+                Environment.Exit(1);
+            }
+            File.AppendAllText("Assets/Avatar.unity", "shape\n");
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"ShapeRecipe\",\"verified\":true,\"saved\":true,\"scene\":\"Assets/Avatar.unity\"," +
+                "\"undo\":{\"weights\":[{\"renderer\":\"Body\",\"shape\":\"Breasts_big\",\"weight\":0}],\"sync\":[]," +
+                "\"removeKeys\":[],\"addedRemovers\":[]},\"sceneDigest\":\"" + Checksum("Assets/Avatar.unity") + "\"}");
+        ''')
+        plan = self.json_output(self.cli("unity_shape.py", "preview", *ARGS))
+        self.json_output(self.cli("unity_shape.py", "apply", *ARGS, "--approved-preview", plan["preview"], env=unity))
+        preview = self.json_output(self.cli("unity_shape.py", "remove", *ARGS))
+        failed = self.cli("unity_shape.py", "remove", *ARGS, "--approved-preview", preview["preview"], env=unity)
+        self.assertNotEqual(failed.returncode, 0)
+        output = json.loads(failed.stdout)
+        self.assertTrue(output["sceneRestored"], output)
+        self.assertIn("put back", output["error"])
+        self.assertEqual(scene.read_text(), "original\nshape\n")
+        record = json.loads((self.project / ".dsh/shapes/Fit.json").read_text(encoding="utf-8"))
+        self.assertIn("Assets/Avatar.unity", record["scenes"])
+        retry = self.json_output(self.cli("unity_shape.py", "remove", *ARGS))  # still a managed scene
+        self.assertEqual(retry["git"]["blockingChanges"], [])
+        self.assertEqual(retry["preview"], preview["preview"])
+
 
 if __name__ == "__main__":
     unittest.main()

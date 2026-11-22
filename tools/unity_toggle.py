@@ -42,7 +42,8 @@ LEGACY = {
         "1168f8a1430d88449909e6459cd236f611d0de13",  # 0.6.2
         "d04fa099a93b5ab56c4133493e25cc8ba850a525",  # 0.6.3 - 0.9.0
     ),
-    "DshShape.cs": ("c55ea10fa33bf54c9a23ff49fa7ee08de3d485c1",),  # 0.7.0 - 0.9.2
+    "DshShape.cs": ("c55ea10fa33bf54c9a23ff49fa7ee08de3d485c1",  # 0.7.0 - 0.9.2
+                    "1e6d7ff70b95aad93d3be8576a0b40c0882099bd"),  # 0.10.0
     "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",  # 0.8.0 - 0.9.0
                         "d79661a2f6585c578b1c11f288dc48c3d1608d78"),  # 0.9.1
 }
@@ -427,6 +428,7 @@ def apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, help
     # Build plugins such as Avatar Optimizer's mesh passes need a graphics device, so SDK verification runs
     # Unity with graphics (as Build & Test does). Plain saves keep -nographics.
     graphics = bool(verify_sdk and not skipped_sdk)
+    before_run = scene.read_bytes()  # the previewed scene; put back if Unity saves but cannot verify
     run, result, log = run_task(root, unity_request, helpers, method, task, name, helper_class=helper_class,
                                 graphics=graphics)
     if skipped_sdk and result.get("verified") is True:
@@ -452,6 +454,13 @@ def apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, help
             output["error"] = "The requested SDK verification result is missing. Review the Unity log."
         else:
             output["error"] = result.get("error") or run_error(run)
+        # A task that failed its own check may still have saved part of its change. Put the previewed scene back,
+        # so the project stays at the last verified state and the task can be previewed again.
+        if result.get("verified") is not True and saved_digest != plan["sceneDigest"]:
+            scene.write_bytes(before_run)
+            output["sceneRestored"] = True
+            output["changes"] = git_state(root)["changes"]
+            output["error"] += " The scene was put back as it was before this run."
     else:
         receipt = receipt_path(root, request)
         receipt.parent.mkdir(parents=True, exist_ok=True)
