@@ -83,6 +83,8 @@ Windows で、まだ入っていないものを用意してください。
 
 適用後は、保存結果とSDKの前処理でメニュー・アニメーションを確認できたかがチャットに表示されます。VRChat内で試すには、Unityで **VRChat SDK → Show Control Panel → Builder → Offline Testing → Build & Test** を選びます。VRChatの **SDK Test Avatars** でテスト用アバターを選び、チャットに表示されたメニューから衣装をオン・オフしてください。 [VRChat のローカルテスト手順](https://creators.vrchat.com/avatars/#local-avatar-testing)
 
+複数の衣装から 1 着だけを着るようにもできます（0.10.0 から）。「パーカーとコートを、どちらか 1 着だけ着るように切り替えられるようにして」のように頼むと、同じグループのトグルになり、片方をオンにするともう片方がオフになります。作ったトグルは「衣装トグルを一覧にして」で確認でき、「パーカーのトグルを外して」と頼めば、そのトグルだけを外せます（衣装そのものは残ります。外す前に確認があります）。
+
 ## 色・スキンの改変（0.6.0 から）
 
 アバターや衣装に付属している、レイヤー分けされた PSD から色違いを作れます。衣装の色、肌の色、髪や瞳の色を変えたり、自分で用意したロゴや柄を入れたりできます。元の PSD・テクスチャ・マテリアルはそのまま残し、色違いは別のマテリアルとして追加されます。メニューから元の見た目と切り替えられます。
@@ -116,6 +118,10 @@ FBX を変えずに、アバターの形を調整できます。
 ```
 
 エージェントがシェイプキーを調べて、変える値と消す部位を示します。そのうえで、VRChat と同じようにビルドした改変前後の画像と三角形数を見せ、確認を取ってから適用します。Modular Avatar と Avatar Optimizer は VCC または ALCOM で導入しておいてください。撮影と検証では GPU を使って Unity を起動します。
+
+適用した体型の調整は「Fit_Hoodie の体型調整を元に戻して」で戻せます（0.10.0 から）。このプラグインが変えた値と足した設定だけを戻し、アバターに最初から入っていた連動は残します。0.10.0 より前に適用したものは、Git でシーンを戻します。
+
+性能ランクは「性能ランクを調べて」で確認できます。PC と Mobile のランクと、ランクを決めている項目（たとえばスキンメッシュの数）を示します。ビルド前の元の Prefab で数えた目安なので、最終的なランクは VRChat SDK のビルド画面で確認してください。
 
 ## 小物の取り付けと Blender での作成・合わせ込み（0.8.0 から）
 
@@ -160,7 +166,7 @@ Blender は [blender.org](https://www.blender.org/download/) から無料で入�
 <details>
 <summary>メンテナー向けのテストと公開手順</summary>
 
-Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取り、衣装トグル、色違いの CLI の回帰テストを実行できます（Unity と PhotoCraft は偽物を使うので不要です）。Claude Code 版のマニフェストは `claude plugin validate . --strict` で確認できます。版を上げるときは `package.json` と `.claude-plugin/plugin.json` を揃えます（`verify-package.ps1` が照合します）。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
+Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取り、衣装トグル、色違い、体型、小物、Blender の CLI の回帰テストを実行できます（Unity・Blender・PhotoCraft は偽物を使うので不要です）。Unity 2022.3.22f1 が入っている PC では、`templates/Editor/` のヘルパーを Unity の DLL に対してコンパイルするテストも動きます（無い PC では skip）。GitHub では push と PR のたびに `.github/workflows/ci.yml` が Windows と Python 3.10 / 3.13 で同じテストと `verify-package.ps1` を回します。Claude Code 版のマニフェストは `claude plugin validate . --strict` で確認できます。版を上げるときは `package.json` と `.claude-plugin/plugin.json` を揃えます（`verify-package.ps1` が照合します）。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
 
 ```powershell
 npm login
