@@ -6,7 +6,7 @@
 
 ### AI エージェントに任せる（おすすめ）
 
-DSH または Claude Code のチャットに次の文章をそのまま貼り付けて送ってください。足りないものの確認、プラグインの導入、最初の確認までエージェントが順に案内します。
+DSH、Claude Code、Codex のどれかのチャットに次の文章をそのまま貼り付けて送ってください。足りないものの確認、プラグインの導入、最初の確認までエージェントが順に案内します。
 
 ```text
 VRChat のアバター改変に「dsh-vrc-unity-supporter」というプラグインを使いたいです。
@@ -17,13 +17,19 @@ Windows の PC で、導入から最初の確認までを次の順に手伝っ�
    Git / Python 3.10 以上 / Unity Hub と Unity 2022.3.22f1 / VCC または ALCOM
    足りないものは公式のダウンロード先を示し、私が入れるのを待ってください。
    あなたがインストールすることはしないでください。
-2. 今使っているアプリが DeepSeek Harness か Claude Code かを確認し、プラグインを入れてください。
+2. 今使っているアプリが DeepSeek Harness、Claude Code、Codex のどれかを確認し、プラグインを入れてください。
    - Claude Code の場合（デスクトップアプリを含む）:
      次の 2 つを PowerShell で実行してよいか私に聞いてから、実行してください。
        claude plugin marketplace add mistraparutenaste/dsh-vrc-unity-supporter
        claude plugin install dsh-vrc-unity-supporter@dsh-vrc-unity-supporter
      claude コマンドが見つからないときは、https://code.claude.com/docs/en/setup の
      Windows 向けの手順を示し、私が入れるのを待ってください。
+   - Codex の場合:
+     次を PowerShell で実行してよいか私に聞いてから、実行してください。
+       codex plugin marketplace add mistraparutenaste/dsh-vrc-unity-supporter
+     そのあと、Codex のアプリの Plugins で「VRChat Avatar (Unity)」を入れる操作を私に案内してください。
+     codex コマンドが見つからないときは、https://developers.openai.com/codex/ の手順を示し、
+     私が入れるのを待ってください。
    - DeepSeek Harness の場合:
      Plugins → Add plugin に「dsh-vrc-unity-supporter」を入れる操作を私に案内してください。
 3. 改変したい Unity プロジェクトのフォルダ（Assets と ProjectSettings があるフォルダ）を私に聞いてください。
@@ -91,15 +97,29 @@ Unity プロジェクトのフォルダで Claude Code を開き、次を順に�
 
 入れたあとに `/reload-plugins` を実行するか、新しいセッションを始めます。
 
+### Codex で導入する
+
+1. PowerShell を開き、次を実行してマーケットプレイスを追加します。
+
+   ```powershell
+   codex plugin marketplace add mistraparutenaste/dsh-vrc-unity-supporter
+   ```
+
+   「codex が見つからない」と表示されたら、[Codex のドキュメント](https://developers.openai.com/codex/) の手順で `codex` コマンドを入れてから、もう一度実行します。
+2. Codex のアプリを開き直し、**Plugins** でマーケットプレイス `dsh-vrc-unity-supporter` を選んで **VRChat Avatar (Unity)** をインストールします。
+3. Unity プロジェクトのフォルダで新しいスレッドを始めます。
+
+Codex では、スキルのコマンドがサンドボックスの中で動きます。Unity や Blender の実行で、サンドボックスの外で実行してよいかを聞かれることがあります。何を実行するかを確かめてから承認してください。
+
 ### 必要なもの
 
 AI エージェントに任せる場合は、エージェントが確認します。手動で準備する場合は、Windows で次をそろえてください。
 
 | 必要なもの | 準備すること |
 | --- | --- |
-| **DeepSeek Harness Desktop または Claude Code** | DSH は公式サイトの **Download Desktop → Windows (64-bit)** からインストールし、画面の案内に沿って初期設定を済ませます。Claude Code はデスクトップアプリかターミナル版を使います。[DSH 公式サイト](https://www.deepseek.com/en/harness/) · [Claude Code の概要](https://code.claude.com/docs/en/overview) |
+| **DeepSeek Harness Desktop、Claude Code、Codex のどれか** | DSH は公式サイトの **Download Desktop → Windows (64-bit)** からインストールし、画面の案内に沿って初期設定を済ませます。Claude Code はデスクトップアプリかターミナル版を使います。Codex はアプリと `codex` コマンドを使います。[DSH 公式サイト](https://www.deepseek.com/en/harness/) · [Claude Code の概要](https://code.claude.com/docs/en/overview) · [Codex のドキュメント](https://developers.openai.com/codex/) |
 | **Git for Windows** | 改変前の状態を記録し、あとで元に戻すために使います。記録は PC の中で完結します。 [Git のダウンロード](https://git-scm.com/install/win) |
-| **Python 3.10 以上** | アバターの構成を調べるために使います。インストール後、DSH または Claude Code を開き直してください。 [Python の Windows 向けダウンロード](https://www.python.org/downloads/windows/) |
+| **Python 3.10 以上** | アバターの構成を調べるために使います。インストール後、使っているアプリ（DSH、Claude Code、Codex）を開き直してください。 [Python の Windows 向けダウンロード](https://www.python.org/downloads/windows/) |
 | **Unity Hub と Unity 2022.3.22f1** | Unity Hub で有効なライセンスを設定し、指定のバージョンでプロジェクトを開けることを確認します。 [VRChat 公式の Unity 導入案内](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC または ALCOM とアバタープロジェクト** | 普段使っている管理アプリをどちらか一つ使います。作業対象は **VRChat SDK - Avatars** が導入済みで、Unity で開けるプロジェクトです。 [VCC のセットアップ](https://vcc.docs.vrchat.com/guides/getting-started/) · [ALCOM のダウンロード](https://vrc-get.anatawa12.com/alcom/) |
 
@@ -107,8 +127,8 @@ AI エージェントに任せる場合は、エージェントが確認しま�
 
 ## 試すこと
 
-1. 改変したい Unity プロジェクトのフォルダを開きます。`Assets`、`Packages`、`ProjectSettings` が並んでいるフォルダです。DSH ではワークスペースとして、Claude Code では作業フォルダとして開きます。
-2. DSH では、新しいセッションのプリセットを **VRChat Avatar**、モデルを **DeepSeek V4.1 Flash**、エフォートを **MAX** にします。Claude Code では、新しいセッションを始めるだけです。
+1. 改変したい Unity プロジェクトのフォルダを開きます。`Assets`、`Packages`、`ProjectSettings` が並んでいるフォルダです。DSH ではワークスペースとして、Claude Code と Codex では作業フォルダとして開きます。
+2. DSH では、新しいセッションのプリセットを **VRChat Avatar**、モデルを **DeepSeek V4.1 Flash**、エフォートを **MAX** にします。Claude Code では新しいセッション、Codex では新しいスレッドを始めるだけです。
 3. チャットに次の一文を送ります。この段階では、プロジェクトのファイルを読むだけです。
 
    ```text
@@ -237,16 +257,18 @@ Blender は [blender.org](https://www.blender.org/download/) から無料で入�
 | モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） | Opus 5.5 |
 | エフォート（推論の強さ） | `MAX` | 中以上 |
 
-上記以外の組み合わせでの動作は確認していません。
+上記以外の組み合わせでの動作は確認していません。Codex 版はまだ動作を確認していません。
 
 ## 困ったとき
 
 - **VRChat Avatar が表示されない**。Plugins でプラグインが入っていることを確認し、DSH で新しいセッションを作ります。
 - **Claude Code でスキルが使われない**。デスクトップアプリでは **+** → **Plugins** → **Manage plugins**、ターミナル版では `/plugin` で、`dsh-vrc-unity-supporter` が有効になっているか確認します。そのうえで新しいセッションを始めます（ターミナル版は `/reload-plugins` でも可）。
 - **「claude が見つからない」と表示される**。[Claude Code のセットアップ](https://code.claude.com/docs/en/setup) の Windows 向けの手順で `claude` コマンドを入れ、PowerShell を開き直します。
-- **プロジェクトが見つからない**。DSH または Claude Code で開いているフォルダに `Assets` と `ProjectSettings` があるか確認します。
-- **「Blender was not found」と表示される**。Blender をインストールし、DSH または Claude Code を開き直します。別の場所に入れた場合は、環境変数 `DSH_BLENDER` に `blender.exe` のフルパスを設定します。
-- **色違いで「PhotoCraft CLI was not found」と表示される**。PhotoCraft をインストールし、DSH または Claude Code を開き直します。別の場所に入れた場合は、環境変数 `PHOTOCRAFT_CLI` に `photocraft-cli.exe` のフルパスを設定します。
+- **Codex でスキルが使われない**。Codex のアプリの **Plugins** で **VRChat Avatar (Unity)** がインストールされているか確認し、新しいスレッドを始めます。最新版にするには `codex plugin marketplace upgrade dsh-vrc-unity-supporter` を実行します。
+- **Codex で Unity の実行が途中で止まる**。初回のコンパイルには数分かかります。Unity がまだ動いていることがあるので、チャットで「Unity がまだ動いているか確認して」と頼んでから、もう一度頼んでください。
+- **プロジェクトが見つからない**。使っているアプリで開いているフォルダに `Assets` と `ProjectSettings` があるか確認します。
+- **「Blender was not found」と表示される**。Blender をインストールし、使っているアプリを開き直します。別の場所に入れた場合は、環境変数 `DSH_BLENDER` に `blender.exe` のフルパスを設定します。
+- **色違いで「PhotoCraft CLI was not found」と表示される**。PhotoCraft をインストールし、使っているアプリを開き直します。別の場所に入れた場合は、環境変数 `PHOTOCRAFT_CLI` に `photocraft-cli.exe` のフルパスを設定します。
 - **撮影（改変前後の画像）が失敗する**。撮影では GPU を使って Unity を起動します。Unity を閉じてから再度頼み、それでも失敗する場合は、チャットに表示されたログの場所を確認してください。
 - **体型の調整を戻せない**。0.10.0 より前に適用した体型の調整には、戻すための記録がありません。Git の復元地点からシーンを戻してください。
 - **Git の名前やメールアドレスを求められた**。チャットで「このプロジェクトで Git の名前とメールアドレスを設定する方法を教えて」と聞いてください。
@@ -256,7 +278,7 @@ Blender は [blender.org](https://www.blender.org/download/) から無料で入�
 <details>
 <summary>メンテナー向けのテストと公開手順</summary>
 
-Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取り、衣装トグル、色違い、体型、小物、Blender の CLI の回帰テストを実行できます（Unity・Blender・PhotoCraft は偽物を使うので不要です）。Unity 2022.3.22f1 が入っている PC では、`templates/Editor/` のヘルパーを Unity の DLL に対してコンパイルするテストも動きます（無い PC では skip）。GitHub では push と PR のたびに `.github/workflows/ci.yml` が Windows と Python 3.10 / 3.13 で同じテストと `verify-package.ps1` を回します。Claude Code 版のマニフェストは `claude plugin validate . --strict` で確認できます。版を上げるときは `package.json` と `.claude-plugin/plugin.json` を揃えます（`verify-package.ps1` が照合します）。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
+Windows で `python -B -m unittest discover -s tests -v` を実行すると、読み取り、衣装トグル、色違い、体型、小物、Blender の CLI の回帰テストを実行できます（Unity・Blender・PhotoCraft は偽物を使うので不要です）。Unity 2022.3.22f1 が入っている PC では、`templates/Editor/` のヘルパーを Unity の DLL に対してコンパイルするテストも動きます（無い PC では skip）。GitHub では push と PR のたびに `.github/workflows/ci.yml` が Windows と Python 3.10 / 3.13 で同じテストと `verify-package.ps1` を回します。Claude Code 版のマニフェストは `claude plugin validate . --strict` で確認できます。版を上げるときは `package.json`、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` を揃えます（`verify-package.ps1` が照合します）。Codex 版はマニフェストが `.codex-plugin/plugin.json`、マーケットプレイスが `.agents/plugins/marketplace.json`、入口スキルが `codex/skills/vrc-avatar/` です。共有スキルは `skills/` にあり、Claude Code 用の入口スキル（`claude/skills/vrc-avatar/`）と Codex 用の入口スキルは、どちらも全スキルへの案内を載せます。独自の Editor スクリプトを使う場合は `templates/Editor/` のヘルパーを `Assets/DSH/Editor/` に配置します。`templates/AGENTS.template.md` は任意のプロジェクトメモです。
 
 ```powershell
 npm login

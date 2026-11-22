@@ -16,7 +16,7 @@ description: 付属のレイヤー PSD から、衣装・肌・髪・瞳の色�
 元の PSD、テクスチャ、マテリアルは変えない。成果物はすべて `Assets/DSH/Variants/<名前>/` に入る
 （`recipe.json`、書き出した PNG、複製マテリアル、切り替え用アニメーション）。このフォルダは DSH が管理する。
 
-`<pkg>` はパッケージのルート（Claude Code では `${CLAUDE_PLUGIN_ROOT}`）。CLI は次の形で呼ぶ。
+`<pkg>` はパッケージのルート（このスキルの 2 階層上。Claude Code では `${CLAUDE_PLUGIN_ROOT}` でもよい）。CLI は次の形で呼ぶ。
 
 ```powershell
 $tex = '<pkg>\tools\unity_texture.py'

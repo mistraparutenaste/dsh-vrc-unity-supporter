@@ -16,7 +16,7 @@ description: Blender をバックグラウンドで使い、簡単な小物（�
 Blender が必要（blender.org の無料版）。見つからないときは `DSH_BLENDER` に `blender.exe` のパスを設定する。
 Unity を閉じる必要はない（開いていれば、書き出した FBX を Unity が取り込む）。
 
-`<pkg>` はパッケージのルート（Claude Code では `${CLAUDE_PLUGIN_ROOT}`）。
+`<pkg>` はパッケージのルート（このスキルの 2 階層上。Claude Code では `${CLAUDE_PLUGIN_ROOT}` でもよい）。
 
 ```powershell
 $model = '<pkg>\tools\blender_model.py'

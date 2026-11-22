@@ -16,7 +16,7 @@ description: 帽子・髪・小物・衣装の prefab / FBX を、ボーンに�
 アバター直下に `DSH Accessory <名前>` を作り、その下に置く。メニューのトグルもそこに付く。
 レシピは `Assets/DSH/Accessories/<名前>/recipe.json` に置く（DSH が管理するフォルダ）。
 
-`<pkg>` はパッケージのルート（Claude Code では `${CLAUDE_PLUGIN_ROOT}`）。
+`<pkg>` はパッケージのルート（このスキルの 2 階層上。Claude Code では `${CLAUDE_PLUGIN_ROOT}` でもよい）。
 
 ```powershell
 $acc = '<pkg>\tools\unity_accessory.py'

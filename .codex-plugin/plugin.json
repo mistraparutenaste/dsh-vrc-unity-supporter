@@ -1,0 +1,23 @@
+{
+  "name": "dsh-vrc-unity-supporter",
+  "version": "0.11.0",
+  "description": "VRChat avatar modification in an existing Unity 2022.3.22f1 project: read the project without opening the editor, design the change, apply it through generated Editor scripts in batch mode, and verify the result.",
+  "author": {
+    "name": "mistraparutenaste",
+    "url": "https://github.com/mistraparutenaste"
+  },
+  "homepage": "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter",
+  "repository": "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter",
+  "license": "MIT",
+  "keywords": ["vrchat", "unity", "avatar", "modular-avatar", "vrcfury"],
+  "skills": ["./skills/", "./codex/skills/"],
+  "interface": {
+    "displayName": "VRChat Avatar (Unity)",
+    "shortDescription": "VRChat アバター改変を、読む→設計→C#で適用→検証まで任せる",
+    "longDescription": "既存の Unity 2022.3.22f1 の VRChat プロジェクトで、衣装・髪・色違い・体型・トグル・メニュー・性能の改変を手伝います。Unity を開かずにプロジェクトを読み、Editor スクリプトをバッチモードで実行して適用し、結果を確認します。アップロードはしません。",
+    "developerName": "mistraparutenaste",
+    "category": "Coding",
+    "websiteURL": "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter",
+    "defaultPrompt": ["このプロジェクトのアバター構成を調べて"]
+  }
+}

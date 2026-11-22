@@ -27,6 +27,7 @@ description: 同梱のコマンドで足りない改変を、Unity Editor スク
 
 - DSH: 通常 `%USERPROFILE%\.dsh\profiles\<profile>\node_modules\dsh-vrc-unity-supporter`
 - Claude Code: `${CLAUDE_PLUGIN_ROOT}`（プラグインのインストール先）
+- Codex: 通常 `%USERPROFILE%\.codex\plugins\cache\<marketplace>\dsh-vrc-unity-supporter\<version>`。`${CLAUDE_PLUGIN_ROOT}` は設定されないので、このファイルの場所から求める
 
 分からなければ `doctor.ps1` が表示する。
 

@@ -15,7 +15,7 @@ description: FBX を変えずに、シェイプキーで体型・顔を変え、
 元の FBX は変えない。変更はシーンに保存されるシェイプキーの値と、追加するコンポーネントだけ。
 レシピは `Assets/DSH/Shapes/<名前>/recipe.json` に置く（DSH が管理するフォルダ）。
 
-`<pkg>` はパッケージのルート（Claude Code では `${CLAUDE_PLUGIN_ROOT}`）。
+`<pkg>` はパッケージのルート（このスキルの 2 階層上。Claude Code では `${CLAUDE_PLUGIN_ROOT}` でもよい）。
 
 ```powershell
 $shape = '<pkg>\tools\unity_shape.py'

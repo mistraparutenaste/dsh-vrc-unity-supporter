@@ -53,10 +53,13 @@ foreach ($ps1 in Get-ChildItem $root -Filter *.ps1 -Recurse) {
 }
 
 # 2. skill directory names must match the SKILL.md name
-#    (skills/ is shared by DSH and Claude Code; claude/skills/ is Claude Code only)
+#    (skills/ is shared by DSH, Claude Code and Codex; claude/skills/ is Claude Code only,
+#    codex/skills/ is Codex only)
 $skillDirs = @(Get-ChildItem (Join-Path $root 'skills') -Directory)
-$claudeSkills = Join-Path $root 'claude/skills'
-if (Test-Path $claudeSkills) { $skillDirs += Get-ChildItem $claudeSkills -Directory }
+foreach ($agentSkills in @('claude/skills', 'codex/skills')) {
+    $agentSkillPath = Join-Path $root $agentSkills
+    if (Test-Path $agentSkillPath) { $skillDirs += Get-ChildItem $agentSkillPath -Directory }
+}
 foreach ($dir in $skillDirs) {
     $skill = Join-Path $dir.FullName 'SKILL.md'
     if (-not (Test-Path $skill)) { $problems.Add("missing SKILL.md in $($dir.Name)"); continue }
@@ -136,16 +139,55 @@ if (-not (Test-Path $pluginPath) -or -not (Test-Path $marketPath)) {
     } catch { }  # invalid JSON is already reported by check 3
 }
 
-# 9. skill routing stays in step: the Claude Code entry skill names every shared skill,
+# 8b. the Codex plugin manifest matches package.json, declares its skills and interface,
+#     and the Codex marketplace points at the repository root.
+$codexPluginPath = Join-Path $root '.codex-plugin/plugin.json'
+$codexMarketPath = Join-Path $root '.agents/plugins/marketplace.json'
+if (-not (Test-Path $codexPluginPath) -or -not (Test-Path $codexMarketPath)) {
+    $problems.Add('missing: .codex-plugin/plugin.json or .agents/plugins/marketplace.json')
+} else {
+    try {
+        $codexPlugin = Get-Content $codexPluginPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $codexMarket = Get-Content $codexMarketPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($codexPlugin.name -ne $pkgJson.name) { $problems.Add('.codex-plugin/plugin.json: name differs from package.json') }
+        if ($codexPlugin.version -ne $pkgJson.version) { $problems.Add(".codex-plugin/plugin.json: version $($codexPlugin.version) differs from package.json $($pkgJson.version)") }
+        if (-not $codexPlugin.description) { $problems.Add('.codex-plugin/plugin.json: description is missing') }
+        if (-not $codexPlugin.author.name) { $problems.Add('.codex-plugin/plugin.json: author.name is missing') }
+        if (-not $codexPlugin.interface.displayName) { $problems.Add('.codex-plugin/plugin.json: interface.displayName is missing') }
+        if ($codexPlugin.PSObject.Properties.Name -contains '$schema') { $problems.Add('.codex-plugin/plugin.json: must not declare $schema') }
+        # A root plugin.json would make Codex ignore the skills field (and drop codex/skills).
+        if (Test-Path (Join-Path $root 'plugin.json')) { $problems.Add('plugin.json at the root makes Codex ignore .codex-plugin skills') }
+        $codexSkillPaths = @($codexPlugin.skills)
+        foreach ($p in @('./skills/', './codex/skills/')) {
+            if ($codexSkillPaths -notcontains $p) { $problems.Add(".codex-plugin/plugin.json: skills must list $p") }
+        }
+        foreach ($p in $codexSkillPaths) {
+            if ($p -and -not (Test-Path (Join-Path $root $p))) { $problems.Add(".codex-plugin/plugin.json: skills path not found: $p") }
+        }
+        $codexEntry = @($codexMarket.plugins | Where-Object { $_.name -eq $codexPlugin.name })
+        if ($codexEntry.Count -ne 1) { $problems.Add('.agents/plugins/marketplace.json: no single plugins[] entry named like the Codex plugin') }
+        else {
+            if ($codexEntry[0].source.source -ne 'local' -or $codexEntry[0].source.path -notmatch '^\./?$') {
+                $problems.Add('.agents/plugins/marketplace.json: plugin source must be {"source":"local","path":"./"}')
+            }
+            if (-not $codexEntry[0].policy.installation -or -not $codexEntry[0].policy.authentication -or -not $codexEntry[0].category) {
+                $problems.Add('.agents/plugins/marketplace.json: entry needs policy.installation, policy.authentication and category')
+            }
+        }
+    } catch { }  # invalid JSON is already reported by check 3
+}
+
+# 9. skill routing stays in step: each agent's entry skill names every shared skill,
 #    every skill the DSH persona tells the agent to load exists, and descriptions stay short
 #    (long descriptions crowd the Claude Code skill listing).
 $sharedSkills = @(Get-ChildItem (Join-Path $root 'skills') -Directory | ForEach-Object Name)
-$entryPath = Join-Path $root 'claude/skills/vrc-avatar/SKILL.md'
-if (Test-Path $entryPath) {
+foreach ($entryRel in @('claude/skills/vrc-avatar/SKILL.md', 'codex/skills/vrc-avatar/SKILL.md')) {
+    $entryPath = Join-Path $root $entryRel
+    if (-not (Test-Path $entryPath)) { $problems.Add("missing: $entryRel"); continue }
     $entry = Get-Content $entryPath -Raw -Encoding UTF8
     foreach ($name in $sharedSkills) {
         if ($entry -cnotmatch ('`' + [regex]::Escape($name) + '`')) {
-            $problems.Add("claude/skills/vrc-avatar/SKILL.md does not route to skill: $name")
+            $problems.Add("$entryRel does not route to skill: $name")
         }
     }
 }

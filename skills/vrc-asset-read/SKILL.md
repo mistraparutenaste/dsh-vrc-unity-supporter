@@ -10,7 +10,7 @@ description: Unity を開かずにプロジェクトを読む（unity_inspect.py
 
 ## 0. ツールの場所
 
-このスキルの 2 階層上がパッケージルート（`<pkg>`）。Claude Code では `${CLAUDE_PLUGIN_ROOT}`。
+このスキルの 2 階層上がパッケージルート（`<pkg>`）。Claude Code では `${CLAUDE_PLUGIN_ROOT}` でもよい（Codex にはこの変数がないので、このファイルの場所から求める）。
 
 ```powershell
 python <pkg>/tools/unity_inspect.py --help
