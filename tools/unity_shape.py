@@ -103,26 +103,90 @@ def plan(root, args):
     return output, helpers
 
 
+def undo_path(root, name):
+    recipe_dir(root, name)  # checks the name
+    return inside(root, f".dsh/shapes/{name}.json")
+
+
+def read_undo(root, name):
+    record = toggle.read_result(undo_path(root, name))
+    scenes = record.get("scenes")
+    return scenes if isinstance(scenes, dict) else {}
+
+
+def merge_undo(earlier, later):
+    """Keep the first recorded weight of each shape (the value before DSH changed it) and every addition."""
+    merged = {key: list(earlier.get(key) or []) for key in ("weights", "sync", "removeKeys", "addedRemovers")}
+    seen = {(w.get("renderer"), w.get("shape")) for w in merged["weights"]}
+    for weight in later.get("weights") or []:
+        if (weight.get("renderer"), weight.get("shape")) not in seen:
+            merged["weights"].append(weight)
+    for key in ("sync", "removeKeys", "addedRemovers"):
+        for item in later.get(key) or []:
+            if item not in merged[key]:
+                merged[key].append(item)
+    return merged
+
+
 def apply(root, args):
-    return toggle.run_approved(root, args, lambda: plan(root, args), "Apply", "ShapeRecipe", "shape-recipe",
-                               HELPER, args.verify_sdk)
+    output = toggle.run_approved(root, args, lambda: plan(root, args), "Apply", "ShapeRecipe", "shape-recipe",
+                                 HELPER, args.verify_sdk)
+    undo = output.get("unity", {}).get("undo") if output.get("ok") else None
+    if isinstance(undo, dict):
+        scenes = read_undo(root, args.recipe)
+        scene = output["unity"].get("scene") or args.scene
+        scenes[scene] = merge_undo(scenes.get(scene, {}), undo)
+        path = undo_path(root, args.recipe)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"recipe": args.recipe, "scenes": scenes}, ensure_ascii=False), encoding="utf-8")
+    return output
+
+
+def remove_plan(root, args):
+    scene, scene_path = toggle.scene_asset(root, args.scene)
+    undo = read_undo(root, args.recipe).get(scene_path)
+    if not undo or not any(undo.get(key) for key in ("weights", "sync", "removeKeys", "addedRemovers")):
+        raise WorkflowError(f"There is no record of what {args.recipe} changed in {scene_path} (it was applied before "
+                            "this release, or in another copy of the project). Restore the scene from Git instead.")
+    request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "name": args.recipe,
+               "undo": undo}
+    output, helpers = toggle.scene_plan(root, request, scene, [scene_path], [])
+    output["summary"] = {"weights": len(undo.get("weights") or []), "syncShapes": len(undo.get("sync") or []),
+                         "removeShapes": len(undo.get("removeKeys") or []),
+                         "removerComponents": len(undo.get("addedRemovers") or [])}
+    output["next"] = ("Confirm what goes back, then rerun with --approved-preview. Only what DSH added is taken out; "
+                      "the recipe file stays.")
+    return output, helpers
+
+
+def remove(root, args):
+    if not args.approved_preview:
+        output, _ = remove_plan(root, args)
+        return output
+    output = toggle.run_approved(root, args, lambda: remove_plan(root, args), "Remove", "ShapeRemove", "shape-remove",
+                                 HELPER)
+    if output.get("ok"):
+        scenes = read_undo(root, args.recipe)
+        scenes.pop(output.get("unity", {}).get("scene") or args.scene, None)
+        undo_path(root, args.recipe).write_text(json.dumps({"recipe": args.recipe, "scenes": scenes}), encoding="utf-8")
+    return output
 
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("shapes", "capture", "preview", "apply"):
+    for name in ("shapes", "capture", "preview", "apply", "remove"):
         action = commands.add_parser(name)
         action.add_argument("--project", default=os.getcwd())
         action.add_argument("--scene", required=True)
-        action.add_argument("--avatar", required=name in ("preview", "apply"), default="")
+        action.add_argument("--avatar", required=name in ("preview", "apply", "remove"), default="")
         action.add_argument("--avatar-id", default="")
         if name in ("shapes", "capture"):
             action.add_argument("--prepare", action="store_true")
         if name == "shapes":
             action.add_argument("--filter", default="")
-        if name in ("capture", "preview", "apply"):
+        if name in ("capture", "preview", "apply", "remove"):
             action.add_argument("--recipe", required=True)
         if name == "capture":
             action.add_argument("--views", default="front,face")
@@ -133,6 +197,9 @@ def main():
             action.add_argument("--verify-sdk", action="store_true")
         if name == "apply":
             action.add_argument("--approved-preview", required=True)
+        if name == "remove":
+            action.add_argument("--approved-preview", default="",
+                                help="Without this, remove only previews what it would change")
     args = parser.parse_args()
     try:
         if not Path(args.project).is_dir():
@@ -146,6 +213,8 @@ def main():
             output = capture(root, args)
         elif args.command == "preview":
             output, _ = plan(root, args)
+        elif args.command == "remove":
+            output = remove(root, args)
         else:
             output = apply(root, args)
     except (WorkflowError, OSError, ValueError, SystemExit) as error:

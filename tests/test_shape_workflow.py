@@ -76,6 +76,54 @@ class ShapeWorkflowTests(unittest.TestCase):
         self.assertEqual(toggle["git"]["managedScenes"], ["Assets/Avatar.unity"])
         self.assertEqual(toggle["git"]["blockingChanges"], [])
 
+    def test_remove_needs_a_record_of_what_apply_changed(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.recipe(weights=[{"renderer": "Body", "shape": "Breasts_big", "weight": 60}])
+        refused = self.cli("unity_shape.py", "remove", *ARGS)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("Restore the scene from Git", json.loads(refused.stdout)["error"])
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_remove_takes_back_what_apply_recorded_and_later_tasks_continue(self):
+        scene = self.write("Assets/Avatar.unity", "original\n")
+        self.recipe(weights=[{"renderer": "Body", "shape": "Breasts_big", "weight": 60}],
+                    remove=[{"renderer": "Body", "shapes": ["Chest_1_OFF"]}])
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        unity = self.editor_fixture(r'''
+            string request = File.ReadAllText(Environment.GetEnvironmentVariable("DSH_UNITY_REQUEST_PATH"));
+            bool remove = Array.IndexOf(args, "DSH.Editor.DshShape.Remove") >= 0;
+            string undo = "{\"weights\":[{\"renderer\":\"Body\",\"shape\":\"Breasts_big\",\"weight\":0}]," +
+                "\"sync\":[],\"removeKeys\":[{\"renderer\":\"Body\",\"shape\":\"Chest_1_OFF\"}],\"addedRemovers\":[\"Body\"]}";
+            if (remove) {
+                if (!request.Contains("Chest_1_OFF") || !request.Contains("addedRemovers")) Environment.Exit(4);
+                File.WriteAllText("Assets/Avatar.unity", "original\n");
+            } else {
+                File.AppendAllText("Assets/Avatar.unity", "shape\n");
+            }
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"" + (remove ? "ShapeRemove" : "ShapeRecipe") + "\",\"verified\":true," +
+                "\"saved\":true,\"scene\":\"Assets/Avatar.unity\"," + (remove ? "" : "\"undo\":" + undo + ",") +
+                "\"sceneDigest\":\"" + Checksum("Assets/Avatar.unity") + "\"}");
+        ''')
+        plan = self.json_output(self.cli("unity_shape.py", "preview", *ARGS))
+        self.json_output(self.cli("unity_shape.py", "apply", *ARGS, "--approved-preview", plan["preview"], env=unity))
+        self.assertEqual(scene.read_text(), "original\nshape\n")
+        record = json.loads((self.project / ".dsh/shapes/Fit.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["scenes"]["Assets/Avatar.unity"]["addedRemovers"], ["Body"])
+
+        preview = self.json_output(self.cli("unity_shape.py", "remove", *ARGS))
+        self.assertEqual(preview["summary"], {"weights": 1, "syncShapes": 0, "removeShapes": 1, "removerComponents": 1})
+        self.assertEqual(preview["git"]["managedScenes"], ["Assets/Avatar.unity"])
+        removed = self.json_output(self.cli("unity_shape.py", "remove", *ARGS, "--approved-preview", preview["preview"],
+                                            env=unity))
+        self.assertTrue(removed["ok"], removed)
+        self.assertEqual(scene.read_text(), "original\n")
+        record = json.loads((self.project / ".dsh/shapes/Fit.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["scenes"], {})
+        self.assertTrue((self.project / "Assets/DSH/Shapes/Fit/recipe.json").is_file())  # the recipe stays
+        again = self.cli("unity_shape.py", "remove", *ARGS)
+        self.assertNotEqual(again.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

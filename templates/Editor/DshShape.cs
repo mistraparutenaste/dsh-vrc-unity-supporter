@@ -40,6 +40,52 @@ namespace DSH.Editor
             public float tolerance = 0.001f;
         }
 
+        /// <summary>A sync binding that DSH added: target renderer and its shape, source renderer and its shape.</summary>
+        [Serializable]
+        private sealed class SyncUndo
+        {
+            public string renderer = "";
+            public string local = "";
+            public string source = "";
+            public string sourceShape = "";
+        }
+
+        /// <summary>
+        /// What an apply changed, so remove can take back exactly that: earlier weights, the sync bindings and
+        /// removal shape keys DSH added, and the renderers where DSH added the Remove Mesh By BlendShape component.
+        /// Bindings and keys that were already there are not listed, so remove leaves the author's setup alone.
+        /// </summary>
+        [Serializable]
+        private sealed class Undo
+        {
+            public Weight[] weights = Array.Empty<Weight>();
+            public SyncUndo[] sync = Array.Empty<SyncUndo>();
+            public Weight[] removeKeys = Array.Empty<Weight>();  // renderer + shape; weight unused
+            public string[] addedRemovers = Array.Empty<string>();
+        }
+
+        private sealed class UndoLog
+        {
+            public readonly List<Weight> Weights = new List<Weight>();
+            public readonly List<SyncUndo> Sync = new List<SyncUndo>();
+            public readonly List<Weight> RemoveKeys = new List<Weight>();
+            public readonly List<string> AddedRemovers = new List<string>();
+
+            public void Before(string renderer, string shape, float weight)
+            {
+                if (!Weights.Any(w => w.renderer == renderer && w.shape == shape))
+                    Weights.Add(new Weight { renderer = renderer, shape = shape, weight = weight });
+            }
+
+            public Dictionary<string, object> Describe() => new Dictionary<string, object>
+            {
+                { "weights", Weights.Select(w => new Dictionary<string, object> { { "renderer", w.renderer }, { "shape", w.shape }, { "weight", w.weight } }).ToArray() },
+                { "sync", Sync.Select(b => new Dictionary<string, object> { { "renderer", b.renderer }, { "local", b.local }, { "source", b.source }, { "sourceShape", b.sourceShape } }).ToArray() },
+                { "removeKeys", RemoveKeys.Select(k => new Dictionary<string, object> { { "renderer", k.renderer }, { "shape", k.shape } }).ToArray() },
+                { "addedRemovers", AddedRemovers.ToArray() },
+            };
+        }
+
         [Serializable]
         private sealed class Request
         {
@@ -53,6 +99,7 @@ namespace DSH.Editor
             public Weight[] weights = Array.Empty<Weight>();
             public Sync[] sync = Array.Empty<Sync>();
             public Removal[] remove = Array.Empty<Removal>();
+            public Undo undo = new Undo();
         }
 
         private const string SyncType = "nadena.dev.modular_avatar.core.ModularAvatarBlendshapeSync";
@@ -124,8 +171,10 @@ namespace DSH.Editor
                 var avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
                 result["scene"] = scene.path;
                 result["recipe"] = request.name;
-                var changes = ApplyRecipe(avatar, request);
+                var log = new UndoLog();
+                var changes = ApplyRecipe(avatar, request, log);
                 result["applied"] = changes;
+                result["undo"] = log.Describe();
                 if (changes.Count > 0)
                 {
                     DshAvatarScene.RequireSceneDigest(scene.path, request.expectedSceneDigest);
@@ -153,6 +202,123 @@ namespace DSH.Editor
                 result["error"] = error.GetBaseException().Message;
             }
             DshAvatarScene.Finish("ShapeRecipe", result);
+        }
+
+        /// <summary>
+        /// Take back what earlier applies of a recipe changed, from the undo log they reported: restore the earlier
+        /// weights, remove the sync bindings and removal shape keys DSH added, and remove the Remove Mesh By BlendShape
+        /// components DSH added once they hold no keys. Anything the avatar already had is left as it is.
+        /// </summary>
+        public static void Remove()
+        {
+            var result = new Dictionary<string, object> { { "ok", false }, { "saved", false } };
+            try
+            {
+                var request = DshAvatarScene.ReadRequest<Request>();
+                var undo = request.undo ?? new Undo();
+                var scene = DshAvatarScene.OpenScene(request.scene, request.expectedSceneDigest);
+                var avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
+                result["scene"] = scene.path;
+                result["recipe"] = request.name;
+                var changes = Revert(avatar, undo);
+                result["reverted"] = changes;
+                if (changes.Count > 0)
+                {
+                    DshAvatarScene.RequireSceneDigest(scene.path, request.expectedSceneDigest);
+                    EditorSceneManager.MarkSceneDirty(scene);
+                    if (!EditorSceneManager.SaveScene(scene))
+                        throw new IOException($"Unity could not save {scene.path}. Check write access and retry.");
+                    result["saved"] = true;
+                    DshApply.Note(result, $"Removed shape recipe {request.name} ({changes.Count} changes)");
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                    scene = DshAvatarScene.OpenScene(request.scene);
+                    avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
+                }
+                // Reverting the saved scene again must change nothing.
+                var remaining = Revert(avatar, undo);
+                if (remaining.Count > 0)
+                    throw new InvalidOperationException("The saved scene still holds part of the recipe: " + string.Join("; ", remaining.Take(5)));
+                result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
+                result["ok"] = true;
+                result["verified"] = true;
+            }
+            catch (Exception error)
+            {
+                result["error"] = error.GetBaseException().Message;
+            }
+            DshAvatarScene.Finish("ShapeRemove", result);
+        }
+
+        /// <summary>Components that belong to a prefab asset cannot be destroyed in the scene; scene additions can.</summary>
+        private static bool AddedInScene(Component component) =>
+            !PrefabUtility.IsPartOfPrefabInstance(component) || PrefabUtility.IsAddedComponentOverride(component);
+
+        private static List<string> Revert(GameObject avatar, Undo undo)
+        {
+            var changes = new List<string>();
+            var syncType = DshVrc.LoadedType(SyncType);
+            foreach (var item in undo.sync)
+            {
+                var target = avatar.transform.Find(item.renderer)?.GetComponent<SkinnedMeshRenderer>();
+                if (target == null || syncType == null) continue;
+                foreach (var component in target.GetComponents(syncType))
+                {
+                    var bindings = (IList)syncType.GetField("Bindings").GetValue(component);
+                    var removed = false;
+                    for (var i = bindings.Count - 1; i >= 0; i--)
+                    {
+                        var binding = bindings[i];
+                        var type = binding.GetType();
+                        var local = (string)type.GetField("LocalBlendshape").GetValue(binding);
+                        var shape = (string)type.GetField("Blendshape").GetValue(binding);
+                        var reference = type.GetField("ReferenceMesh").GetValue(binding);
+                        var path = reference?.GetType().GetField("referencePath")?.GetValue(reference) as string;
+                        if ((string.IsNullOrEmpty(local) ? shape : local) != item.local || shape != item.sourceShape || path != item.source)
+                            continue;
+                        bindings.RemoveAt(i);
+                        removed = true;
+                        changes.Add($"{item.renderer}: {item.local} no longer follows {item.source}:{item.sourceShape}");
+                    }
+                    if (!removed) continue;
+                    if (bindings.Count == 0 && AddedInScene(component))
+                    {
+                        UnityEngine.Object.DestroyImmediate(component);
+                        changes.Add($"{item.renderer}: removed the empty Blendshape Sync");
+                    }
+                    else EditorUtility.SetDirty(component);
+                }
+            }
+            var removeType = DshVrc.LoadedType(RemoveType);
+            foreach (var renderer in undo.removeKeys.Select(k => k.renderer).Concat(undo.addedRemovers).Distinct())
+            {
+                var target = avatar.transform.Find(renderer)?.gameObject;
+                var component = target == null || removeType == null ? null : target.GetComponent(removeType);
+                if (component == null) continue;
+                var keys = (ICollection<string>)removeType.GetProperty("ShapeKeys").GetValue(component);
+                var changed = false;
+                foreach (var key in undo.removeKeys.Where(k => k.renderer == renderer && keys.Contains(k.shape)).ToArray())
+                {
+                    keys.Remove(key.shape);
+                    changed = true;
+                    changes.Add($"{renderer}: keeps the mesh moved by {key.shape}");
+                }
+                if (keys.Count == 0 && undo.addedRemovers.Contains(renderer) && AddedInScene(component))
+                {
+                    UnityEngine.Object.DestroyImmediate(component);
+                    changes.Add($"{renderer}: removed Remove Mesh By BlendShape");
+                }
+                else if (changed) EditorUtility.SetDirty(component);
+            }
+            foreach (var item in undo.weights)
+            {
+                var renderer = avatar.transform.Find(item.renderer)?.GetComponent<SkinnedMeshRenderer>();
+                var index = renderer == null || renderer.sharedMesh == null ? -1 : renderer.sharedMesh.GetBlendShapeIndex(item.shape);
+                if (index < 0 || Mathf.Approximately(renderer.GetBlendShapeWeight(index), item.weight)) continue;
+                renderer.SetBlendShapeWeight(index, item.weight);
+                EditorUtility.SetDirty(renderer);
+                changes.Add($"{item.renderer}: {item.shape} = {item.weight}");
+            }
+            return changes;
         }
 
         /// <summary>
@@ -251,7 +417,7 @@ namespace DSH.Editor
         }
 
         /// <summary>Make the avatar (or a copy of it) match the recipe; returns what had to change.</summary>
-        private static List<string> ApplyRecipe(GameObject avatar, Request recipe)
+        private static List<string> ApplyRecipe(GameObject avatar, Request recipe, UndoLog log = null)
         {
             var changes = new List<string>();
             foreach (var item in recipe.weights)
@@ -260,14 +426,15 @@ namespace DSH.Editor
                 var index = ShapeIndex(renderer, item.shape, item.renderer);
                 var weight = Mathf.Clamp(item.weight, 0, 100);
                 if (Mathf.Approximately(renderer.GetBlendShapeWeight(index), weight)) continue;
+                log?.Before(item.renderer, item.shape, renderer.GetBlendShapeWeight(index));
                 renderer.SetBlendShapeWeight(index, weight);
                 EditorUtility.SetDirty(renderer);
                 changes.Add($"{item.renderer}: {item.shape} = {weight}");
             }
             foreach (var item in recipe.sync)
-                changes.AddRange(AddSync(avatar, item));
+                changes.AddRange(AddSync(avatar, item, log));
             foreach (var item in recipe.remove)
-                changes.AddRange(AddRemoval(avatar, item));
+                changes.AddRange(AddRemoval(avatar, item, log));
             return changes;
         }
 
@@ -305,7 +472,7 @@ namespace DSH.Editor
                 : $"'{path}' has several blendshapes ending with '_{source}'. Write 'Source=Target' to pick one.");
         }
 
-        private static List<string> AddSync(GameObject avatar, Sync item)
+        private static List<string> AddSync(GameObject avatar, Sync item, UndoLog log)
         {
             var type = DshVrc.LoadedType(SyncType)
                 ?? throw new InvalidOperationException("Modular Avatar is not installed. Add it in VCC/ALCOM to sync blendshapes.");
@@ -342,6 +509,8 @@ namespace DSH.Editor
                 bindingType.GetField("Blendshape").SetValue(binding, sourceShape);
                 bindingType.GetField("LocalBlendshape").SetValue(binding, local);
                 ((IList)field.GetValue(component)).Add(binding);
+                log?.Sync.Add(new SyncUndo { renderer = item.renderer, local = local, source = item.source, sourceShape = sourceShape });
+                log?.Before(item.renderer, local, target.GetBlendShapeWeight(localIndex));
                 // Show the synced value right away; MA keeps it in sync at build time.
                 target.SetBlendShapeWeight(localIndex, source.GetBlendShapeWeight(ShapeIndex(source, sourceShape, item.source)));
                 EditorUtility.SetDirty(component);
@@ -351,7 +520,7 @@ namespace DSH.Editor
             return changes;
         }
 
-        private static List<string> AddRemoval(GameObject avatar, Removal item)
+        private static List<string> AddRemoval(GameObject avatar, Removal item, UndoLog log)
         {
             var type = DshVrc.LoadedType(RemoveType)
                 ?? throw new InvalidOperationException("Avatar Optimizer is not installed. Add it in VCC/ALCOM to remove hidden meshes.");
@@ -363,6 +532,7 @@ namespace DSH.Editor
             {
                 component = renderer.gameObject.AddComponent(type);
                 type.GetMethod("Initialize")?.Invoke(component, new object[] { 1 });
+                log?.AddedRemovers.Add(item.renderer);
                 changes.Add($"{item.renderer}: added Remove Mesh By BlendShape");
             }
             var tolerance = (double)Mathf.Clamp(item.tolerance, 0.000001f, 1f);
@@ -376,6 +546,7 @@ namespace DSH.Editor
             foreach (var shape in item.shapes.Where(s => !keys.Contains(s)))
             {
                 keys.Add(shape);
+                log?.RemoveKeys.Add(new Weight { renderer = item.renderer, shape = shape });
                 changes.Add($"{item.renderer}: remove mesh moved by {shape}");
             }
             if (changes.Count > 0) EditorUtility.SetDirty(component);

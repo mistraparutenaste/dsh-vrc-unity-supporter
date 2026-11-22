@@ -95,7 +95,14 @@ python -B $shape apply @a --approved-preview '<preview の値>'
 - Git の扱いは衣装トグル・色違いと同じ（チェックポイントが必要、DSH が保存したシーンはコミットなしで続けられる）。
 - apply は、保存後にシーンを読み直してもう一度レシピを当て、何も変わらないことを確かめる（`unity.applied` が今回の変更）。
 - `unity.sdkVerification` に、シーン上とビルド後の三角形数が出る。性能ランクへの影響は `vrc-perf-budget` で判断する。
-- 元に戻すときは、Git でシーンを復元する（`vrc-first-run` の復元の注意を参照）。
+- 元に戻すときは `remove` を使う。apply が `.dsh/shapes/<名前>.json` に記録した分（変える前の値、DSH が足した追従・削除のキーとコンポーネント）だけを戻し、作者が最初から入れていた連動は残す。レシピのファイルは残る。
+
+```powershell
+python -B $shape remove --project '<project>' --scene 'Assets/Avatar.unity' --avatar 'Avatar' --recipe Fit_Hoodie
+python -B $shape remove --project '<project>' --scene 'Assets/Avatar.unity' --avatar 'Avatar' --recipe Fit_Hoodie --approved-preview '<値>'
+```
+
+  `--approved-preview` なしでは `summary`（戻す値・追従・削除の数）だけを返すので、伝えて確認を取ってから実行する。記録が無い（この版より前に適用した、別のコピーで適用した）ときは止まるので、Git でシーンを復元する（`vrc-first-run` の復元の注意を参照）。
 
 ## 注意
 
