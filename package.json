@@ -4,6 +4,14 @@
     "description":  "DeepSeek Harness agent preset for VRChat avatar modification: read Unity projects without opening the editor, design the change, apply it through generated Editor scripts in batch mode, and verify the result.",
     "type":  "module",
     "license":  "MIT",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/mistraparutenaste/dsh-vrc-unity-supporter.git"
+                   },
+    "homepage":  "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter#readme",
+    "bugs":  {
+                 "url":  "https://github.com/mistraparutenaste/dsh-vrc-unity-supporter/issues"
+             },
     "keywords":  [
                      "dsh",
                      "deepseek-harness",
