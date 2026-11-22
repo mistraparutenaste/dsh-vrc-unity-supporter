@@ -171,6 +171,21 @@ if ($Project) {
         if ($vpmList.Count -gt 0) {
             Add-Check 'project packages' 'INFO' (($vpmList | Select-Object -First 6) -join ', ')
         }
+        # The Editor helpers call these packages by type name at run time, so report their versions
+        # on their own lines (the list above is cut at six) for bug reports and update checks.
+        $tools = [ordered]@{
+            'nadena.dev.modular-avatar'        = @('Modular Avatar', '小物の取り付け・体型の追従')
+            'com.vrcfury.vrcfury'              = @('VRCFury', '衣装トグル・色違い・小物のメニュー')
+            'com.anatawa12.avatar-optimizer'   = @('Avatar Optimizer', '服の下の体の削除')
+        }
+        foreach ($id in $tools.Keys) {
+            $label, $use = $tools[$id]
+            if ($vpmPkgs.Contains($id)) {
+                Add-Check $label 'INFO' "$id $($vpmPkgs[$id])"
+            } else {
+                Add-Check $label 'INFO' "未導入（$($use)に使います。VCC / ALCOM で追加できます）"
+            }
+        }
         $sdk = 'com.vrchat.avatars'
         $sdkManifest = Join-Path $proj "Packages\$sdk\package.json"
         $cache = Join-Path $proj 'Library\PackageCache'
