@@ -35,12 +35,15 @@ LEGACY = {
         "23cf182d53ef8fc2405305d706ace79403c1bca1",  # 0.6.0 - 0.6.1
         "88d4f3fb624c6083b44436ccd5e29562d8cb8f04",  # 0.6.2
         "0a7da5fd1f1428cc639e6654fca15fbd5eb2a9a7",  # 0.6.3
+        "3a2fa108730eaf9afff5e9c64fbe1578c422c789",  # 0.6.4 - 0.11.1
     ),
-    "DshCapture.cs": ("99e317d29760a8151015a5858e4cf593668ee94e",),  # 0.6.0 - 0.6.4
+    "DshCapture.cs": ("99e317d29760a8151015a5858e4cf593668ee94e",  # 0.6.0 - 0.6.4
+                      "82224ae9179ce0f7c0c3bbf491d4ef0411d9084d"),  # 0.7.0 - 0.11.1
     # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
     "DshAvatarTools.cs": (
         "1168f8a1430d88449909e6459cd236f611d0de13",  # 0.6.2
         "d04fa099a93b5ab56c4133493e25cc8ba850a525",  # 0.6.3 - 0.9.0
+        "fab4ab2f63f9e98e2fec8d658a4e38836aa0c671",  # 0.9.1 - 0.11.1
     ),
     "DshShape.cs": ("c55ea10fa33bf54c9a23ff49fa7ee08de3d485c1",  # 0.7.0 - 0.9.2
                     "1e6d7ff70b95aad93d3be8576a0b40c0882099bd"),  # 0.10.0

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Make color and skin variants from layered PSDs with PhotoCraft, and switch them from the avatar menu."""
+"""Make color and skin variants from layered PSDs (PhotoCraft) or lilToon material values, and switch them
+from the avatar menu."""
 
 import argparse
 import hashlib
@@ -22,6 +23,32 @@ UV_LAYER = re.compile(r"^uv(?:[\s_-].*)?$", re.IGNORECASE)
 MAX_LAYERS = 300
 MAX_TEXTURES = 8
 MAX_OPS = 64
+MAX_MATERIALS = 16
+MAX_PROPERTIES = 48
+HEX_COLOR = re.compile(r"^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+HSVG = {"hue": (0, -0.5, 0.5), "saturation": (1, 0.0, 2.0), "value": (2, 0.0, 2.0), "gamma": (3, 0.01, 2.0)}
+
+# lilToon values a recipe may change, as (kind, low, high). Templates/Editor/DshAvatarTools.cs keeps the same
+# names and kinds (DshMaterialEdit.Allowed) and checks the shader's own ranges again in Unity.
+LILTOON = {
+    "_Color": ("color",), "_MainTexHSVG": ("hsvg",), "_MainGradationStrength": ("float", 0, 1),
+    "_UseShadow": ("toggle",), "_ShadowStrength": ("float", 0, 1), "_ShadowColor": ("color",),
+    "_ShadowBorder": ("float", 0, 1), "_ShadowBlur": ("float", 0, 1), "_Shadow2ndColor": ("color",),
+    "_Shadow2ndBorder": ("float", 0, 1), "_Shadow2ndBlur": ("float", 0, 1), "_Shadow3rdColor": ("color",),
+    "_Shadow3rdBorder": ("float", 0, 1), "_Shadow3rdBlur": ("float", 0, 1), "_ShadowBorderColor": ("color",),
+    "_ShadowBorderRange": ("float", 0, 1), "_ShadowMainStrength": ("float", 0, 1), "_ShadowEnvStrength": ("float", 0, 1),
+    "_UseBacklight": ("toggle",), "_BacklightColor": ("color",),
+    "_UseReflection": ("toggle",), "_Smoothness": ("float", 0, 1), "_Metallic": ("float", 0, 1),
+    "_Reflectance": ("float", 0, 1), "_ReflectionColor": ("color",),
+    "_UseMatCap": ("toggle",), "_MatCapColor": ("color",), "_MatCapBlend": ("float", 0, 1),
+    "_UseRim": ("toggle",), "_RimColor": ("color",), "_RimBorder": ("float", 0, 1), "_RimBlur": ("float", 0, 1),
+    "_RimFresnelPower": ("float", 0.01, 50), "_RimEnableLighting": ("float", 0, 1),
+    "_UseEmission": ("toggle",), "_EmissionColor": ("color",), "_EmissionMainStrength": ("float", 0, 1),
+    "_EmissionBlend": ("float", 0, 1),
+    "_OutlineColor": ("color",), "_OutlineWidth": ("float", 0, 1), "_OutlineTexHSVG": ("hsvg",),
+    "_AsUnlit": ("float", 0, 1), "_LightMinLimit": ("float", 0, 1), "_LightMaxLimit": ("float", 0, 10),
+    "_MonochromeLighting": ("float", 0, 1),
+}
 TEXTURE_SUFFIXES = {".png", ".psd", ".tga", ".jpg", ".jpeg", ".tif", ".tiff", ".exr"}
 PSD_SUFFIXES = {".psd", ".psb", ".png"}
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".psd"}
@@ -167,9 +194,17 @@ def load_recipe(root, name):
         raise WorkflowError("exclusiveTag must be a short string.")
     if not isinstance(recipe.get("defaultOn", False), bool):
         raise WorkflowError("defaultOn must be true or false.")
-    textures = recipe.get("textures")
-    if not isinstance(textures, list) or not 1 <= len(textures) <= MAX_TEXTURES:
-        raise WorkflowError(f"List 1 to {MAX_TEXTURES} textures to replace in the recipe.")
+    textures = recipe.setdefault("textures", [])
+    if not isinstance(textures, list) or len(textures) > MAX_TEXTURES:
+        raise WorkflowError(f"List at most {MAX_TEXTURES} textures to replace in the recipe.")
+    materials = recipe.setdefault("materials", [])
+    if not isinstance(materials, list) or len(materials) > MAX_MATERIALS:
+        raise WorkflowError(f"List at most {MAX_MATERIALS} materials to change in the recipe.")
+    if not textures and not materials:
+        raise WorkflowError("The recipe changes nothing. Add textures (from a PSD) or materials (lilToon values).")
+    edited = set()
+    for entry in materials:
+        check_material(root, entry, edited)
     outputs = set()
     for texture in textures:
         if not isinstance(texture, dict):
@@ -197,6 +232,73 @@ def load_recipe(root, name):
         for op in ops:
             check_op(root, folder, op)
     return recipe, folder
+
+
+def check_material(root, entry, edited):
+    """Check one recipe material and turn its 'set' values into the edits Unity applies (entry['_edits'])."""
+    if not isinstance(entry, dict):
+        raise WorkflowError("Each recipe material must be an object with 'material' and 'set'.")
+    material = entry.get("material")
+    path = inside(root, material) if isinstance(material, str) else None
+    if (path is None or not material.startswith("Assets/") or path.suffix.lower() != ".mat" or not path.is_file() or
+            path.is_relative_to(inside(root, VARIANTS.as_posix()))):
+        raise WorkflowError(f"'material' must name an existing .mat under Assets (not a variant): {material}")
+    if material in edited:
+        raise WorkflowError(f"{material} is listed twice. Put all of its values in one 'set'.")
+    edited.add(material)
+    values = entry.get("set")
+    if not isinstance(values, dict) or not 1 <= len(values) <= MAX_PROPERTIES:
+        raise WorkflowError(f"Give {material} a 'set' object with 1 to {MAX_PROPERTIES} lilToon values.")
+    entry["_path"] = path
+    entry["_edits"] = [material_edit(material, name, value) for name, value in values.items()]
+
+
+def material_edit(material, name, value):
+    spec = LILTOON.get(name)
+    if spec is None:
+        raise WorkflowError(f"{name} is not a lilToon value this tool changes. Use one of: {', '.join(LILTOON)}.")
+    kind = spec[0]
+    edit = {"material": material, "property": name, "kind": kind, "x": 0, "y": 0, "z": 0, "w": 0, "mask": 1}
+    if kind == "toggle":
+        if not isinstance(value, bool):
+            raise WorkflowError(f"{name} switches a lilToon feature; use true or false.")
+        edit["x"] = 1 if value else 0
+    elif kind == "float":
+        low, high = spec[1], spec[2]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+            raise WorkflowError(f"{name} must be a number from {low} to {high}.")
+        edit["x"] = value
+    elif kind == "color":
+        components = color_components(name, value)
+        edit.update(zip("xyzw", components), mask=15 if len(components) == 4 else 7)
+    else:
+        if not isinstance(value, dict) or not value or not set(value) <= set(HSVG):
+            raise WorkflowError(f"{name} is lilToon color correction; give some of hue, saturation, value, gamma.")
+        mask = 0
+        for key, number_value in value.items():
+            index, low, high = HSVG[key]
+            if isinstance(number_value, bool) or not isinstance(number_value, (int, float)) or not low <= number_value <= high:
+                raise WorkflowError(f"{name} {key} must be from {low} to {high} (unchanged: hue 0, others 1).")
+            edit["xyzw"[index]] = number_value
+            mask |= 1 << index
+        edit["mask"] = mask
+    return edit
+
+
+def color_components(name, value):
+    """'#RRGGBB', '#RRGGBBAA', or [r, g, b(, a)] with HDR values up to 100; without alpha it keeps the material's."""
+    if isinstance(value, str) and HEX_COLOR.match(value):
+        digits = value[1:]
+        return [round(int(digits[i:i + 2], 16) / 255, 4) for i in range(0, len(digits), 2)]
+    if (isinstance(value, list) and len(value) in (3, 4) and
+            all(not isinstance(c, bool) and isinstance(c, (int, float)) and 0 <= c <= 100 for c in value) and
+            (len(value) == 3 or value[3] <= 1)):
+        return list(value)
+    raise WorkflowError(f"{name} is a color: use '#RRGGBB', '#RRGGBBAA' or [r, g, b] from 0 to 1 (HDR up to 100).")
+
+
+def material_edits(recipe):
+    return [edit for entry in recipe.get("materials", []) for edit in entry["_edits"]]
 
 
 def check_op(root, folder, op):
@@ -277,7 +379,9 @@ def recipe_digest(recipe):
 
     images = sorted(digest(op["_image"]) for texture in recipe["textures"]
                     for op in texture.get("ops", []) if "_image" in op)
-    payload = {"recipe": public(recipe), "images": images}
+    written = public(recipe)
+    written.pop("materials", None)  # material values do not change the rendered textures
+    payload = {"recipe": written, "images": images}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -287,6 +391,9 @@ def render_receipt_path(root, name):
 
 def render(root, name):
     recipe, folder = load_recipe(root, name)
+    if not recipe["textures"]:
+        return {"ok": True, "variant": name, "outputs": [],
+                "next": "This recipe only changes material values; nothing to render. Capture or preview it directly."}
     outputs = []
     for texture in recipe["textures"]:
         info = psd_info(texture["_psd"])
@@ -318,6 +425,8 @@ def render(root, name):
 def rendered(root, name):
     """Return the recipe and the textures it produced, refusing stale or edited renders."""
     recipe, folder = load_recipe(root, name)
+    if not recipe["textures"]:
+        return recipe, folder, []
     receipt = read_result(render_receipt_path(root, name))
     outputs = receipt.get("outputs") if receipt.get("recipe") == recipe_digest(recipe) else None
     if not isinstance(outputs, list) or len(outputs) != len(recipe["textures"]):
@@ -332,8 +441,8 @@ def rendered(root, name):
 # --- Unity tasks ---------------------------------------------------------------
 
 def materials(root, args):
-    output = toggle.read_only_task(root, args, {"filter": args.filter}, "Materials", "TextureMaterials",
-                                   "texture-materials", "DshTextureVariant")
+    output = toggle.read_only_task(root, args, {"filter": args.filter, "properties": args.properties}, "Materials",
+                                   "TextureMaterials", "texture-materials", "DshTextureVariant")
     if output.get("ok"):
         roots = [Path(value) for value in args.psd_dir] + [root / "Assets"]
         textures = output["unity"].get("textures") or []
@@ -362,8 +471,9 @@ def psd_candidates(texture, roots, limit=5):
 def capture_request(root, name):
     if not name:
         return {}
-    _, _, outputs = rendered(root, name)
-    return {"variant": name, "swaps": [{"from": output["replace"], "to": output["texture"]} for output in outputs]}
+    recipe, _, outputs = rendered(root, name)
+    return {"variant": name, "swaps": [{"from": output["replace"], "to": output["texture"]} for output in outputs],
+            "edits": material_edits(recipe)}
 
 
 def capture(root, args):
@@ -382,10 +492,11 @@ def variant_request(root, args):
     request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "variant": args.variant,
                "folder": folder.relative_to(root).as_posix(), "menu": recipe["menu"],
                "exclusiveTag": recipe.get("exclusiveTag", ""), "defaultOn": recipe.get("defaultOn", False),
-               "swaps": [{"from": output["replace"], "to": output["texture"]} for output in outputs]}
+               "swaps": [{"from": output["replace"], "to": output["texture"]} for output in outputs],
+               "edits": material_edits(recipe)}
     if args.verify_sdk:
         request["verifySdk"] = True
-    return request, scene, outputs
+    return request, scene, outputs, recipe
 
 
 def overlapping_variants(root, name, recipe):
@@ -394,6 +505,7 @@ def overlapping_variants(root, name, recipe):
     Both would animate the same material slots, so only one of them would show in VRChat.
     """
     replaced = {texture["replace"] for texture in recipe["textures"]}
+    edited = {entry["material"] for entry in recipe.get("materials", [])}
     tag = recipe.get("exclusiveTag", "")
     found = []
     for path in sorted(inside(root, VARIANTS.as_posix()).glob("*/recipe.json")):
@@ -402,24 +514,29 @@ def overlapping_variants(root, name, recipe):
         try:
             other = json.loads(path.read_text(encoding="utf-8-sig"))
             shared = sorted(replaced & {t.get("replace") for t in other.get("textures", []) if isinstance(t, dict)})
+            shared_materials = sorted(edited & {m.get("material") for m in other.get("materials", []) if isinstance(m, dict)})
         except (OSError, ValueError, AttributeError, TypeError):
             continue
-        if shared and (not tag or other.get("exclusiveTag", "") != tag):
-            found.append({"variant": path.parent.name, "textures": shared, "exclusiveTag": other.get("exclusiveTag", "")})
+        if (shared or shared_materials) and (not tag or other.get("exclusiveTag", "") != tag):
+            overlap = {"variant": path.parent.name, "textures": shared, "exclusiveTag": other.get("exclusiveTag", "")}
+            if shared_materials:
+                overlap["materials"] = shared_materials
+            found.append(overlap)
     return found
 
 
 def preview(root, args):
-    request, scene, outputs = variant_request(root, args)
-    recipe, _ = load_recipe(root, args.variant)
+    request, scene, outputs, recipe = variant_request(root, args)
     overlaps = overlapping_variants(root, args.variant, recipe)
+    # The source materials are part of the approval: a material changed after the preview makes a new token.
+    sources = [[entry["material"], digest(entry["_path"])] for entry in recipe["materials"]]
     output, helpers = toggle.scene_plan(root, request, scene,
                                  [request["scene"], request["folder"] + "/ (materials, animation clip)"],
-                                 [o["sha256"] for o in outputs])
+                                 [*(o["sha256"] for o in outputs), *sources])
     if overlaps:
         output["overlappingVariants"] = overlaps
-        output["warning"] = ("These variants replace the same textures and can be on at the same time, so only one "
-                             "would show. Give them the same exclusiveTag, or combine the changes into one recipe.")
+        output["warning"] = ("These variants change the same textures or materials and can be on at the same time, so "
+                             "only one would show. Give them the same exclusiveTag, or combine the changes into one recipe.")
     return output, helpers
 
 
@@ -455,8 +572,11 @@ def list_variants(root):
         try:
             recipe, _ = load_recipe(root, name)
             entry.update(menu=recipe["menu"], exclusiveTag=recipe.get("exclusiveTag", ""),
-                         textures=[texture["replace"] for texture in recipe["textures"]])
-            if not render_receipt_path(root, name).is_file():
+                         textures=[texture["replace"] for texture in recipe["textures"]],
+                         materials=[material["material"] for material in recipe["materials"]])
+            if not recipe["textures"]:
+                entry["render"] = "not-needed"
+            elif not render_receipt_path(root, name).is_file():
                 entry["render"] = "missing"
             else:
                 try:
@@ -573,6 +693,8 @@ def main():
         if name == "materials":
             action.add_argument("--filter", default="")
             action.add_argument("--psd-dir", action="append", default=[])
+            action.add_argument("--properties", action="store_true",
+                                help="Also list the lilToon values of the matching materials (up to 12)")
         if name == "capture":
             action.add_argument("--variant", default="")
             action.add_argument("--views", default="front,back,left,face")

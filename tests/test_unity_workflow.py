@@ -543,5 +543,26 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertEqual(later["git"]["blockingChanges"], [])
 
 
+class HelperUpgradeTests(unittest.TestCase):
+    def test_helpers_of_the_latest_release_upgrade_without_a_manual_merge(self):
+        """A helper changed since the last release tag must list that release's blob in LEGACY."""
+        sys.path.insert(0, str(TOOLS))
+        import unity_toggle
+        root = TOOLS.parent
+        tags = subprocess.run(["git", "-C", str(root), "tag", "--list", "v*", "--sort=-v:refname"],
+                              capture_output=True, encoding="utf-8", check=False).stdout.split()
+        if not tags:
+            self.skipTest("no release tags in this checkout")
+        for name in unity_toggle.HELPERS:
+            released = subprocess.run(["git", "-C", str(root), "rev-parse", f"{tags[0]}:templates/Editor/{name}"],
+                                      capture_output=True, encoding="utf-8", check=False)
+            if released.returncode:
+                continue  # added after that release
+            current = unity_toggle.git_blob_hash((root / "templates/Editor" / name).read_bytes())
+            blob = released.stdout.strip()
+            self.assertTrue(blob == current or blob in unity_toggle.LEGACY[name],
+                            f"{name} changed since {tags[0]}; add {blob} to LEGACY")
+
+
 if __name__ == "__main__":
     unittest.main()

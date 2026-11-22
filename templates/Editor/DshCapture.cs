@@ -33,6 +33,7 @@ namespace DSH.Editor
             public string texture = "";
             public int size = 512;
             public Swap[] swaps = Array.Empty<Swap>();
+            public DshMaterialEdit.Edit[] edits = Array.Empty<DshMaterialEdit.Edit>();
         }
 
         private const int CaptureLayer = 31;
@@ -51,26 +52,35 @@ namespace DSH.Editor
                 var avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
                 result["avatar"] = DshAvatarScene.Describe(avatar.transform);
                 var swaps = DshAvatarScene.LoadSwaps(request.swaps.Select(s => (s.from, s.to)));
+                var edits = DshMaterialEdit.Load(request.edits);
 
                 var swapped = 0;
+                var visible = 0;
                 var rows = new List<(string label, Func<GameObject, GameObject> make)>
                 {
                     ("original", source => UnityEngine.Object.Instantiate(source))
                 };
-                if (swaps.Count > 0)
+                if (swaps.Count + edits.Count > 0)
                     rows.Add((request.variant, source =>
                     {
                         var copy = UnityEngine.Object.Instantiate(source);
-                        swapped = SwapMaterials(copy, swaps);
+                        (swapped, visible) = SwapMaterials(copy, swaps, edits);
                         return copy;
                     }));
                 var output = RenderSheet(avatar, views, Mathf.Clamp(request.size, 64, 2048), rows);
                 if (rows.Count > 1 && swapped == 0)
-                    throw new InvalidOperationException("No material on this avatar uses the original textures of the variant.");
+                    throw new InvalidOperationException("No material on this avatar uses the original textures or materials of the variant.");
                 result["image"] = output;
                 result["columns"] = views;
                 result["rows"] = rows.Select(r => r.label).ToArray();
                 result["swappedSlots"] = swapped;
+                if (rows.Count > 1)
+                {
+                    result["visibleSwappedSlots"] = visible;
+                    if (visible == 0)
+                        result["warning"] = "Every changed slot is on a hidden or disabled renderer, so both rows look the same. " +
+                            "Check slots[].active in the materials output and change the material the visible renderer uses.";
+                }
                 result["ok"] = true;
             }
             catch (Exception error)
@@ -128,10 +138,12 @@ namespace DSH.Editor
             return output;
         }
 
-        private static int SwapMaterials(GameObject copy, Dictionary<Texture, Texture> swaps)
+        private static (int swapped, int visible) SwapMaterials(GameObject copy, Dictionary<Texture, Texture> swaps,
+            Dictionary<Material, DshMaterialEdit.Edit[]> edits)
         {
             var copies = new Dictionary<Material, Material>();
             var count = 0;
+            var visible = 0;
             foreach (var renderer in copy.GetComponentsInChildren<Renderer>(true))
             {
                 var materials = renderer.sharedMaterials;
@@ -139,16 +151,17 @@ namespace DSH.Editor
                 for (var slot = 0; slot < materials.Length; slot++)
                 {
                     var original = materials[slot];
-                    if (original == null || !DshAvatarScene.Textures(original).Any(t => swaps.ContainsKey(t.texture))) continue;
+                    if (!DshAvatarScene.InVariant(original, swaps, edits)) continue;
                     if (!copies.TryGetValue(original, out var variant))
-                        copies[original] = variant = DshAvatarScene.VariantCopy(original, swaps);
+                        copies[original] = variant = DshAvatarScene.VariantCopy(original, swaps, edits);
                     materials[slot] = variant;
                     changed = true;
                     count++;
+                    if (renderer.enabled && renderer.gameObject.activeInHierarchy) visible++;
                 }
                 if (changed) renderer.sharedMaterials = materials;
             }
-            return count;
+            return (count, visible);
         }
 
         private static Color32[] Render(GameObject copy, GameObject avatar, string view, int size)

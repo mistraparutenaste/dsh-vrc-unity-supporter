@@ -5,6 +5,7 @@
 - **Read the project** without opening Unity: avatars, scenes, prefabs, installed packages and missing references.
 - **Outfit toggles**: make an outfit placed in the scene switchable from the Expression menu.
 - **Color variants**: make outfit, skin, hair and eye color variants, or add a logo, from the avatar's layered PSDs, and switch them from the menu (uses [PhotoCraft](https://getartcraft.com/apps/photocraft)).
+- **lilToon adjustments**: without a PSD, make copies of lilToon materials with changed values (main color, color correction, shadows, outline, emission, rim light) and switch them from the menu.
 - **Body shape**: change blendshapes, make outfits follow the body, and remove body parts hidden under clothes at build time, without editing the FBX.
 - **Accessories**: attach hats, hair, accessories or outfits to a bone or merge their armature, switch them from the menu, and hide the original hair while they are on.
 - **Blender**: make simple shapes. Hair and outfits made for another avatar are fitted to this avatar's skeleton and to the body-shape difference from the avatar they were made for, get the avatar's body shape keys, and are then attached, made to follow the body, and the body hidden underneath removed (uses [Blender](https://www.blender.org/)).

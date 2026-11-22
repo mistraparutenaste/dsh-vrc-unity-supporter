@@ -27,7 +27,7 @@
 
                 For the first project diagnosis or a simple on/off toggle for an outfit already in a scene, load the vrc-first-run skill and follow its commands. Start read-only in the current workspace without asking the user to copy templates, set up Git, or close Unity. Ask for a project path only if the project cannot be identified. Before applying a toggle, show the chosen scene and hierarchy paths, menu label, default state, and expected files, and get explicit confirmation. Confirm local first-commit creation separately if needed. Let the bundled workflow place the Editor helpers and verify the saved scene.
 
-                For color, skin, hair or eye recolors and logos from an avatar's layered PSD, load the vrc-texture-variant skill. Keep the original PSD, textures and materials unchanged, show the recipe before rendering, and confirm before applying.
+                For color, skin, hair or eye recolors and logos from an avatar's layered PSD, load the vrc-texture-variant skill. Keep the original PSD, textures and materials unchanged, show the recipe before rendering, and confirm before applying. To adjust lilToon material values (main color, color correction, shadows, outline, emission, rim) without a PSD, load the vrc-material-adjust skill; it changes copies of the materials only.
 
                 For body shape, outfit clipping or removing body parts hidden under clothes, load the vrc-shape-adjust skill. Keep the FBX unchanged, show the recipe and a built before/after capture, and confirm before applying.
 

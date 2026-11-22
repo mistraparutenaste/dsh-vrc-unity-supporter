@@ -32,10 +32,13 @@ namespace DSH.Editor
             public bool defaultOn = false;
             public bool verifySdk = false;
             public bool keepFiles = false;
+            public bool properties = false;
             public Swap[] swaps = Array.Empty<Swap>();
+            public DshMaterialEdit.Edit[] edits = Array.Empty<DshMaterialEdit.Edit>();
         }
 
         private const int MaxSlots = 200;
+        private const int MaxPropertyMaterials = 12;
 
         /// <summary>Read-only: renderer slots, shaders and textures of one avatar in a saved scene.</summary>
         public static void Materials()
@@ -50,6 +53,8 @@ namespace DSH.Editor
                 var filter = request.filter ?? "";
                 var slots = new List<Dictionary<string, object>>();
                 var textures = new Dictionary<string, Dictionary<string, object>>();
+                var lilToon = new Dictionary<string, Dictionary<string, object>>();
+                var ranges = new Dictionary<string, object>();
                 foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true))
                 {
                     var rendererPath = AnimationUtility.CalculateTransformPath(renderer.transform, avatar.transform);
@@ -73,6 +78,19 @@ namespace DSH.Editor
                             { "mainTexture", used.Where(t => t.property == "_MainTex").Select(t => t.path).FirstOrDefault() ?? "" },
                             { "active", renderer.gameObject.activeInHierarchy },
                         });
+                        if (request.properties && !lilToon.ContainsKey(materialPath) &&
+                            DshAvatarScene.ShaderFamily(material.shader) == "lilToon" &&
+                            materialPath.StartsWith("Assets/", StringComparison.Ordinal))
+                        {
+                            if (lilToon.Count >= MaxPropertyMaterials) result["propertiesTruncated"] = true;
+                            else lilToon[materialPath] = new Dictionary<string, object>
+                            {
+                                { "material", materialPath }, { "shader", material.shader.name },
+                                { "multi", DshMaterialEdit.IsMulti(material.shader) },
+                                { "outline", DshMaterialEdit.HasOutline(material.shader) },
+                                { "properties", DshMaterialEdit.Read(material, ranges) },
+                            };
+                        }
                         foreach (var (property, path, texture) in used)
                         {
                             if (!textures.TryGetValue(path, out var entry))
@@ -95,6 +113,11 @@ namespace DSH.Editor
                 result["textures"] = textures.Values
                     .OrderByDescending(t => ((List<string>)t["properties"]).Contains("_MainTex"))
                     .ThenBy(t => (string)t["path"], StringComparer.Ordinal).Take(MaxSlots).ToArray();
+                if (request.properties)
+                {
+                    result["lilToon"] = lilToon.Values.ToArray();
+                    result["ranges"] = ranges;
+                }
                 result["ok"] = true;
             }
             catch (Exception error)
@@ -114,7 +137,8 @@ namespace DSH.Editor
                 if (string.IsNullOrWhiteSpace(request.menu) || request.menu.Split('/').Any(string.IsNullOrWhiteSpace))
                     throw new InvalidOperationException("Specify a menu name and nonempty submenu names.");
                 if (string.IsNullOrEmpty(request.variant) || !request.folder.StartsWith("Assets/DSH/Variants/", StringComparison.Ordinal) ||
-                    request.folder != "Assets/DSH/Variants/" + request.variant || request.swaps.Length == 0)
+                    request.folder != "Assets/DSH/Variants/" + request.variant ||
+                    request.swaps.Length + request.edits.Length == 0)
                     throw new InvalidOperationException("The request does not describe a variant under Assets/DSH/Variants.");
                 foreach (var swap in request.swaps)
                     if (!swap.to.StartsWith(request.folder + "/", StringComparison.Ordinal))
@@ -127,9 +151,10 @@ namespace DSH.Editor
                 result["menu"] = request.menu;
                 result["variant"] = request.variant;
 
+                var edits = DshMaterialEdit.Load(request.edits);  // checked before anything is written
                 foreach (var swap in request.swaps) CopyImportSettings(swap.from, swap.to);
                 var swaps = DshAvatarScene.LoadSwaps(request.swaps.Select(s => (s.from, s.to)));
-                var (clip, materials, bindings) = BuildVariant(avatar, request, swaps);
+                var (clip, materials, bindings) = BuildVariant(avatar, request, swaps, edits);
                 result["materials"] = materials;
                 result["bindings"] = bindings;
                 result["clip"] = AssetDatabase.GetAssetPath(clip);
@@ -261,38 +286,52 @@ namespace DSH.Editor
         }
 
         private static (AnimationClip clip, List<Dictionary<string, object>> materials, int bindings) BuildVariant(
-            GameObject avatar, Request request, Dictionary<Texture, Texture> swaps)
+            GameObject avatar, Request request, Dictionary<Texture, Texture> swaps,
+            Dictionary<Material, DshMaterialEdit.Edit[]> edits)
         {
             var copies = new Dictionary<Material, Material>();
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var report = new List<Dictionary<string, object>>();
             var curves = new List<(EditorCurveBinding binding, Material material)>();
+            var shown = new HashSet<Material>();
             foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true))
             {
                 var materials = renderer.sharedMaterials;
                 for (var slot = 0; slot < materials.Length; slot++)
                 {
                     var original = materials[slot];
-                    if (original == null || !DshAvatarScene.Textures(original).Any(t => swaps.ContainsKey(t.texture))) continue;
+                    if (!DshAvatarScene.InVariant(original, swaps, edits)) continue;
                     if (DshAvatarScene.IsLocked(original.shader))
                         throw new InvalidOperationException($"{original.name} uses a locked Poiyomi shader. Unlock it in Unity, then retry.");
                     if (!copies.TryGetValue(original, out var copy))
                     {
                         var name = original.name;
                         for (var n = 2; !used.Add(name); n++) name = $"{original.name}_{n}";
-                        copies[original] = copy = SaveCopy(original, $"{request.folder}/{name}.mat", swaps);
-                        report.Add(new Dictionary<string, object>
+                        copies[original] = copy = SaveCopy(original, $"{request.folder}/{name}.mat", swaps, edits);
+                        var entry = new Dictionary<string, object>
                         {
                             { "from", AssetDatabase.GetAssetPath(original) }, { "to", AssetDatabase.GetAssetPath(copy) },
                             { "family", DshAvatarScene.ShaderFamily(original.shader) }
-                        });
+                        };
+                        if (edits.TryGetValue(original, out var changes))
+                            entry["changed"] = changes.Select(change => change.property).Distinct().ToArray();
+                        report.Add(entry);
                     }
+                    if (renderer.enabled && renderer.gameObject.activeInHierarchy) shown.Add(original);
                     var path = AnimationUtility.CalculateTransformPath(renderer.transform, avatar.transform);
                     curves.Add((EditorCurveBinding.PPtrCurve(path, renderer.GetType(), $"m_Materials.Array.data[{slot}]"), copy));
                 }
             }
             if (curves.Count == 0)
-                throw new InvalidOperationException("No material on this avatar uses the original textures of the recipe.");
+                throw new InvalidOperationException("No material on this avatar uses the original textures or materials of the recipe.");
+            var unused = edits.Keys.Where(material => !copies.ContainsKey(material)).Select(AssetDatabase.GetAssetPath).ToArray();
+            if (unused.Length > 0)
+                throw new InvalidOperationException("No renderer of this avatar uses " + string.Join(", ", unused) +
+                    ". Check the material paths with the materials command.");
+            // Hidden renderers may be outfits switched on from the menu, so this is reported rather than refused.
+            foreach (var entry in report)
+                entry["visibleNow"] = copies.Where(pair => AssetDatabase.GetAssetPath(pair.Value) == (string)entry["to"])
+                    .Any(pair => shown.Contains(pair.Key));
 
             var clipPath = $"{request.folder}/{request.variant}.anim";
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
@@ -312,9 +351,10 @@ namespace DSH.Editor
             return (clip, report, curves.Count);
         }
 
-        private static Material SaveCopy(Material original, string path, Dictionary<Texture, Texture> swaps)
+        private static Material SaveCopy(Material original, string path, Dictionary<Texture, Texture> swaps,
+            Dictionary<Material, DshMaterialEdit.Edit[]> edits)
         {
-            var copy = DshAvatarScene.VariantCopy(original, swaps);
+            var copy = DshAvatarScene.VariantCopy(original, swaps, edits);
             var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (existing == null)
             {

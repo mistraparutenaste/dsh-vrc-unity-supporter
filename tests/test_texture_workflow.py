@@ -251,5 +251,108 @@ class TextureWorkflowTests(unittest.TestCase):
         self.assertEqual(toggle["git"]["blockingChanges"], [])
 
 
+    # --- lilToon material values -------------------------------------------------------
+
+    def material_variant(self, values, name="Hair_Ash", material="Assets/Mat/Hair.mat", create=True, **extra):
+        if create and not (self.project / material).exists():
+            self.write(material, "material")
+        recipe = dict({"name": name, "menu": "色/髪", "materials": [{"material": material, "set": values}]}, **extra)
+        self.write(f"Assets/DSH/Variants/{name}/recipe.json", json.dumps(recipe, ensure_ascii=False))
+
+    def test_material_values_become_unity_edits_without_a_render(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.material_variant({"_ShadowColor": "#336699", "_RimColor": [0.5, 1, 2, 0.25],
+                               "_MainTexHSVG": {"hue": -0.1, "value": 0.8}, "_UseRim": True, "_ShadowStrength": 0.4})
+        rendered = self.json_output(self.cli("unity_texture.py", "render", "--variant", "Hair_Ash"))
+        self.assertEqual(rendered["outputs"], [])
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Hair_Ash")
+        plan = self.json_output(self.cli("unity_texture.py", "preview", *args))
+        self.assertEqual(plan["request"]["swaps"], [])
+        edits = {edit["property"]: edit for edit in plan["request"]["edits"]}
+        self.assertEqual({k: edits["_ShadowColor"][k] for k in "xyzw"} | {"mask": edits["_ShadowColor"]["mask"]},
+                         {"x": 0.2, "y": 0.4, "z": 0.6, "w": 0, "mask": 7})  # no alpha: keep the material's
+        self.assertEqual([edits["_RimColor"][k] for k in "xyzw"] + [edits["_RimColor"]["mask"]], [0.5, 1, 2, 0.25, 15])
+        self.assertEqual((edits["_MainTexHSVG"]["kind"], edits["_MainTexHSVG"]["x"], edits["_MainTexHSVG"]["z"],
+                          edits["_MainTexHSVG"]["mask"]), ("hsvg", -0.1, 0.8, 0b101))
+        self.assertEqual((edits["_UseRim"]["kind"], edits["_UseRim"]["x"]), ("toggle", 1))
+        self.assertEqual((edits["_ShadowStrength"]["kind"], edits["_ShadowStrength"]["x"]), ("float", 0.4))
+        self.assertTrue(all(edit["material"] == "Assets/Mat/Hair.mat" for edit in edits.values()))
+
+        listed = self.json_output(self.cli("unity_texture.py", "list"))["variants"][0]
+        self.assertEqual((listed["render"], listed["materials"], listed["textures"]),
+                         ("not-needed", ["Assets/Mat/Hair.mat"], []))
+
+        # Editing the source material after the preview invalidates the approval token.
+        (self.project / "Assets/Mat/Hair.mat").write_text("edited in Unity", encoding="utf-8")
+        self.assertNotEqual(self.json_output(self.cli("unity_texture.py", "preview", *args))["preview"], plan["preview"])
+
+    def test_material_recipe_errors_are_reported_at_preview(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.write("Assets/Mat/Hair.mat", "material")
+        self.write("Assets/Mat/Hair.png", "texture")
+        self.write("Assets/DSH/Variants/Other/Copy.mat", "variant material")
+        cases = [
+            ({"_SrcBlend": 1}, "not a lilToon value"),
+            ({"_UseRim": 1}, "true or false"),
+            ({"_ShadowStrength": 2}, "from 0 to 1"),
+            ({"_ShadowColor": "blue"}, "is a color"),
+            ({"_RimColor": [1, 1, 1, 2]}, "is a color"),
+            ({"_MainTexHSVG": {"hue": 0.9}}, "hue must be from -0.5 to 0.5"),
+            ({"_MainTexHSVG": {"tint": 1}}, "color correction"),
+            ({}, "1 to 48"),
+        ]
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Hair_Ash")
+        for values, message in cases:
+            self.material_variant(values)
+            failed = self.cli("unity_texture.py", "preview", *args)
+            self.assertNotEqual(failed.returncode, 0, values)
+            self.assertIn(message, json.loads(failed.stdout)["error"])
+        for material in ("Assets/Mat/Hair.png", "Assets/DSH/Variants/Other/Copy.mat", "Assets/Mat/Missing.mat"):
+            self.material_variant({"_UseRim": True}, material=material, create=False)
+            self.assertIn("existing .mat under Assets",
+                          json.loads(self.cli("unity_texture.py", "preview", *args).stdout)["error"])
+        recipe = {"name": "Hair_Ash", "menu": "色/髪", "materials": [
+            {"material": "Assets/Mat/Hair.mat", "set": {"_UseRim": True}},
+            {"material": "Assets/Mat/Hair.mat", "set": {"_RimBorder": 0.2}}]}
+        self.write("Assets/DSH/Variants/Hair_Ash/recipe.json", json.dumps(recipe))
+        self.assertIn("listed twice", json.loads(self.cli("unity_texture.py", "preview", *args).stdout)["error"])
+        self.write("Assets/DSH/Variants/Hair_Ash/recipe.json", json.dumps({"name": "Hair_Ash", "menu": "色/髪"}))
+        self.assertIn("changes nothing", json.loads(self.cli("unity_texture.py", "preview", *args).stdout)["error"])
+
+    def test_variants_on_the_same_material_are_reported_as_overlapping(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.material_variant({"_UseRim": True}, name="Rim", exclusiveTag="rim")
+        self.material_variant({"_ShadowColor": "#000000"}, name="Shade", exclusiveTag="shade")
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Shade")
+        plan = self.json_output(self.cli("unity_texture.py", "preview", *args))
+        self.assertEqual(plan["overlappingVariants"], [{"variant": "Rim", "textures": [], "exclusiveTag": "rim",
+                                                        "materials": ["Assets/Mat/Hair.mat"]}])
+
+    def test_adding_material_values_keeps_an_earlier_texture_render_current(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.write("Assets/Mat/Hair.mat", "material")
+        self.variant([{"op": "hsl", "layer": "Hoodie/Base", "hue": 30}])
+        env = self.photocraft_env()
+        self.json_output(self.cli("unity_texture.py", "render", "--variant", "Hoodie_Blue", env=env))
+        recipe_path = self.project / "Assets/DSH/Variants/Hoodie_Blue/recipe.json"
+        recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+        recipe["materials"] = [{"material": "Assets/Mat/Hair.mat", "set": {"_OutlineWidth": 0.02}}]
+        recipe_path.write_text(json.dumps(recipe, ensure_ascii=False), encoding="utf-8")
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Hoodie_Blue")
+        plan = self.json_output(self.cli("unity_texture.py", "preview", *args, env=env))
+        self.assertEqual(len(plan["request"]["swaps"]), 1)
+        self.assertEqual([edit["property"] for edit in plan["request"]["edits"]], ["_OutlineWidth"])
+
+    def test_python_and_unity_allow_the_same_liltoon_values(self):
+        import re
+        sys.path.insert(0, str(base.TOOLS))
+        import unity_texture
+        source = (base.TOOLS.parent / "templates/Editor/DshAvatarTools.cs").read_text(encoding="utf-8")
+        block = source[source.index("Allowed = new Dictionary"):]
+        block = block[:block.index("};")]
+        unity = dict(re.findall(r'\{\s*"(_\w+)",\s*"(\w+)"\s*\}', block))
+        self.assertEqual(unity, {name: spec[0] for name, spec in unity_texture.LILTOON.items()})
+
+
 if __name__ == "__main__":
     unittest.main()

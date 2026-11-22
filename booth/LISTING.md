@@ -34,6 +34,7 @@ DeepSeek Harness・Claude Code・Codex で使えます。
 - プロジェクトの診断（アバター、導入済みパッケージ、参照切れ）
 - 配置済みの衣装をメニューでオン・オフ（VRCFury）
 - 衣装に付属の PSD から色違いを作る（PhotoCraft）
+- lilToon の色・影・輪郭線・発光を、マテリアルの値で調整する（PSD 不要）
 - 体型の調整、服の下に隠れる体の削除（Modular Avatar・Avatar Optimizer）
 - 小物・髪をボーンに付ける、外す（Modular Avatar）
 - 別アバター用の衣装を Blender で合わせて着せる（Blender）
