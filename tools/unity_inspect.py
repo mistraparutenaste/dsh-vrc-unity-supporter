@@ -636,6 +636,11 @@ def cmd_rank(args) -> int:
         targets, stage = [(None, data.get("counts", data))], None
     else:
         raise SystemExit("Pass a DshInspect.Perf result.json or a JSON object of counts.")
+    if args.prefab:
+        names = [prefab for prefab, _ in targets if prefab]
+        targets = [t for t in targets if t[0] and args.prefab.lower() in t[0].lower()]
+        if not targets:
+            raise SystemExit(f"No measured prefab matches '{args.prefab}'. Measured: {', '.join(names[:20])}")
     output = {
         "ok": True, "source": limits.get("source"), "measurementStage": stage,
         "avatars": [dict({"prefab": prefab} if prefab else {}, **rank_counts(counts, limits))
@@ -644,7 +649,21 @@ def cmd_rank(args) -> int:
                  "notMeasured items are not counted here. Counts taken before the build (source prefab) do not "
                  "include Modular Avatar, VRCFury or Avatar Optimizer changes; the SDK build panel has the final rank."),
     }
-    print(compact_json(output) if args.json else json.dumps(output, ensure_ascii=False, indent=2))
+    if args.json:
+        print(compact_json(output))
+        return 0
+    for avatar in output["avatars"]:
+        print(avatar.get("prefab") or "counts")
+        for platform, label in (("pc", "PC"), ("mobile", "Mobile")):
+            ranked = avatar[platform]
+            limits_text = ", ".join(f"{name} {ranked['items'][name]['value']}" for name in ranked["limitedBy"])
+            line = f"  {label}: {ranked['rank']}" + (f" (limited by {limits_text})" if limits_text else "")
+            reach = ranked.get("toReach")
+            if reach:
+                line += f"; for {reach['rank']}: " + ", ".join(
+                    f"{name} <= {item['max']}" for name, item in reach["reduce"].items())
+            print(line)
+    print(output["note"])
     return 0
 
 
@@ -683,6 +702,7 @@ def main(argv: list[str]) -> int:
 
     p_rank = sub.add_parser("rank", help="performance rank from DshInspect.Perf counts (limits.json)")
     p_rank.add_argument("file", help="a DshInspect.Perf result.json, or a JSON object of counts")
+    p_rank.add_argument("--prefab", default="", help="only prefabs whose path contains this text")
     p_rank.add_argument("--json", action="store_true")
     p_rank.set_defaults(func=cmd_rank)
 

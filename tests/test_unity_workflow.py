@@ -157,6 +157,15 @@ class UnityWorkflowTests(unittest.TestCase):
         counts = self.write("counts.json", json.dumps({"triangles": 20000}))
         mobile = self.json_output(self.cli("unity_inspect.py", "rank", str(counts), "--json"))["avatars"][0]["mobile"]
         self.assertEqual(mobile["rank"], "poor")
+        text = self.cli("unity_inspect.py", "rank", str(perf)).stdout
+        self.assertIn("PC: poor (limited by skinnedMeshes 13); for medium: skinnedMeshes <= 8", text)
+        two = self.write("two.json", json.dumps({"avatars": [{"prefab": "Assets/A.prefab", "counts": {"triangles": 1}},
+                                                             {"prefab": "Assets/B.prefab", "counts": {"triangles": 1}}]}))
+        picked = self.json_output(self.cli("unity_inspect.py", "rank", str(two), "--prefab", "b.prefab", "--json"))
+        self.assertEqual([a["prefab"] for a in picked["avatars"]], ["Assets/B.prefab"])
+        missing = self.cli("unity_inspect.py", "rank", str(two), "--prefab", "C")
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("Assets/A.prefab", missing.stderr)
 
     def test_refs_lists_are_capped_with_a_total(self):
         self.avatar_scene()

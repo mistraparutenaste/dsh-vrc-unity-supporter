@@ -57,10 +57,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 今回の `result.json` に項目別のカウントが出る。ランクは手で表と見比べず、`rank` で出す（Unity 不要）:
 
 ```powershell
-python -B "<pkg>\tools\unity_inspect.py" rank "<project>\.dsh\runs\<run-id>\result.json" --json
+python -B "<pkg>\tools\unity_inspect.py" rank "<project>\.dsh\runs\<run-id>\result.json" --prefab "<avatar>.prefab" --json
 ```
 
-`pc` / `mobile` ごとに、全体の `rank`、それを決めた項目（`limitedBy`）、1 つ上のランクに上げるための上限（`toReach.reduce`）、数えていない項目（`notMeasured`）が出る。撮影や SDK 検証の三角形数だけを見るときは `{"triangles": 52000}` のような JSON を渡してもよい。
+`pc` / `mobile` ごとに、全体の `rank`、それを決めた項目（`limitedBy`）、1 つ上のランクに上げるための上限（`toReach.reduce`）、数えていない項目（`notMeasured`）が出る。Perf はプロジェクト内のアバター prefab をすべて数えるので、`--prefab` で対象を絞る（パスの一部で一致。`--json` を外すと 1 prefab 2 行の要約になる）。撮影や SDK 検証の三角形数だけを見るときは `{"triangles": 52000}` のような JSON を渡してもよい。
 
 Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクスチャメモリは概算。未計測の項目がある場合は測った項目ごとの目安を伝える。
 
