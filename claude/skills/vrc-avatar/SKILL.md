@@ -48,7 +48,8 @@ description: VRChat アバター改変の入口（Claude Code 用）。Unity の
 | 色違い・肌・髪・瞳の色、ロゴ（付属 PSD から） | `vrc-texture-variant` |
 | 体型・顔の調整、衣装の貫通、隠れる部分の削除 | `vrc-shape-adjust` |
 | 小物・髪・衣装の取り付け、付け替え、取り外し | `vrc-accessory` |
-| Blender での小物作成、非対応衣装の合わせ込み | `vrc-blender-model` |
+| 非対応衣装・髪を着せる（合わせる→付ける→追従・削除→確認） | `vrc-outfit-fit` |
+| Blender での小物作成、FBX の合わせ込みだけ | `vrc-blender-model` |
 | Editor スクリプトでの適用 | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |
 | 性能ランクの試算 | `vrc-perf-budget` |

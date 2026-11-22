@@ -7,7 +7,7 @@
 - **Color variants**: make outfit, skin, hair and eye color variants, or add a logo, from the avatar's layered PSDs, and switch them from the menu (uses [PhotoCraft](https://getartcraft.com/apps/photocraft)).
 - **Body shape**: change blendshapes, make outfits follow the body, and remove body parts hidden under clothes at build time, without editing the FBX.
 - **Accessories**: attach hats, hair, accessories or outfits to a bone or merge their armature, switch them from the menu, and hide the original hair while they are on.
-- **Blender**: make simple shapes, or fit hair and outfits made for another avatar onto this avatar's skeleton and push them out of the body, then attach the result (uses [Blender](https://www.blender.org/)).
+- **Blender**: make simple shapes. Hair and outfits made for another avatar are fitted to this avatar's skeleton and to the body-shape difference from the avatar they were made for, get the avatar's body shape keys, and are then attached, made to follow the body, and the body hidden underneath removed (uses [Blender](https://www.blender.org/)).
 - **Verify**: check the generated menu and animations with VRChat SDK preprocessing; color variants are also rendered before and after in Unity.
 
 ## Safety

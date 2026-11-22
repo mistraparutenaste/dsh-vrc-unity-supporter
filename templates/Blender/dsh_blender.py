@@ -15,6 +15,7 @@ import traceback
 import bpy
 from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
+from mathutils.kdtree import KDTree
 
 
 MAX_LISTED = 80
@@ -431,15 +432,134 @@ def push_out(tree, obj, offset, limit=0.05):
     return moves
 
 
-def find_body(avatar_objects, name):
+def find_body(avatar_objects, name, bones=None, label="avatar"):
+    """The named mesh, or the one that covers the most of the given bones (the bones the outfit uses), then has
+    the most vertices on them: a full outfit picks the body, hair picks the head mesh. A name containing 'body'
+    counts a little more."""
     meshes = [obj for obj in avatar_objects if obj.type == "MESH"]
     if name:
         match = [obj for obj in meshes if source_name(obj) == name]
         if not match:
             names = ", ".join(source_name(o) for o in meshes[:30])
-            raise ValueError(f"The avatar has no mesh named {name}. Meshes: {names}")
+            raise ValueError(f"The {label} has no mesh named {name}. Meshes: {names}")
         return match[0]
-    return max(meshes, key=lambda obj: len(obj.data.vertices)) if meshes else None
+    if not meshes:
+        return None
+
+    def score(obj):
+        if not bones:
+            return len(obj.data.vertices)
+        indices = {group.index for group in obj.vertex_groups if group.name in bones}
+        per_bone = {}
+        for vertex in obj.data.vertices:
+            for g in vertex.groups:
+                if g.group in indices and g.weight > 0.3:
+                    per_bone[g.group] = per_bone.get(g.group, 0) + 1
+        covered = sum(1 for n in per_bone.values() if n >= 20)
+        count = sum(per_bone.values()) * (1.5 if "body" in source_name(obj).lower() else 1.0)
+        return covered, count
+    return max(meshes, key=score)
+
+
+def set_shapes(obj, values, label):
+    """Zero every shape key, then set the given ones (0-100, as Unity shows them)."""
+    keys = obj.data.shape_keys.key_blocks if obj.data.shape_keys else {}
+    for block in list(keys)[1:]:
+        block.value = 0.0
+    missing = [name for name in values if name not in keys]
+    if missing:
+        raise ValueError(f"The {label} mesh {source_name(obj)} has no shape key {', '.join(missing[:5])}.")
+    for name, value in values.items():
+        keys[name].slider_max = max(1.0, value / 100)
+        keys[name].value = value / 100
+
+
+def evaluated_surface(obj):
+    """World positions and normals of obj as it is now deformed (armature and shape keys), plus its polygons."""
+    dependencies = bpy.context.evaluated_depsgraph_get()
+    evaluated = obj.evaluated_get(dependencies)
+    mesh = evaluated.to_mesh()
+    matrix = obj.matrix_world
+    normal_matrix = matrix.to_3x3().inverted().transposed()
+    points = [matrix @ v.co for v in mesh.vertices]
+    normals = [(normal_matrix @ v.normal).normalized() for v in mesh.vertices]
+    polygons = [tuple(p.vertices) for p in mesh.polygons]
+    evaluated.to_mesh_clear()
+    return points, normals, polygons
+
+
+def make_field(points, moves):
+    tree = KDTree(len(points))
+    for index, point in enumerate(points):
+        tree.insert(point, index)
+    tree.balance()
+    return tree, moves
+
+
+def body_difference(source_body, target_tree, limit=0.08):
+    """How far each point of the (skeleton-aligned) source body must move to reach the target body's surface.
+
+    Only points whose nearest target surface faces the same way count, so a leg never snaps to the other leg.
+    """
+    points, normals, _ = evaluated_surface(source_body)
+    kept, moves = [], []
+    for point, normal in zip(points, normals):
+        location, target_normal, _, _ = target_tree.find_nearest(point, limit)
+        if location is not None and target_normal.dot(normal) > 0.3:
+            kept.append(point)
+            moves.append(location - point)
+    if len(kept) < 50:
+        raise ValueError("The source body does not line up with the avatar body after the skeleton fit. "
+                         "Check 'source' (the avatar the outfit was made for) and 'sourceBody'.")
+    return make_field(kept, moves), len(kept), len(points)
+
+
+def field_offsets(field, obj, count=12):
+    """Per-vertex displacement (object space) of obj, interpolated from the nearest field points."""
+    tree, moves = field
+    matrix = obj.matrix_world
+    inverse = matrix.inverted().to_3x3()
+    offsets = []
+    for vertex in obj.data.vertices:
+        total, weight = Vector(), 0.0
+        for _, index, distance in tree.find_n(matrix @ vertex.co, count):
+            w = 1.0 / (distance + 0.005) ** 2
+            total += moves[index] * w
+            weight += w
+        offsets.append(inverse @ (total / weight) if weight else Vector())
+    return offsets
+
+
+def follow_shapes(body, meshes, names, min_move=0.0005):
+    """Make each named body shape key on the outfit meshes as well (same name), by carrying the body's
+    displacement to the nearest outfit vertices. Meshes that hardly move, or already have the key, are skipped."""
+    keys = body.data.shape_keys.key_blocks if body.data.shape_keys else {}
+    missing = [name for name in names if name not in keys]
+    if missing:
+        raise ValueError(f"The body {source_name(body)} has no shape key {', '.join(missing[:5])}.")
+    points, _, _ = evaluated_surface(body)
+    rotation = body.matrix_world.to_3x3()
+    made = {}
+    for name in names:
+        block = keys[name]
+        relative = block.relative_key
+        moves = [rotation @ (a.co - b.co) for a, b in zip(block.data, relative.data)]
+        field = make_field(points, moves)
+        for obj in meshes:
+            existing = obj.data.shape_keys.key_blocks if obj.data.shape_keys else {}
+            if name in existing:
+                continue
+            offsets = field_offsets(field, obj)
+            if max((o.length for o in offsets), default=0) < min_move:
+                continue
+            if not obj.data.shape_keys:
+                obj.shape_key_add(name="Basis", from_mix=False)
+            basis = obj.data.shape_keys.key_blocks[0]
+            key = obj.shape_key_add(name=name, from_mix=False)
+            for target, base, offset in zip(key.data, basis.data, offsets):
+                target.co = base.co + offset
+            made.setdefault(source_name(obj), []).append(name)
+    return made
 
 
 def transfer_weights(body, meshes, avatar):
@@ -498,17 +618,52 @@ def fit(request):
     if not pairs:
         raise ValueError("No outfit bone matches an avatar bone. Map them with boneMap.")
     humanoid = [name for name in pairs if humanoid_key(pairs[name])]
-    body = find_body(avatar_objects, request.get("body", ""))
+    body = find_body(avatar_objects, request.get("body", ""), set(pairs.values()))
+    shapes = request.get("avatarShapes", {})
+    if body is not None:
+        set_shapes(body, shapes, "avatar")
+    elif shapes:
+        raise ValueError("avatarShapes needs the avatar body mesh.")
+    bpy.context.view_layer.update()
     tree = body_tree(body) if body else None
+    pose_args = (request.get("scaleBones", True), request.get("scale", 1.0), request.get("offset", [0, 0, 0]))
 
-    posed = pose_to_avatar(outfit, avatar, pairs, request.get("scaleBones", True), request.get("scale", 1.0),
-                           request.get("offset", [0, 0, 0]))
+    # The avatar the outfit was made for, posed the same way: the gap between its body and the avatar's body
+    # is carried onto the outfit (chest, waist, arm thickness: what the skeleton alone cannot tell).
+    surface = None
+    if request.get("source"):
+        if tree is None:
+            raise ValueError("'source' needs the avatar body mesh.")
+        source_objects = import_named(request["source"], "DSH_source_")
+        source_rig = armature_of(source_objects, "source avatar")
+        source_pairs = bone_pairs(source_rig, avatar, request.get("boneMap", {}))
+        source_body = find_body(source_objects, request.get("sourceBody", ""), set(source_pairs),
+                                "source avatar")
+        if source_body is None:
+            raise ValueError("The source avatar has no mesh.")
+        set_shapes(source_body, request.get("sourceShapes", {}), "source avatar")
+        pose_to_avatar(source_rig, avatar, source_pairs, *pose_args)
+        bpy.context.view_layer.update()
+        field, matched, total = body_difference(source_body, tree)
+        surface = {"sourceBody": source_name(source_body), "matchedPoints": f"{matched}/{total}"}
+
+    posed = pose_to_avatar(outfit, avatar, pairs, *pose_args)
     for obj in meshes:
         bake_deform(obj)
     bpy.context.view_layer.objects.active = outfit
     bpy.ops.object.mode_set(mode="POSE")
     bpy.ops.pose.armature_apply(selected=False)
     bpy.ops.object.mode_set(mode="OBJECT")
+    if surface is not None:
+        moved = []
+        for obj in meshes:
+            offsets = field_offsets(field, obj)
+            rotation = obj.matrix_world.to_3x3()
+            moved += [(rotation @ o).length for o in offsets]
+            bake_deform(obj, offsets)
+        moved.sort()
+        surface.update(meanMoveMm=round(sum(moved) / len(moved) * 1000, 1),
+                       maxMoveMm=round(moved[-1] * 1000, 1))
     fitted = {source_name(obj): inside_count(tree, obj) for obj in meshes} if tree else {}
 
     renamed = {}
@@ -533,20 +688,33 @@ def fit(request):
             bake_deform(obj, push_out(tree, obj, push))
         pushed = {source_name(obj): inside_count(tree, obj) for obj in meshes}
 
+    followed = {}
+    if request.get("followShapes"):
+        if body is None:
+            raise ValueError("followShapes needs the avatar body mesh.")
+        followed = follow_shapes(body, meshes, request["followShapes"])
+
     exported = [rig, *meshes]
-    restore_names(exported, [obj for obj in [*outfit_objects, *avatar_objects] if obj not in exported])
+    others = [obj for obj in bpy.data.objects if obj not in exported and obj.type in ("MESH", "ARMATURE")]
+    restore_names(exported, others)
     if request.get("output"):
         export_fbx(request["output"], exported)
+    unmatched = [b.name for b in outfit.data.bones if b.name not in pairs and b.name not in renamed.values()]
     result = {"ok": True, "output": request.get("output", ""), "weights": weights,
               "mappedBones": len(pairs), "humanoidBones": len(humanoid), "posedBones": len(posed),
               "renamedBones": dict(list(renamed.items())[:MAX_LISTED]),
-              "unmatchedOutfitBones": [b.name for b in outfit.data.bones if b.name not in pairs and
-                                       b.name not in renamed.values()][:MAX_LISTED],
-              "body": source_name(body) if body else None,
+              # Swaying bones (skirt, hair, strings) need no match; a main bone left here does.
+              "unmatchedHumanoidBones": [name for name in unmatched if humanoid_key(name)][:MAX_LISTED],
+              "unmatchedOtherBones": len([name for name in unmatched if not humanoid_key(name)]),
+              "body": source_name(body) if body else None, "avatarShapes": shapes,
+              "surfaceFit": surface, "followedShapes": followed,
               "verticesInsideBody": {"afterFit": fitted, "afterPush": pushed}, "push": push,
               "meshes": describe(meshes)["meshes"]}
     if request.get("preview"):
-        result["preview"] = render_preview(request["preview"], meshes, [o for o in avatar_objects if o.type == "MESH"])
+        # Only the body (and a separate head or face mesh): the avatar's own clothes and hair would hide the outfit.
+        skin = [obj for obj in avatar_objects if obj.type == "MESH" and
+                re.search(r"body|face|head", source_name(obj), re.IGNORECASE)]
+        result["preview"] = render_preview(request["preview"], meshes, list({*skin, *([body] if body else [])}))
     return result
 
 
@@ -559,6 +727,9 @@ def render_preview(path, focus, context, size=512, colors="OBJECT"):
     scene.render.engine = "BLENDER_WORKBENCH"
     scene.display.shading.light = "STUDIO"
     scene.display.shading.color_type = colors
+    shown = set(focus) | set(context)
+    for obj in scene.objects:
+        obj.hide_render = obj.type == "MESH" and obj not in shown
     for obj in context:
         obj.color = (0.55, 0.55, 0.58, 1)
     for obj in focus:

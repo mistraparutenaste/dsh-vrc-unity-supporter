@@ -70,7 +70,10 @@ python -B $model inspect 'Assets/Booth/Outfit/Outfit.fbx' --project '<project>'
   "kind": "fit",
   "outfit": "Assets/Booth/Hoodie/FBX/Hoodie_ForOtherAvatar.fbx",
   "avatar": "Assets/Amatousagi/Salt/FBX/Salt.fbx",
-  "body": "Body",
+  "source": "Assets/Booth/OtherAvatar/FBX/OtherAvatar.fbx",
+  "body": "",
+  "avatarShapes": {"Breasts_big": 40},
+  "followShapes": ["Waist_slim"],
   "weights": "keep",
   "push": 0.002,
   "boneMap": {"J_Bip_C_UpperChest": "Chest"},
@@ -83,19 +86,27 @@ python -B $model inspect 'Assets/Booth/Outfit/Outfit.fbx' --project '<project>'
 処理の順番:
 1. 衣装のボーンをアバターのボーンに対応づける（`boneMap` → 同じ名前 → Humanoid の綴りの違い。`Upperarm.L` と `Left_UpperArm` など）。
 2. 対応したボーンの付け根と向きをアバターに合わせ、衣装を変形する（シェイプキーも一緒に変形する）。長さの違いに合わせて拡大縮小もする（`scaleBones`、既定 true、0.5〜2 倍）。
-3. その姿勢を新しい基本姿勢にし、対応したボーンの名前をアバターに合わせる（`weights: keep`）。
-4. 体（`body`、省略時は一番大きいメッシュ）の内側に入った頂点を、表面から `push`（既定 0.002m）外へ押し出す。
+3. `source`（衣装が作られた元のアバター）があれば、その体も同じように骨格を合わせ、元の体の表面からアバターの体の表面までの差（胸、腰、腕の太さなど）を衣装に写す。
+4. その姿勢を新しい基本姿勢にし、対応したボーンの名前をアバターに合わせる（`weights: keep`）。
+5. 体（`body`）の内側に入った頂点を、表面から `push`（既定 0.002m）外へ押し出す。
+6. `followShapes` の体型キーを、同じ名前で衣装のメッシュにも作る（体の動きを近くの衣装の頂点に写す）。
 
 | 項目 | 内容 |
 |---|---|
 | `weights` | `keep`: 衣装のウェイトと揺れもの用のボーンを残す。`transfer`: 体からウェイトを写し、アバターの骨組みに付け替える（衣装のリグが壊れている・無いとき。スカートの揺れものボーンは無くなる） |
+| `source` / `sourceBody` | 衣装が作られた元のアバターの FBX と、その体のメッシュ名（省略時は自動）。あると体型差まで合う。無ければ骨格合わせと押し出しだけ |
+| `body` | アバターの体のメッシュ名。省略時は、衣装が使うボーンを一番広く覆うメッシュ（全身の服なら体、髪なら頭） |
+| `avatarShapes` | アバターの体型キーの値（0〜100、Unity の表示と同じ）。シーンで体型を変えているなら、その値に合わせて作る。`sourceShapes` は元のアバター側 |
+| `followShapes` | 衣装にも作る体型キー（`Breasts_big`、`Waist_slim` など）。Unity で `vrc-shape-adjust` の `sync` を付けると体型に追従する。縮めるキー（`*_OFF`）や顔のキーは入れない。`avatarShapes` と同じキーは入れない（二重に動く） |
 | `push` | 押し出す距離（0〜0.02m、0 で押し出さない） |
 | `exclude` | 書き出さない衣装のメッシュ名（付属の素体など）。`inspect` に出る名前で書く |
 | `scale` / `offset` | 一番上の対応ボーンにかける拡大（0.5〜2）とずらし（x 右、y 上、z 前、メートル）。髪や帽子のように Head だけで対応するものは、頭の大きさの違いを骨格から読めないので、これで合わせる |
 
 - build の結果の `verticesInsideBody` に、メッシュごとの「体の内側にある頂点数」が、骨格を合わせた直後（`afterFit`）と押し出し後（`afterPush`）で出る。`afterPush` が大きく残るなら、`push` を少し上げるか、Unity の `vrc-shape-adjust` の `remove` で体側を消す。
-- 髪は内側の層が頭に近いので、`body` には頭のメッシュ（顔の付いたメッシュ）を指定する。
-- `unmatchedOutfitBones` は対応しなかったボーン（揺れもの用などは対応しなくてよい）。腕や脚の主なボーンが入っていたら `boneMap` で補う。
+- 髪は `body` を省略すると頭のメッシュが選ばれる（`build` の結果の `body` で確かめる）。
+- `unmatchedHumanoidBones` は対応しなかった主なボーン（腕・脚・背骨など）。入っていたら `boneMap` で補う（つま先は無くてもよい）。揺れもの用などの数は `unmatchedOtherBones`。
+- `surfaceFit` は `source` を使ったときの結果。`matchedPoints` が半分未満なら、元のアバターか `sourceBody` が違う。`meanMoveMm` は体型差で動かした平均の距離。
+- `followedShapes` は、メッシュごとに作った体型キー（ほとんど動かないメッシュには作らない）。
 - 付けるときは vrc-accessory の `mode: armature` を使う（Head から始まる髪・帽子は `mode: bone`、`bone: Head`）。
   書き出した FBX のマテリアルは Unity の標準になるので、vrc-accessory の `materialsFrom` に元の衣装・髪の prefab を指定する。
 
@@ -112,6 +123,7 @@ python -B $model list --project '<project>'
 
 ## 注意
 
-- 自動で合わせられるのは「骨格の位置と向き」と「体からの押し出し」まで。デザインの違い（丈、袖の太さ、体型差が大きい部分）は Blender での手作業が要ることを、ユーザーに伝える。
+- 着せる一連の流れ（付ける、追従、隠れる体の削除まで）は `vrc-outfit-fit` を読む。
+- 自動で合わせられるのは「骨格の位置と向き」「元のアバターとの体型差（`source` があるとき）」「体からの押し出し」「体型キーの追従」まで。デザインの違い（丈、袖の太さ、体型差が大きい部分）は Blender での手作業が要ることを、ユーザーに伝える。
 - 衣装・アバターの規約で、他アバターへの改変・流用が許されているかをユーザーに確認してもらう。
 - 書き出した FBX は Unity で `Generic` のモデルとして取り込まれる。Humanoid への変更は不要（MA が統合する）。

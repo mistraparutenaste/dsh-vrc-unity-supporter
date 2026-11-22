@@ -33,7 +33,7 @@ $required = @(
     'templates/Editor/DshAvatarTools.cs', 'templates/Editor/DshShape.cs', 'tools/unity_shape.py',
     'skills/vrc-texture-variant/SKILL.md', 'skills/vrc-shape-adjust/SKILL.md', 'docs/PHOTOCRAFT.md',
     'templates/Editor/DshAccessory.cs', 'tools/unity_accessory.py', 'skills/vrc-accessory/SKILL.md',
-    'templates/Blender/dsh_blender.py', 'tools/blender_model.py', 'skills/vrc-blender-model/SKILL.md',
+    'templates/Blender/dsh_blender.py', 'tools/blender_model.py', 'skills/vrc-blender-model/SKILL.md', 'skills/vrc-outfit-fit/SKILL.md',
     'install.cmd',
     'installer/install.cmd', 'installer/install.ps1',
     'installer/uninstall.cmd', 'installer/uninstall.ps1',

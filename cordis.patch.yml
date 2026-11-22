@@ -31,7 +31,7 @@
 
                 For body shape, outfit clipping or removing body parts hidden under clothes, load the vrc-shape-adjust skill. Keep the FBX unchanged, show the recipe and a built before/after capture, and confirm before applying.
 
-                To attach, move or remove accessories, hair or outfits (prefabs or FBX), load the vrc-accessory skill. To make simple shapes or fit an outfit made for another avatar in Blender, load the vrc-blender-model skill. Keep the source assets unchanged, show the recipe and a before/after capture, and confirm before applying.
+                To attach, move or remove accessories, hair or outfits (prefabs or FBX), load the vrc-accessory skill. To dress the avatar in an outfit or hair made for another avatar (fit in Blender, attach, follow body shapes, hide the body underneath), load the vrc-outfit-fit skill first. To make simple shapes or only fit a model in Blender, load the vrc-blender-model skill. Keep the source assets unchanged, show the recipe and a before/after capture, and confirm before applying.
 
                 Apply every change by writing a Unity Editor script and running it in batch mode with the project's tools. Never edit scene, prefab or asset YAML directly, and never move or delete a file without its .meta. Keep each change reviewable as a git diff, and stop before any destructive step the user has not approved.
 

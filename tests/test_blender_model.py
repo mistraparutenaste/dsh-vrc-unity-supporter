@@ -62,6 +62,16 @@ class BlenderModelTests(unittest.TestCase):
               "scale": 3}, "scale"),
             ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
               "offset": [0, 1, 0]}, "offset"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "source": "Assets/Items/Missing.fbx"}, "source file does not exist"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "avatarShapes": {"Breasts_big": 150}}, "'avatarShapes'"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "sourceShapes": ["Breasts_big"]}, "'sourceShapes'"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "followShapes": ["Waist_slim", "Waist_slim"]}, "'followShapes'"),
+            ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
+              "sourceBody": 3}, "'sourceBody'"),
         ]
         for fields, message in cases:
             self.recipe(**fields)
@@ -99,6 +109,24 @@ class BlenderModelTests(unittest.TestCase):
         self.assertIn("changed outside this tool", json.loads(refused.stdout)["error"])
         self.assertEqual(fbx.read_text(), "edited by hand")
         self.assertEqual(calls.read_text().split(), ["make", "make"])
+
+    def test_fit_passes_the_source_avatar_and_shapes_and_tracks_the_source_file(self):
+        env, calls = self.fake_blender()
+        self.write("Assets/Items/Outfit.fbx", "outfit\n")
+        self.write("Assets/Items/Avatar.fbx", "avatar\n")
+        source = self.write("Assets/Items/Source.fbx", "source\n")
+        self.recipe("Coat_Fit", kind="fit", outfit="Assets/Items/Outfit.fbx", avatar="Assets/Items/Avatar.fbx",
+                    source="Assets/Items/Source.fbx", avatarShapes={"Breasts_big": 40},
+                    followShapes=["Waist_slim"])
+        self.json_output(self.build("Coat_Fit", env=env))
+        request = json.loads(next((self.project / ".dsh/runs").glob("*/request.json")).read_text(encoding="utf-8"))
+        self.assertEqual(Path(request["source"]), self.project / "Assets/Items/Source.fbx")
+        self.assertEqual(request["avatarShapes"], {"Breasts_big": 40.0})
+        self.assertEqual(request["followShapes"], ["Waist_slim"])
+        self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "current")
+        source.write_text("source changed\n")
+        self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "stale")
+        self.assertEqual(calls.read_text().split(), ["fit"])
 
     def test_inspect_reads_a_project_file(self):
         env, calls = self.fake_blender()

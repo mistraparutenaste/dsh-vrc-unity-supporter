@@ -160,6 +160,15 @@ def make_request(recipe):
     return {"parts": checked, "join": join}
 
 
+def shape_values(value, label):
+    if (not isinstance(value, dict) or len(value) > 64 or
+            not all(isinstance(k, str) and 0 < len(k) <= 128 for k in value) or
+            not all(isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100
+                    for v in value.values())):
+        raise WorkflowError(f"'{label}' must map body shape key names to values from 0 to 100 (as Unity shows).")
+    return {k: float(v) for k, v in value.items()}
+
+
 def fit_request(root, recipe):
     request = {"outfit": str(source(root, recipe.get("outfit"), "outfit")),
                "avatar": str(source(root, recipe.get("avatar"), "avatar"))}
@@ -179,6 +188,18 @@ def fit_request(root, recipe):
     exclude = recipe.get("exclude", [])
     if not isinstance(exclude, list) or not all(isinstance(e, str) for e in exclude):
         raise WorkflowError("'exclude' must be a list of outfit mesh names.")
+    if recipe.get("source"):
+        request["source"] = str(source(root, recipe["source"], "source"))
+    source_body = recipe.get("sourceBody", "")
+    if not isinstance(source_body, str) or len(source_body) > 128:
+        raise WorkflowError("'sourceBody' must be the source avatar's body mesh name (or empty).")
+    follow = recipe.get("followShapes", [])
+    if (not isinstance(follow, list) or len(follow) > 64 or
+            not all(isinstance(n, str) and 0 < len(n) <= 128 for n in follow) or len(set(follow)) != len(follow)):
+        raise WorkflowError("'followShapes' must be a list of up to 64 different body shape key names.")
+    request.update(sourceBody=source_body, followShapes=follow,
+                   avatarShapes=shape_values(recipe.get("avatarShapes", {}), "avatarShapes"),
+                   sourceShapes=shape_values(recipe.get("sourceShapes", {}), "sourceShapes"))
     request.update(body=body, boneMap=bone_map, weights=weights, scaleBones=scale_bones, exclude=exclude,
                    push=number(recipe.get("push", 0.002), 0, 0.02, "push"),
                    scale=number(recipe.get("scale", 1), 0.5, 2, "scale"),
@@ -211,7 +232,7 @@ def load_recipe(root, name):
 def inputs_digest(root, request, path):
     """Recipe plus source files; the FBX is current while this matches the receipt."""
     hasher = hashlib.sha256(path.read_bytes())
-    for key in ("outfit", "avatar"):
+    for key in ("outfit", "avatar", "source"):
         if key in request:
             hasher.update(digest(Path(request[key])).encode())
     hasher.update(SCRIPT.read_bytes())
