@@ -54,7 +54,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
   -Method "DSH.Editor.DshInspect.Perf"
 ```
 
-今回の `result.json` に項目別のカウントが出る。Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクスチャメモリは概算。未計測の項目がある場合は測った項目ごとの目安を伝える。
+今回の `result.json` に項目別のカウントが出る。ランクは手で表と見比べず、`rank` で出す（Unity 不要）:
+
+```powershell
+python -B "<pkg>\tools\unity_inspect.py" rank "<project>\.dsh\runs\<run-id>\result.json" --json
+```
+
+`pc` / `mobile` ごとに、全体の `rank`、それを決めた項目（`limitedBy`）、1 つ上のランクに上げるための上限（`toReach.reduce`）、数えていない項目（`notMeasured`）が出る。撮影や SDK 検証の三角形数だけを見るときは `{"triangles": 52000}` のような JSON を渡してもよい。
+
+Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクスチャメモリは概算。未計測の項目がある場合は測った項目ごとの目安を伝える。
 
 - **その項目が Excellent の上限以下なら Excellent を維持**
 - 1 つでも超えたら、その項目の達成ランクに全体が引き下げられる（最弱の項目で決まる）

@@ -55,7 +55,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
   -Method "DSH.Editor.DshInspect.Perf"
 ```
 
-改変前後で比較し、ランクが落ちた項目を名指しで報告する。
+`result.json` を `unity_inspect.py rank` に渡してランクを出し（`vrc-perf-budget` §2）、改変前後で比較してランクが落ちた項目（`limitedBy`）を名指しで報告する。
 判断基準は `vrc-perf-budget`。
 
 ## 5. アップロード前チェックリスト（人間が実行する）

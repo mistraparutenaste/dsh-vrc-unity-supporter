@@ -142,6 +142,22 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertRegex(text.stdout, r"\(showing \d+ of 350 nodes.*--max-nodes 0\)")
         self.assertLessEqual(len(text.stdout.encode("utf-8")), 50 * 1024)
 
+    def test_rank_reads_perf_counts_and_names_the_limiting_statistic(self):
+        perf = self.write("perf.json", json.dumps({"measurementStage": "source-prefab-before-build", "avatars": [
+            {"prefab": "Assets/Avatar.prefab", "counts": {"triangles": 68583, "skinnedMeshes": 13, "materialSlots": 6,
+                                                          "constraints": 3, "unreadableMeshes": 0}}]}))
+        ranked = self.json_output(self.cli("unity_inspect.py", "rank", str(perf), "--json"))
+        pc = ranked["avatars"][0]["pc"]
+        self.assertEqual(pc["items"]["triangles"]["rank"], "good")
+        self.assertEqual(pc["items"]["constraintCount"]["rank"], "excellent")
+        self.assertEqual((pc["rank"], pc["limitedBy"]), ("poor", ["skinnedMeshes"]))
+        self.assertEqual(pc["toReach"], {"rank": "medium", "reduce": {"skinnedMeshes": {"value": 13, "max": 8}}})
+        self.assertIn("bones", pc["notMeasured"])
+        self.assertEqual(ranked["avatars"][0]["mobile"]["rank"], "veryPoor")
+        counts = self.write("counts.json", json.dumps({"triangles": 20000}))
+        mobile = self.json_output(self.cli("unity_inspect.py", "rank", str(counts), "--json"))["avatars"][0]["mobile"]
+        self.assertEqual(mobile["rank"], "poor")
+
     def test_refs_lists_are_capped_with_a_total(self):
         self.avatar_scene()
         for i in range(250):

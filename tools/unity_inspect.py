@@ -590,6 +590,64 @@ def cmd_report(args) -> int:
     return 0
 
 
+LIMITS = Path(__file__).resolve().parent.parent / "skills" / "vrc-perf-budget" / "assets" / "limits.json"
+RANKS = ("excellent", "good", "medium", "poor")
+# DshInspect.Perf names that differ from limits.json
+COUNT_ALIASES = {"constraints": "constraintCount"}
+
+
+def rank_counts(counts: dict, limits: dict) -> dict:
+    """Rank each measured statistic for PC and Mobile; the avatar's rank is its worst statistic."""
+    measured = {COUNT_ALIASES.get(k, k): v for k, v in counts.items()
+                if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    platforms = {}
+    for platform in ("pc", "mobile"):
+        table = limits[platform]
+        items = {}
+        for stat, value in measured.items():
+            if stat not in table["poor"]:
+                continue
+            rank = next((r for r in RANKS if stat in table[r] and value <= table[r][stat]), "veryPoor")
+            items[stat] = {"value": value, "rank": rank}
+        order = RANKS + ("veryPoor",)
+        worst = max((item["rank"] for item in items.values()), key=order.index, default=None)
+        platforms[platform] = {
+            "rank": worst,
+            "limitedBy": sorted(stat for stat, item in items.items() if item["rank"] == worst) if worst else [],
+            "items": items,
+            "notMeasured": sorted(stat for stat in table["poor"] if stat not in items),
+        }
+        if worst and worst != "excellent":
+            better = order[order.index(worst) - 1]
+            platforms[platform]["toReach"] = {
+                "rank": better,
+                "reduce": {stat: {"value": items[stat]["value"], "max": table[better][stat]}
+                           for stat in platforms[platform]["limitedBy"] if stat in table[better]}}
+    return platforms
+
+
+def cmd_rank(args) -> int:
+    limits = json.loads(LIMITS.read_text(encoding="utf-8"))
+    data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
+    if isinstance(data, dict) and isinstance(data.get("avatars"), list):  # a DshInspect.Perf result.json
+        targets = [(a.get("prefab"), a.get("counts") or {}) for a in data["avatars"] if isinstance(a, dict)]
+        stage = data.get("measurementStage")
+    elif isinstance(data, dict):
+        targets, stage = [(None, data.get("counts", data))], None
+    else:
+        raise SystemExit("Pass a DshInspect.Perf result.json or a JSON object of counts.")
+    output = {
+        "ok": True, "source": limits.get("source"), "measurementStage": stage,
+        "avatars": [dict({"prefab": prefab} if prefab else {}, **rank_counts(counts, limits))
+                    for prefab, counts in targets[:20]],
+        "note": ("Ranks follow limits.json; textureMemoryMB from Perf is an uncompressed estimate and runs high. "
+                 "notMeasured items are not counted here. Counts taken before the build (source prefab) do not "
+                 "include Modular Avatar, VRCFury or Avatar Optimizer changes; the SDK build panel has the final rank."),
+    }
+    print(compact_json(output) if args.json else json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
+
+
 def main(argv: list[str]) -> int:
     try:  # keep UTF-8 on Windows consoles and pipes
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -622,6 +680,11 @@ def main(argv: list[str]) -> int:
                         help="only nodes at this tree depth or shallower (0 = roots)")
     p_hier.add_argument("--json", action="store_true")
     p_hier.set_defaults(func=cmd_hierarchy)
+
+    p_rank = sub.add_parser("rank", help="performance rank from DshInspect.Perf counts (limits.json)")
+    p_rank.add_argument("file", help="a DshInspect.Perf result.json, or a JSON object of counts")
+    p_rank.add_argument("--json", action="store_true")
+    p_rank.set_defaults(func=cmd_rank)
 
     p_refs = sub.add_parser("refs", help="find references to a GUID")
     p_refs.add_argument("--guid")
