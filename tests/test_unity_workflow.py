@@ -19,7 +19,9 @@ class UnityWorkflowTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory(prefix="dsh test ")
         self.addCleanup(directory.cleanup)
-        self.project = Path(directory.name)
+        # resolve(): on CI the temp folder is an 8.3 short path (RUNNER~1), but the tools
+        # report the resolved long path, so the expected paths must be resolved too.
+        self.project = Path(directory.name).resolve()
         self.write("ProjectSettings/ProjectVersion.txt", "m_EditorVersion: 2022.3.22f1\n")
         (self.project / "Assets").mkdir()
 
