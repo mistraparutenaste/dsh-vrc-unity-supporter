@@ -24,6 +24,8 @@ namespace DSH.Editor
             public string outfitId = "";
             public string menu = "";
             public string query = "";
+            public string exclusiveTag = "";
+            public string holder = "";
             public string expectedSceneDigest = "";
             public bool defaultOn = false;
             public bool verifySdk = false;
@@ -122,6 +124,7 @@ namespace DSH.Editor
             result["outfit"] = request.outfit;
             result["menu"] = request.menu;
             result["defaultOn"] = request.defaultOn;
+            result["exclusiveTag"] = request.exclusiveTag;
             return (avatar, outfit);
         }
 
@@ -182,6 +185,8 @@ namespace DSH.Editor
             var toggle = DshVrc.CreateFuryToggle(holder);
             DshVrc.CallPublic(toggle, "SetMenuPath", request.menu);
             if (request.defaultOn) DshVrc.CallPublic(toggle, "SetDefaultOn");
+            // Outfits that share a tag replace each other: turning one on turns the others off.
+            if (!string.IsNullOrEmpty(request.exclusiveTag)) DshVrc.CallPublic(toggle, "AddExclusiveTag", request.exclusiveTag);
             DshVrc.CallPublic(DshVrc.CallPublic(toggle, "GetActions"), "AddTurnOn", outfit);
         }
 
@@ -209,8 +214,76 @@ namespace DSH.Editor
             if (data == null || data.FindPropertyRelative("name")?.stringValue != request.menu ||
                 data.FindPropertyRelative("defaultOn")?.boolValue != request.defaultOn ||
                 action?.FindPropertyRelative("obj")?.objectReferenceValue != outfit ||
-                mode == null || mode.enumNames[mode.enumValueIndex] != "TurnOn")
+                mode == null || mode.enumNames[mode.enumValueIndex] != "TurnOn" || !HasExclusiveTag(data, request.exclusiveTag))
                 throw new InvalidOperationException("The DSH toggle settings differ or VRCFury uses an unsupported format. Inspect the scene and Git diff before retrying.");
+        }
+
+        /// <summary>
+        /// Whether the toggle carries the requested exclusive tag. VRCFury versions name the serialized field
+        /// differently, so an unknown layout is not treated as a mismatch; the SDK check still sees the result.
+        /// </summary>
+        private static bool HasExclusiveTag(SerializedProperty data, string tag)
+        {
+            var enabled = data.FindPropertyRelative("enableExclusiveTag");
+            var tags = data.FindPropertyRelative("exclusiveTag");
+            if (enabled == null || tags == null || tags.propertyType != SerializedPropertyType.String) return true;
+            if (string.IsNullOrEmpty(tag)) return !enabled.boolValue || string.IsNullOrWhiteSpace(tags.stringValue);
+            return enabled.boolValue && tags.stringValue.Split(',').Select(t => t.Trim()).Contains(tag);
+        }
+
+        /// <summary>
+        /// Take a DSH outfit toggle out of the scene. Only a holder that DSH created is removed: an object named
+        /// "DSH Outfit Toggle ..." directly under the avatar, with one VRCFury toggle and nothing else on or under it.
+        /// The outfit itself is left as it is.
+        /// </summary>
+        public static void Remove()
+        {
+            var result = new Dictionary<string, object> { { "ok", false }, { "saved", false } };
+            try
+            {
+                var request = DshAvatarScene.ReadRequest<Request>();
+                if (string.IsNullOrEmpty(request.holder) || !request.holder.StartsWith("DSH Outfit Toggle ", StringComparison.Ordinal))
+                    throw new InvalidOperationException("The request does not name a DSH outfit toggle.");
+                var scene = DshAvatarScene.OpenScene(request.scene, request.expectedSceneDigest);
+                var avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
+                result["scene"] = scene.path;
+                result["holder"] = request.holder;
+                var holder = DshVrc.FindHolder(avatar, request.holder)
+                    ?? throw new InvalidOperationException($"'{request.holder}' is not under the avatar in the saved scene.");
+                var components = holder.GetComponents<Component>().Where(c => !(c is Transform)).ToArray();
+                if (holder.transform.childCount > 0 || components.Length != 1 || !DshVrc.IsFury(components[0]) ||
+                    DshVrc.ToggleData(components[0]) == null)
+                    throw new InvalidOperationException($"'{request.holder}' holds more than the DSH toggle. Remove it in Unity instead.");
+                var data = DshVrc.ToggleData(components[0]);
+                result["menu"] = data.FindPropertyRelative("name")?.stringValue;
+                var actions = data.FindPropertyRelative("state.actions");
+                if (actions != null && actions.arraySize == 1 &&
+                    actions.GetArrayElementAtIndex(0).FindPropertyRelative("obj")?.objectReferenceValue is GameObject outfit)
+                    result["outfit"] = DshAvatarScene.HierarchyPath(outfit.transform);
+
+                UnityEngine.Object.DestroyImmediate(holder);
+                DshAvatarScene.RequireSceneDigest(scene.path, request.expectedSceneDigest);
+                EditorSceneManager.MarkSceneDirty(scene);
+                if (!EditorSceneManager.SaveScene(scene))
+                    throw new IOException($"Unity could not save {scene.path}. Check write access and retry.");
+                result["saved"] = true;
+                DshApply.Note(result, $"Removed the outfit toggle {request.holder}");
+
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                scene = DshAvatarScene.OpenScene(request.scene);
+                avatar = DshAvatarScene.ResolveAvatar(scene, request.avatar, request.avatarId, result);
+                if (DshVrc.FindHolder(avatar, request.holder) != null)
+                    throw new InvalidOperationException("The outfit toggle is still in the saved scene.");
+                result["toggleRemoved"] = true;
+                result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
+                result["ok"] = true;
+                result["verified"] = true;
+            }
+            catch (Exception error)
+            {
+                result["error"] = error.GetBaseException().Message;
+            }
+            DshAvatarScene.Finish("OutfitToggleRemove", result);
         }
 
         private static Dictionary<string, object> VerifySdk(GameObject avatar, GameObject outfit, Request request)

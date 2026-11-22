@@ -29,6 +29,7 @@ LEGACY = {
         "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",  # 0.3.0
         "ee86c39b44243ac2c753c81b0828a73a3c8d3e09",  # 0.4.0 - 0.6.1
         "64a7115bf9450baa18eddcf3b54088d07fa6f568",  # 0.6.2
+        "9699d8cabc77ed64aab627c3300f7cbae999eb21",  # 0.6.3 - 0.9.2
     ),
     "DshTextureVariant.cs": (
         "23cf182d53ef8fc2405305d706ace79403c1bca1",  # 0.6.0 - 0.6.1
@@ -52,6 +53,8 @@ VRCFURY_BUILDS = "Packages/com.vrcfury.temp/Builds"
 SDK_OUTPUTS = (VRCFURY_BUILDS, "Packages/nadena.dev.ndmf/__Generated")
 # Color variants (recipes, rendered textures, copied materials, clips) live here; DSH owns this folder.
 VARIANTS = "Assets/DSH/Variants"
+# Toggle objects that DSH puts directly under the avatar (the suffix comes from the outfit's object ID).
+TOGGLE_HOLDER = "DSH Outfit Toggle "
 # Shape recipes (blendshape weights, outfit sync, hidden-mesh removal); DSH owns this folder.
 SHAPES = "Assets/DSH/Shapes"
 # Accessory recipes (which prefab or model is attached where); DSH owns this folder.
@@ -247,9 +250,14 @@ def preview(root, args):
         raise WorkflowError("Specify a menu name and nonempty submenu names.")
     if not args.avatar.strip() or not args.outfit.startswith(args.avatar + "/"):
         raise WorkflowError("Use full scene hierarchy paths and select an outfit below the avatar.")
+    tag = args.exclusive_tag.strip()
+    if tag and ("," in tag or len(tag) > 64):
+        raise WorkflowError("Use one exclusive tag of up to 64 characters, without commas.")
     request = {"scene": scene_path, "avatar": args.avatar, "outfit": args.outfit,
                "avatarId": args.avatar_id, "outfitId": args.outfit_id,
                "menu": args.menu, "defaultOn": args.default_on}
+    if tag:
+        request["exclusiveTag"] = tag  # only when set, so earlier receipts and previews stay valid
     if args.verify_sdk:
         request["verifySdk"] = True
     helpers = helper_plan(root)
@@ -452,6 +460,66 @@ def apply_scene_change(root, plan, helpers, verify_sdk, method, task, name, help
     return output
 
 
+def scene_holders(root, prefix):
+    """Saved scenes and the DSH holder objects they name (a text search of the YAML; Unity is not needed)."""
+    needle = f"m_Name: {prefix}"
+    found = {}
+    for scene in sorted((root / "Assets").rglob("*.unity")):
+        try:
+            text = scene.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        names = sorted({line.strip()[len("m_Name: "):] for line in text.splitlines()
+                        if line.strip().startswith(needle)})
+        if names:
+            found[scene.relative_to(root).as_posix()] = names
+    return found
+
+
+def toggle_receipts(root):
+    """What each applied toggle was asked for, by holder name, from the apply receipts."""
+    known = {}
+    folder = inside(root, ".dsh/outfits")
+    for file in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        output = read_result(file).get("output")
+        unity = output.get("unity") if isinstance(output, dict) else None
+        if isinstance(unity, dict) and isinstance(unity.get("holder"), str) and unity.get("menu"):
+            known[unity["holder"]] = {key: unity.get(key) for key in ("outfit", "menu", "defaultOn", "exclusiveTag")
+                                      if unity.get(key) not in (None, "")}
+    return known
+
+
+def list_toggles(root):
+    known = toggle_receipts(root)
+    toggles = [dict({"holder": holder, "scene": scene}, **known.get(holder, {}))
+               for scene, holders in scene_holders(root, TOGGLE_HOLDER).items() for holder in holders]
+    return {"ok": True, "toggleCount": len(toggles), "toggles": toggles[:100],
+            "next": "Remove one with remove --holder <holder>. Toggles without a menu were applied before this "
+                    "release or outside this project's .dsh folder; Unity reports their menu on remove."}
+
+
+def remove_plan(root, args):
+    scene, scene_path = scene_asset(root, args.scene)
+    if not args.holder.startswith(TOGGLE_HOLDER):
+        raise WorkflowError(f"Name a toggle holder from list (it starts with '{TOGGLE_HOLDER}').")
+    if args.holder not in scene_holders(root, TOGGLE_HOLDER).get(scene_path, []):
+        raise WorkflowError(f"{args.holder} is not in {scene_path}. Run list to see the toggles in saved scenes.")
+    request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "holder": args.holder,
+               "remove": True}
+    output, helpers = scene_plan(root, request, scene, [scene_path], [])
+    output["toggle"] = toggle_receipts(root).get(args.holder, {})
+    output["next"] = "Confirm the toggle to remove, then rerun with --approved-preview. The outfit itself stays."
+    return output, helpers
+
+
+def remove(root, args):
+    if not args.approved_preview:
+        output, _ = remove_plan(root, args)
+        return output
+    return run_approved(root, args, lambda: remove_plan(root, args), "Remove", "OutfitToggleRemove",
+                        "outfit-remove", "DshOutfitToggle")
+
+
 def targets(root, args):
     if os.name != "nt":
         raise WorkflowError("Exact Unity target discovery requires Windows.")
@@ -534,7 +602,7 @@ def run_approved(root, args, make_plan, method, task, name, helper_class, verify
     if plan["preview"] != args.approved_preview:
         raise WorkflowError("The preview changed. Preview again and confirm the new details before applying.")
     if not plan["git"]["head"]:
-        raise WorkflowError("A project Git checkpoint is required. Run unity_py checkpoint first.")
+        raise WorkflowError("A project Git checkpoint is required. Run unity_toggle.py checkpoint first.")
     if not plan["sceneInCheckpoint"]:
         raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
     with workflow_lock(inside(root, ".dsh/outfit.lock")):
@@ -573,9 +641,19 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("preview", "apply", "targets", "checkpoint", "helpers"):
+    for command in ("preview", "apply", "targets", "checkpoint", "helpers", "list", "remove"):
         action = commands.add_parser(command)
         action.add_argument("--project", default=os.getcwd())
+        if command == "list":
+            continue
+        if command == "remove":
+            action.add_argument("--scene", required=True)
+            action.add_argument("--avatar", required=True)
+            action.add_argument("--avatar-id", default="")
+            action.add_argument("--holder", required=True, help="The toggle object name that list reports")
+            action.add_argument("--approved-preview", default="",
+                                help="Without this, remove only previews what it would change")
+            continue
         if command == "checkpoint":
             action.add_argument("--confirm", action="store_true")
             continue
@@ -594,6 +672,8 @@ def main():
         action.add_argument("--avatar-id", default="")
         action.add_argument("--outfit-id", default="")
         action.add_argument("--default-on", action="store_true")
+        action.add_argument("--exclusive-tag", default="",
+                            help="Outfits with the same tag replace each other in the menu")
         action.add_argument("--verify-sdk", action="store_true")
         if command == "apply":
             action.add_argument("--approved-preview", required=True)
@@ -610,6 +690,10 @@ def main():
             output, _ = preview(root, args)
         elif args.command == "targets":
             output = targets(root, args)
+        elif args.command == "list":
+            output = list_toggles(root)
+        elif args.command == "remove":
+            output = remove(root, args)
         else:
             output = apply(root, args)
     except (WorkflowError, OSError, ValueError, SystemExit) as error:

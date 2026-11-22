@@ -450,6 +450,73 @@ class UnityWorkflowTests(unittest.TestCase):
         self.git("restore", "--source", applied["checkpoint"], "--", "Assets/試着.unity")
         self.assertEqual(scene.read_text(), "original\n")
 
+    def test_exclusive_tag_is_checked_and_only_changes_tagged_previews(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--outfit", "Avatar/Hoodie", "--menu", "衣装/服")
+        plain = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+        self.assertNotIn("exclusiveTag", plain["request"])
+        tagged = self.json_output(self.cli("unity_toggle.py", "preview", *args, "--exclusive-tag", "outfit"))
+        self.assertEqual(tagged["request"]["exclusiveTag"], "outfit")
+        self.assertNotEqual(tagged["preview"], plain["preview"])
+        refused = self.cli("unity_toggle.py", "preview", *args, "--exclusive-tag", "tops,bottoms")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("without commas", json.loads(refused.stdout)["error"])
+
+    def test_remove_preview_needs_a_holder_that_the_saved_scene_names(self):
+        self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Outfit Toggle 0011AABB\n")
+        listed = self.json_output(self.cli("unity_toggle.py", "list"))
+        self.assertEqual(listed["toggles"], [{"holder": "DSH Outfit Toggle 0011AABB", "scene": "Assets/Avatar.unity"}])
+        base = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--holder")
+        plan = self.json_output(self.cli("unity_toggle.py", "remove", *base, "DSH Outfit Toggle 0011AABB"))
+        self.assertEqual(plan["plannedPaths"][0], "Assets/Avatar.unity")
+        self.assertTrue(plan["preview"])
+        for holder, message in (("DSH Outfit Toggle FFFF", "is not in"), ("Hoodie", "starts with")):
+            refused = self.cli("unity_toggle.py", "remove", *base, holder)
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn(message, json.loads(refused.stdout)["error"])
+
+    @unittest.skipUnless(os.name == "nt", "Unity runner uses Windows PowerShell")
+    def test_list_and_remove_an_applied_toggle_then_continue_without_a_commit(self):
+        scene = self.write("Assets/Avatar.unity", "original\n")
+        self.json_output(self.cli("unity_toggle.py", "checkpoint", "--confirm", env=GIT_IDENTITIES))
+        holder_line = "  m_Name: DSH Outfit Toggle 0011AABB\n"
+        environment = self.editor_fixture(r'''
+            string request = File.ReadAllText(Environment.GetEnvironmentVariable("DSH_UNITY_REQUEST_PATH"));
+            bool remove = Array.IndexOf(args, "DSH.Editor.DshOutfitToggle.Remove") >= 0;
+            if (remove) {
+                if (!request.Contains("DSH Outfit Toggle 0011AABB")) Environment.Exit(4);
+                File.WriteAllText("Assets/Avatar.unity", File.ReadAllText("Assets/Avatar.unity")
+                    .Replace("  m_Name: DSH Outfit Toggle 0011AABB\n", ""));
+            } else {
+                if (!request.Contains("\"exclusiveTag\": \"outfit\"")) Environment.Exit(5);
+                File.AppendAllText("Assets/Avatar.unity", "  m_Name: DSH Outfit Toggle 0011AABB\n");
+            }
+            File.WriteAllText(Environment.GetEnvironmentVariable("DSH_UNITY_RESULT_PATH"),
+                "{\"ok\":true,\"task\":\"" + (remove ? "OutfitToggleRemove" : "OutfitToggle") + "\",\"verified\":true," +
+                "\"saved\":true,\"holder\":\"DSH Outfit Toggle 0011AABB\",\"outfit\":\"Avatar/Hoodie\"," +
+                "\"menu\":\"衣装/服\",\"exclusiveTag\":\"outfit\",\"sceneDigest\":\"" + Checksum("Assets/Avatar.unity") + "\"}");
+        ''')
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--outfit", "Avatar/Hoodie",
+                "--menu", "衣装/服", "--exclusive-tag", "outfit")
+        plan = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+        self.json_output(self.cli("unity_toggle.py", "apply", *args, "--approved-preview", plan["preview"], env=environment))
+        self.assertEqual(scene.read_text(), "original\n" + holder_line)
+
+        listed = self.json_output(self.cli("unity_toggle.py", "list"))
+        self.assertEqual(listed["toggles"], [{"holder": "DSH Outfit Toggle 0011AABB", "scene": "Assets/Avatar.unity",
+                                              "outfit": "Avatar/Hoodie", "menu": "衣装/服", "exclusiveTag": "outfit"}])
+        removal = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--holder", "DSH Outfit Toggle 0011AABB")
+        preview = self.json_output(self.cli("unity_toggle.py", "remove", *removal))
+        self.assertEqual(preview["toggle"]["menu"], "衣装/服")
+        self.assertEqual(preview["git"]["managedScenes"], ["Assets/Avatar.unity"])  # no commit between the two
+        removed = self.json_output(self.cli("unity_toggle.py", "remove", *removal,
+                                            "--approved-preview", preview["preview"], env=environment))
+        self.assertTrue(removed["ok"], removed)
+        self.assertEqual(scene.read_text(), "original\n")
+        self.assertEqual(self.json_output(self.cli("unity_toggle.py", "list"))["toggles"], [])
+        later = self.json_output(self.cli("unity_toggle.py", "preview", *args))
+        self.assertEqual(later["git"]["blockingChanges"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

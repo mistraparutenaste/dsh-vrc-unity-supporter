@@ -28,7 +28,7 @@ python -B $tool targets --project '<project>' --scene 'Assets/Avatar.unity' --qu
 
 `setup-required` が返ったら、`plannedPaths` とUnityが生成する `.meta` を伝え、初回のヘルパー設置を確認してから同じコマンドに `--prepare` を付ける。検索は対象シーンを保存せず、Gitの準備前にも使える。`unity.avatars` が複数なら選んでもらい、`--avatar` と `--avatar-id` を付けて衣装候補を取得する。`unity.outfits` の `path` と `siblingPath` で候補を示し、選択された実際のパスと `id` を適用に渡す。`outfitMatchCount` が返った候補数より多い場合は検索語を絞る。
 
-メニュー項目と初期状態を確認する。`--default-on` がない場合は初期状態がオフ。VRCFury未導入の場合はVCC / ALCOMで導入または更新する手順を案内する。
+メニュー項目と初期状態を確認する。`--default-on` がない場合は初期状態がオフ。複数の衣装から 1 着だけを着るなら、同じ `--exclusive-tag`（例: `outfit`、カンマなし 1 つ）を各衣装のトグルに付ける。1 着をオンにすると同じタグのほかの衣装がオフになる。上下別なら `tops` と `bottoms` のように分ける。VRCFury未導入の場合はVCC / ALCOMで導入または更新する手順を案内する。
 
 ```powershell
 $target = @('--project', '<project>', '--scene', 'Assets/Avatar.unity', '--avatar', 'Avatar',
@@ -48,6 +48,15 @@ python -B $tool apply @target --approved-preview '<preview の値>'
 
 3. 適用時に同名候補が返ったら `targets` で対象を確認し、選び直したプレビューを提示する。`changes` は現在のGit差分、`checkpoint` は元のGitコミット。エラー時は `unity.error` と `log` を調べ、シーンが保存済みかも伝える。
 4. 保存結果と `unity.sdkVerification` の結果をそれぞれ報告する。`passed` なら生成済みのメニュー名と衣装のオン・オフを切り替えるキーを確認できたことを伝える。メニューの項目が多いと VRCFury は残りを「Next」の先のページに回すので、VRChat で開く位置は `menuLocation`（例: `Next/衣装/パーカー`）で伝える。`failed` または `inconclusive` なら理由を示す。SDK検証だけ再試行するときは、保存済みのトグルと同じ依頼を新たにプレビューして実行できる。VRChatクライアントでの動作は、ユーザーが **Build & Test** を実行し、報告されたメニューを開いて衣装の表示・非表示を確認する。
-5. Gitで復元する場合、`git restore --source <checkpoint> -- <scene>` はそのシーン全体を元のコミットまで戻す。連続適用した複数の改変にも影響するので、対象と範囲を確認してから案内する。
+5. トグルを 1 つだけ外すときは `list` で `holder`（`DSH Outfit Toggle …`）を確かめ、`remove` で外す（衣装そのものは残る）。`--approved-preview` なしでは内容だけを返すので、`toggle` のメニュー名と衣装を伝えて確認を取ってから実行する。
 
-この導線は単一衣装のオン・オフ用。Prefab本体の改変、排他設定、衣装の装着などは `vrc-avatar-edit` と `vrc-edit-script` を使い、既存機能との相互作用を確認する。
+```powershell
+python -B $tool list --project '<project>'
+$r = @('--project', '<project>', '--scene', 'Assets/Avatar.unity', '--avatar', 'Avatar', '--holder', 'DSH Outfit Toggle <id>')
+python -B $tool remove @r
+python -B $tool remove @r --approved-preview '<remove の preview の値>'
+```
+
+   Gitで復元する場合、`git restore --source <checkpoint> -- <scene>` はそのシーン全体を元のコミットまで戻す。連続適用した複数の改変にも影響するので、対象と範囲を確認してから案内する。
+
+この導線は配置済み衣装のオン・オフ（排他を含む）用。Prefab本体の改変、衣装の装着などは `vrc-avatar-edit` と `vrc-edit-script` を使い、既存機能との相互作用を確認する。
