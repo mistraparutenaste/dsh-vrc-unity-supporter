@@ -1,0 +1,49 @@
+name: ci
+
+# Runs on every push and pull request. Unity, Blender and PhotoCraft are not needed:
+# the tests use fake executables. Windows only, because the tools call powershell.exe
+# and the package targets Windows.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 is the minimum the README asks for; 3.13 catches newer-Python breakage.
+        python: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify the package (BOM, skill names, JSON, manifests)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\verify-package.ps1
+
+      - name: Check the packed file list
+        run: npm pack --dry-run
+
+      - name: Validate the Claude Code plugin manifest
+        run: npx --yes @anthropic-ai/claude-code plugin validate . --strict
+
+      - name: Run the regression tests
+        run: python -B -m unittest discover -s tests -v
