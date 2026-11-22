@@ -42,6 +42,11 @@ $shape = '<pkg>\tools\unity_shape.py'
 - 衣装のパッケージは **Materials・Textures のフォルダごと** インポートされていること。FBX と prefab だけだと、
   prefab のマテリアルが見つからずマゼンタになる（`materialsFrom` を使う 3 の手順がその旨のエラーで止まる）。
   シェーダー（lilToon など）もプロジェクトに入っていること。
+  BOOTH の衣装は、アバター別のパッケージ（FBX と prefab だけ）とは別に、マテリアルとテクスチャを共通パッケージ
+  （`_Material`、`Common` など）で配ることがある。アバター別のものを入れ直しても直らないので、同じ商品の共通パッケージを
+  ダウンロードしてインポートしてもらう（BOOTH からのダウンロードはユーザーが行う）。3 の `preview` の
+  `missingMaterials` に、prefab が参照しているのにプロジェクトに無いマテリアルの数が出る。`exclude` で外したメッシュ
+  （パンツなど）の分だけが残るなら問題ない。
 - 着せるアバターが保存済みのシーンに置かれていること。無ければユーザーに置いて保存してもらうか、
   `vrc-edit-script` のタスク（`PrefabUtility.InstantiatePrefab` でアバターの prefab を置いて保存）で置く。
 - 3 以降はシーンを変えるので、プロジェクトの Git チェックポイントが要る（`vrc-first-run` の checkpoint。
@@ -118,6 +123,11 @@ python -B $model build --project '<project>' --model Coat_Fit
 - `hide` には、新しい衣装と重なるアバターの元の服を入れる（名前は `shapes --filter Costume` などで確かめる）。
 - `vrc-accessory` の 3〜4 のとおり `capture` で前後を見て、`preview` → 確認 → `apply --verify-sdk`。
 - 撮影で大きくずれていたら、2 のレシピを直して build し直す（付けた小物は新しい FBX をそのまま使う）。
+- 適用した後でパッケージを追加インポートした（マテリアルを入れた、など）とき、または DSH 以外の変更が残っているときは、
+  `preview` の `git.blockingChanges` に出て `apply` が止まる。中身がユーザーの意図した変更か確かめて、
+  ユーザーの了承を得てからコミットし（`git add --all` → `git commit`）、`preview` からやり直す。
+  `checkpoint` は最初のコミットだけを作るので、2 回目以降の記録には使えない。
+- 適用は Unity を閉じた状態で行う。Unity が開いていたら閉じてもらい、閉じたのを確かめてから進める。
 
 ## 4. 体型に追従させ、服の下の体を消す
 

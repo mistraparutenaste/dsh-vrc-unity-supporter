@@ -114,6 +114,31 @@ def fingerprint(root, recipe, path):
     return files
 
 
+MATERIAL_REF = re.compile(rb"\{fileID: 2100000, guid: ([0-9a-f]{32}), type: 2\}")
+META_GUID = re.compile(rb"^guid: ([0-9a-f]{32})", re.M)
+
+
+def missing_materials(root, prefab):
+    """Material GUIDs a prefab refers to that no .meta file in the project provides (a text search)."""
+    if not prefab.lower().endswith(".prefab"):
+        return []
+    wanted = set(MATERIAL_REF.findall(inside(root, prefab).read_bytes()))
+    for folder in ("Assets", "Packages", "Library/PackageCache"):
+        base = root / folder
+        if not wanted or not base.is_dir():
+            continue
+        for meta in base.rglob("*.mat.meta"):
+            try:
+                found = META_GUID.search(meta.read_bytes()[:400])
+            except OSError:
+                continue
+            if found:
+                wanted.discard(found.group(1))
+            if not wanted:
+                break
+    return sorted(guid.decode("ascii") for guid in wanted)
+
+
 def scenes_with_holder(root, name):
     """Saved scenes whose YAML names this accessory's object (a text search; Unity is not needed)."""
     needle = f"m_Name: {HOLDER}{name}\n".encode("utf-8")
@@ -171,6 +196,15 @@ def plan(root, args):
         planned.append(f"{recipe['folder']}/{recipe['name']}_hide.anim")
     output, helpers = toggle.scene_plan(root, request, scene, planned, fingerprint(root, recipe, path))
     output["alreadyInScene"] = scene_path in scenes_with_holder(root, recipe["name"])
+    if recipe["materialsFrom"]:
+        missing = missing_materials(root, recipe["materialsFrom"])
+        if missing:
+            # Booth outfits often ship materials and textures in a separate shared package of the same product.
+            output["missingMaterials"] = {
+                "count": len(missing), "guids": missing[:10],
+                "next": "The materialsFrom prefab refers to materials that are not in the project. If the outfit "
+                        "came as several packages (a per-avatar one and a shared or material one), import the shared "
+                        "one too. Missing slots on meshes the fit left out (such as excluded pants) do not matter."}
     return output, helpers
 
 

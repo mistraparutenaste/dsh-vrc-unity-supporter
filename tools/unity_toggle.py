@@ -42,7 +42,8 @@ LEGACY = {
         "d04fa099a93b5ab56c4133493e25cc8ba850a525",  # 0.6.3 - 0.9.0
     ),
     "DshShape.cs": (),
-    "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",),  # 0.8.0 - 0.9.0
+    "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",  # 0.8.0 - 0.9.0
+                        "d79661a2f6585c578b1c11f288dc48c3d1608d78"),  # 0.9.1
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"

@@ -406,7 +406,8 @@ namespace DSH.Editor
             if (broken.Count > 0)
                 throw new InvalidOperationException(
                     $"'{request.materialsFrom}' has missing materials or shaders on {string.Join(", ", broken.Take(8))}. " +
-                    "Import the whole outfit package (its Materials and Textures folders, and the shader it uses such as lilToon), then retry.");
+                    "Import the whole outfit package (its Materials and Textures folders, and the shader it uses such as lilToon), then retry. " +
+                    "If the outfit came as several packages, the materials are often in a separate shared package of the same product.");
             return changes;
         }
 

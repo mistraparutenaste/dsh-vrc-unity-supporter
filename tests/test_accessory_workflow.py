@@ -62,6 +62,22 @@ class AccessoryWorkflowTests(unittest.TestCase):
         changed = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))
         self.assertNotEqual(changed["preview"], plan["preview"])
 
+    def test_preview_reports_materials_the_prefab_refers_to_but_the_project_lacks(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.write("Assets/Items/Hat.prefab", "prefab\n")
+        have, lack = "a" * 32, "b" * 32
+        self.write("Assets/Items/Hat Skin.prefab",
+                   f"  m_Materials:\n  - {{fileID: 2100000, guid: {have}, type: 2}}\n"
+                   f"  - {{fileID: 2100000, guid: {lack}, type: 2}}\n"
+                   f"  m_Script: {{fileID: 11500000, guid: {'c' * 32}, type: 3}}\n")
+        self.write("Assets/Items/Hat.mat.meta", f"fileFormatVersion: 2\nguid: {have}\n")
+        self.recipe(bone="Head", materialsFrom="Assets/Items/Hat Skin.prefab")
+        plan = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))
+        self.assertEqual(plan["missingMaterials"]["guids"], [lack])
+        self.write("Assets/Shared/_Material/Hat2.mat.meta", f"fileFormatVersion: 2\nguid: {lack}\n")
+        plan = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))
+        self.assertNotIn("missingMaterials", plan)
+
     def test_always_worn_accessory_hides_without_a_clip_and_remove_turns_them_back_on(self):
         self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Accessory Hat\n")
         self.write("Assets/Items/Hat.prefab", "prefab\n")
