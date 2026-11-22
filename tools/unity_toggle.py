@@ -37,9 +37,12 @@ LEGACY = {
     ),
     "DshCapture.cs": ("99e317d29760a8151015a5858e4cf593668ee94e",),  # 0.6.0 - 0.6.4
     # Shared scene and VRChat SDK helpers; HELPERS order is also the copy order.
-    "DshAvatarTools.cs": ("1168f8a1430d88449909e6459cd236f611d0de13",),  # 0.6.2
+    "DshAvatarTools.cs": (
+        "1168f8a1430d88449909e6459cd236f611d0de13",  # 0.6.2
+        "d04fa099a93b5ab56c4133493e25cc8ba850a525",  # 0.6.3 - 0.9.0
+    ),
     "DshShape.cs": (),
-    "DshAccessory.cs": (),
+    "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",),  # 0.8.0 - 0.9.0
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -128,12 +131,15 @@ def checkpoint(root, confirmed):
                 "action": "Create a local first commit of project files that Git does not ignore.",
                 "plannedPaths": sorted(p.name for p in root.iterdir() if p.name != ".git"),
                 "next": "Review existing project files and .gitignore, then run checkpoint --confirm."}
+    # Check the commit identity first, so a missing name or email does not leave an empty repository behind.
+    for identity in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"):
+        if git(root, "var", identity, check=False).returncode:
+            raise WorkflowError("Git has no user name and email for commits. Set them (git config --global user.name "
+                                "and user.email, or without --global inside this project), then retry.")
     if state["state"] == "no-repository":
         git(root, "init", "-q")
     if any(row["status"] != "??" for row in git_state(root)["changes"]):
         raise WorkflowError("An initial Git index already contains changes. Review and commit those changes manually.")
-    for identity in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"):
-        git(root, "var", identity)
     ignore = inside(root, ".gitignore")
     if not ignore.exists():
         ignore.write_bytes((TEMPLATES / "gitignore.template").read_bytes())
@@ -141,6 +147,10 @@ def checkpoint(root, confirmed):
         # Keep project rules and add exclusions for generated data before the first commit.
         for rule in (b"/[Ll]ibrary/", b"/[Tt]emp/", b"/[Oo]bj/", b"/[Ll]ogs/", b"/[Uu]ser[Ss]ettings/", LOCAL_IGNORE):
             append_rules(ignore, rule)
+    # A capture before this checkpoint may already have left SDK build outputs; keep them out of the first commit.
+    for folder in SDK_OUTPUTS:
+        append_rules(ignore, f"/{folder}/".encode("ascii"))
+        append_rules(ignore, f"/{folder}.meta".encode("ascii"))
     git(root, "add", "--all", "--", ".")
     git(root, "commit", "-qm", "Record Unity project before DSH changes")
     return {"ok": True, "git": git_state(root)}
@@ -294,6 +304,8 @@ def ensure_local_ignore(root, example, rule):
 
 def prepare_sdk_outputs(root):
     """Keep SDK verification outputs out of Git; return why verification must be skipped, if it must."""
+    if git_state(root)["state"] == "no-repository":
+        return None  # Nothing to keep out of Git yet; a later checkpoint adds the ignore rules.
     for folder in SDK_OUTPUTS:
         if git(root, "ls-files", "-z", "--", folder, f"{folder}.meta").stdout:
             return f"Build outputs in {folder} are tracked in Git. Verify in Build & Test."

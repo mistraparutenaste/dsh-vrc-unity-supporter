@@ -196,7 +196,8 @@ namespace DSH.Editor
                 .GetMethod("OnPreprocessAvatar", BindingFlags.Public | BindingFlags.Static, null,
                     new[] { typeof(GameObject) }, null)
                 ?? throw new InvalidOperationException("The VRChat SDK avatar preprocessing API is unavailable.");
-            if (!AssetDatabase.IsValidFolder("Packages/com.vrcfury.temp"))
+            // Only VRCFury needs its temporary package; projects with Modular Avatar alone build without it.
+            if (LoadedType("VF.Model.VRCFury") != null && !AssetDatabase.IsValidFolder("Packages/com.vrcfury.temp"))
                 throw new InvalidOperationException("Open the project in Unity once to let VRCFury initialize its temporary package, then close it and retry verification.");
             var copy = UnityEngine.Object.Instantiate(avatar);
             copy.name = avatar.name + " (DSH Verification)";

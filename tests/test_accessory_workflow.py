@@ -37,7 +37,6 @@ class AccessoryWorkflowTests(unittest.TestCase):
             ({"rotation": [0, 0]}, "'rotation'"),
             ({"scale": 0}, "'scale'"),
             ({"menu": "Accessory//Hat"}, "'menu'"),
-            ({"hide": ["Hair"]}, "needs a menu toggle"),
             ({"hide": "Hair", "menu": "Hat"}, "'hide'"),
             ({"defaultOn": "yes"}, "'defaultOn'"),
             ({"materialsFrom": "Assets/Items/Missing.prefab"}, "'materialsFrom'"),
@@ -62,6 +61,19 @@ class AccessoryWorkflowTests(unittest.TestCase):
         asset.write_text("prefab changed\n")
         changed = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))
         self.assertNotEqual(changed["preview"], plan["preview"])
+
+    def test_always_worn_accessory_hides_without_a_clip_and_remove_turns_them_back_on(self):
+        self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Accessory Hat\n")
+        self.write("Assets/Items/Hat.prefab", "prefab\n")
+        self.recipe(bone="Head", hide=["Costume_Hoodie"])
+        plan = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))
+        self.assertIn("Assets/Avatar.unity", plan["plannedPaths"])
+        self.assertFalse([p for p in plan["plannedPaths"] if p.endswith(".anim")])
+        removal = self.json_output(self.cli("unity_accessory.py", "remove", *ARGS))
+        self.assertEqual(removal["request"]["hide"], ["Costume_Hoodie"])
+        self.recipe(bone="Head", menu="Accessory/Hat", hide=["Hair"])
+        removal = self.json_output(self.cli("unity_accessory.py", "remove", *ARGS))
+        self.assertNotIn("hide", removal["request"])
 
     def test_list_and_remove_preview_find_the_accessory_in_saved_scenes(self):
         self.write("Assets/Avatar.unity", "--- !u!1 &1\nGameObject:\n  m_Name: DSH Accessory Hat\n")

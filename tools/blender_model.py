@@ -266,7 +266,10 @@ def inspect_file(args):
     if not path.is_file() or path.suffix.lower() not in SOURCES:
         raise WorkflowError(f"Give an existing .fbx or .blend file: {path}")
     with tempfile.TemporaryDirectory(prefix="dsh-blender-") as work:
-        result = run_blender("inspect", {"file": str(path)}, Path(work))
+        request = {"file": str(path)}
+        if args.shapes:
+            request.update(shapes=args.shapes, filter=args.filter)
+        result = run_blender("inspect", request, Path(work))
         result.pop("log", None)
         return result
 
@@ -326,6 +329,8 @@ def main():
     inspect_parser = commands.add_parser("inspect")
     inspect_parser.add_argument("file")
     inspect_parser.add_argument("--project", default="")
+    inspect_parser.add_argument("--shapes", default="", help="Also list the shape key names of this mesh")
+    inspect_parser.add_argument("--filter", default="", help="With --shapes: only names containing this text")
     listing = commands.add_parser("list")
     listing.add_argument("--project", default=os.getcwd())
     builder = commands.add_parser("build")

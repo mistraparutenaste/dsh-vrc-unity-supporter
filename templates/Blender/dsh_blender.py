@@ -161,7 +161,18 @@ def humanoid_map(armature):
 def inspect(request):
     reset_scene()
     objects = import_model(request["file"])
-    return dict(describe(objects), ok=True, file=request["file"])
+    result = dict(describe(objects), ok=True, file=request["file"])
+    wanted = request.get("shapes")
+    if wanted:
+        mesh = next((o for o in objects if o.type == "MESH" and o.name == wanted), None)
+        if mesh is None:
+            raise ValueError(f"No mesh named {wanted!r} in the file.")
+        keys = mesh.data.shape_keys
+        text = (request.get("filter") or "").lower()
+        names = [k.name for k in keys.key_blocks[1:]] if keys else []
+        names = [n for n in names if text in n.lower()]
+        result["shapeKeyNames"] = {"mesh": wanted, "count": len(names), "names": names[:300]}
+    return result
 
 
 # --- make: simple shapes ----------------------------------------------------------
@@ -556,6 +567,8 @@ def follow_shapes(body, meshes, names, min_move=0.0005):
                 obj.shape_key_add(name="Basis", from_mix=False)
             basis = obj.data.shape_keys.key_blocks[0]
             key = obj.shape_key_add(name=name, from_mix=False)
+            # New keys may start at 1.0 (Blender 5), and the FBX keeps that as the default weight in Unity.
+            key.value = 0.0
             for target, base, offset in zip(key.data, basis.data, offsets):
                 target.co = base.co + offset
             made.setdefault(source_name(obj), []).append(name)

@@ -90,8 +90,6 @@ def load_recipe(root, name):
     if (not isinstance(hide, list) or len(hide) > 50 or
             not all(isinstance(path, str) and path.strip() and not path.startswith("/") for path in hide)):
         raise WorkflowError("'hide' must be a list of object paths under the avatar (for example 'Hair').")
-    if hide and not menu:
-        raise WorkflowError("Hiding objects needs a menu toggle. Add 'menu' to the recipe.")
     materials_from = recipe.get("materialsFrom", "")
     if materials_from:
         if (not isinstance(materials_from, str) or not materials_from.startswith("Assets/") or "\\" in materials_from or
@@ -169,7 +167,7 @@ def plan(root, args):
     if args.verify_sdk:
         request["verifySdk"] = True
     planned = [scene_path]
-    if recipe["hide"]:
+    if recipe["hide"] and recipe["menu"]:
         planned.append(f"{recipe['folder']}/{recipe['name']}_hide.anim")
     output, helpers = toggle.scene_plan(root, request, scene, planned, fingerprint(root, recipe, path))
     output["alreadyInScene"] = scene_path in scenes_with_holder(root, recipe["name"])
@@ -190,6 +188,14 @@ def remove_plan(root, args):
         raise WorkflowError(f"No accessory named {args.recipe} exists in this project or scene.")
     request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "name": args.recipe,
                "folder": folder.relative_to(root).as_posix(), "keepFiles": bool(args.keep_files), "remove": True}
+    if exists:
+        # Without a menu the hidden objects were turned off in the scene; removing turns them back on.
+        try:
+            recipe, _ = load_recipe(root, args.recipe)
+            if not recipe["menu"]:
+                request["hide"] = recipe["hide"]
+        except WorkflowError:
+            pass
     files = sorted(item.relative_to(root).as_posix() for item in folder.rglob("*") if item.is_file()) if exists else []
     planned = [scene_path] if in_scene else []
     if exists and not args.keep_files:

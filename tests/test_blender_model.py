@@ -16,7 +16,8 @@ request = json.load(open(request_path, encoding="utf-8"))
 with open(sys.argv[0] + ".calls", "a", encoding="utf-8") as calls:
     calls.write(command + "\n")
 if command == "inspect":
-    result = {"ok": True, "meshes": [{"name": "Body"}], "armatures": []}
+    result = {"ok": True, "meshes": [{"name": "Body"}], "armatures": [],
+              "asked": {k: request[k] for k in ("shapes", "filter") if k in request}}
 else:
     with open(request["output"], "w", encoding="utf-8") as fbx:
         fbx.write("fbx " + request["kind"] + " " + json.dumps(request.get("parts", []))[:40])
@@ -134,7 +135,11 @@ class BlenderModelTests(unittest.TestCase):
         result = self.json_output(self.cli("blender_model.py", "inspect", "Assets/Items/Outfit.fbx",
                                            "--project", str(self.project), env=env))
         self.assertEqual(result["meshes"], [{"name": "Body"}])
-        self.assertEqual(calls.read_text().split(), ["inspect"])
+        self.assertEqual(result["asked"], {})
+        shapes = self.json_output(self.cli("blender_model.py", "inspect", "Assets/Items/Outfit.fbx", "--project",
+                                           str(self.project), "--shapes", "Body_base", "--filter", "OFF", env=env))
+        self.assertEqual(shapes["asked"], {"shapes": "Body_base", "filter": "OFF"})
+        self.assertEqual(calls.read_text().split(), ["inspect", "inspect"])
 
 
 if __name__ == "__main__":

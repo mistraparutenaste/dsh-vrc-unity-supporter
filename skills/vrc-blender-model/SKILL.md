@@ -31,6 +31,8 @@ python -B $model inspect 'Assets/Booth/Outfit/Outfit.fbx' --project '<project>'
 - `meshes[]`: 名前、頂点数、三角形数、シェイプキー数、使うアーマチュア。
 - `armatures[]`: ボーン数と、Humanoid として読めたボーン（`hips`、`left upperarm` など）。
 - `sizeUnity`: 全体の大きさ（幅・高さ・奥行き、メートル）。
+- `--shapes <メッシュ名>`（`--filter <文字>` で絞る）を付けると、そのメッシュのシェイプキー名が `shapeKeyNames` に出る。
+  体型キー（`avatarShapes`、`followShapes`）や縮めるキーの名前を確かめるときに使う。
 
 アバターの FBX（体のメッシュ名とボーン名）も同じように調べる。FBX の場所は `vrc-asset-read` の `refs` や、
 アバターの prefab が参照するモデルから探す。

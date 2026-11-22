@@ -181,6 +181,14 @@ namespace DSH.Editor
                 result["holderRemoved"] = holder != null;
                 if (holder != null)
                 {
+                    // Turn back on what an always-worn accessory turned off.
+                    foreach (var path in request.hide ?? Array.Empty<string>())
+                    {
+                        var hidden = avatar.transform.Find(path);
+                        if (hidden == null || hidden.gameObject.activeSelf || hidden.IsChildOf(holder.transform)) continue;
+                        SetActive(hidden.gameObject, true);
+                        DshApply.Note(result, $"Turned on {path}");
+                    }
                     UnityEngine.Object.DestroyImmediate(holder);
                     DshAvatarScene.RequireSceneDigest(scene.path, request.expectedSceneDigest);
                     EditorSceneManager.MarkSceneDirty(scene);
@@ -299,6 +307,8 @@ namespace DSH.Editor
             var changes = new List<string>();
             var holderName = HolderPrefix + request.name;
             var holder = DshVrc.FindHolder(avatar, holderName);
+            if (inScene && !string.IsNullOrEmpty(request.menu) && DshVrc.LoadedType("com.vrcfury.api.FuryComponents") == null)
+                throw new InvalidOperationException("A menu toggle needs VRCFury. Install it in VCC/ALCOM, or leave 'menu' empty to always wear the accessory.");
             if (holder == null)
             {
                 if (inScene) CheckMenu(avatar, request.menu);
@@ -341,13 +351,22 @@ namespace DSH.Editor
                 if (item.GetComponent(DshVrc.LoadedType(BoneProxyType)) != null)
                     throw new InvalidOperationException("The accessory was attached to a bone before. Remove it, then apply again in armature mode.");
             }
-            if (inScene)
+            if (inScene && !string.IsNullOrEmpty(request.menu))
             {
                 var clip = HideClip(avatar, holder, request, changes);
                 changes.AddRange(EnsureToggle(holder, item, clip, request));
             }
             else
-                foreach (var hidden in HiddenObjects(avatar, holder, request)) hidden.SetActive(false);
+            {
+                if (inScene) changes.AddRange(EnsureToggle(holder, item, null, request));
+                // Always worn: the hidden objects stay off in the scene (remove turns them back on).
+                foreach (var hidden in HiddenObjects(avatar, holder, request))
+                {
+                    if (!hidden.activeSelf) continue;
+                    SetActive(hidden, false);
+                    changes.Add($"turned off {AnimationUtility.CalculateTransformPath(hidden.transform, avatar.transform)}");
+                }
+            }
             return changes;
         }
 
@@ -365,10 +384,17 @@ namespace DSH.Editor
             foreach (var renderer in source.GetComponentsInChildren<Renderer>(true))
                 if (!byName.ContainsKey(renderer.name)) byName[renderer.name] = renderer.sharedMaterials;
             var matched = 0;
+            var broken = new List<string>();
             foreach (var renderer in item.GetComponentsInChildren<Renderer>(true))
             {
                 if (!byName.TryGetValue(renderer.name, out var materials) || materials.Length != renderer.sharedMaterials.Length) continue;
                 matched++;
+                // A prefab imported without its Materials or Textures folder keeps missing references, which render magenta.
+                if (materials.Any(m => m == null || m.shader == null || m.shader.name == "Hidden/InternalErrorShader"))
+                {
+                    broken.Add(renderer.name);
+                    continue;
+                }
                 if (renderer.sharedMaterials.SequenceEqual(materials)) continue;
                 renderer.sharedMaterials = materials;
                 EditorUtility.SetDirty(renderer);
@@ -377,6 +403,10 @@ namespace DSH.Editor
             }
             if (matched == 0)
                 throw new InvalidOperationException($"No renderer of the accessory has a same-named renderer with as many material slots in '{request.materialsFrom}'.");
+            if (broken.Count > 0)
+                throw new InvalidOperationException(
+                    $"'{request.materialsFrom}' has missing materials or shaders on {string.Join(", ", broken.Take(8))}. " +
+                    "Import the whole outfit package (its Materials and Textures folders, and the shader it uses such as lilToon), then retry.");
             return changes;
         }
 
@@ -498,6 +528,13 @@ namespace DSH.Editor
                     throw new InvalidOperationException($"An existing VRCFury toggle on '{DshAvatarScene.HierarchyPath(component.transform)}' uses the menu '{menu}'.");
         }
 
+        private static void SetActive(GameObject target, bool active)
+        {
+            target.SetActive(active);
+            EditorUtility.SetDirty(target);
+            if (PrefabUtility.IsPartOfPrefabInstance(target)) PrefabUtility.RecordPrefabInstancePropertyModifications(target);
+        }
+
         /// <summary>Avatar objects the recipe hides while the accessory is on (for example the original hair).</summary>
         private static List<GameObject> HiddenObjects(GameObject avatar, GameObject holder, Request request)
         {
@@ -521,8 +558,6 @@ namespace DSH.Editor
         {
             var hidden = HiddenObjects(avatar, holder, request);
             if (hidden.Count == 0) return null;
-            if (string.IsNullOrEmpty(request.menu))
-                throw new InvalidOperationException("Hiding objects needs a menu toggle. Add a menu to the recipe.");
             if (request.folder != "Assets/DSH/Accessories/" + request.name || !AssetDatabase.IsValidFolder(request.folder))
                 throw new InvalidOperationException("The recipe folder Assets/DSH/Accessories/<name> is missing.");
             var clipPath = $"{request.folder}/{request.name}_hide.anim";

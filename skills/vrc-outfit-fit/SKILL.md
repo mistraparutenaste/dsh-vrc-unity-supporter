@@ -39,17 +39,27 @@ $shape = '<pkg>\tools\unity_shape.py'
 衣装の配布物に素体が同梱されていることがある（`inspect` で体のメッシュがある FBX）。元のアバターを持っていない場合は、
 その旨をユーザーに伝え、`source` なしで進める。
 
+- 衣装のパッケージは **Materials・Textures のフォルダごと** インポートされていること。FBX と prefab だけだと、
+  prefab のマテリアルが見つからずマゼンタになる（`materialsFrom` を使う 3 の手順がその旨のエラーで止まる）。
+  シェーダー（lilToon など）もプロジェクトに入っていること。
+- 着せるアバターが保存済みのシーンに置かれていること。無ければユーザーに置いて保存してもらうか、
+  `vrc-edit-script` のタスク（`PrefabUtility.InstantiatePrefab` でアバターの prefab を置いて保存）で置く。
+- 3 以降はシーンを変えるので、プロジェクトの Git チェックポイントが要る（`vrc-first-run` の checkpoint。
+  Git に名前とメールが設定されていること）。
+
 ## 1. 調べる（ファイルは変えない）
 
 ```powershell
 python -B $model inspect 'Assets/Booth/Coat/FBX/Coat.fbx' --project '<project>'
 python -B $model inspect 'Assets/Booth/Selestia/SELESTIA.fbx' --project '<project>'
 python -B $model inspect 'Assets/Amatousagi/Salt/FBX/Salt.fbx' --project '<project>'
+python -B $model inspect 'Assets/Amatousagi/Salt/FBX/Salt.fbx' --project '<project>' --shapes 'Body_base'
 python -B $shape shapes --project '<project>' --scene 'Assets/Avatar.unity' --avatar 'Avatar' --filter 'Body' --prepare
 ```
 
 - 衣装: メッシュ名（付属の素体があれば `exclude` に入れる）、`humanoid`（腕・脚・背骨が読めているか）。
 - アバター: 体のメッシュ（`Body_base` など、全身に広がるもの）と、体型のシェイプキー（`Breasts_big`、`Waist_slim` など）。
+  キーの名前は `inspect --shapes <メッシュ名>`（`--filter` で絞れる）で読む。`*_OFF` の縮めるキーも 4 で使う。
 - 今の体型: `shapes` で 0 以外の値が付いた体型キー。これを `avatarShapes` に入れると、その体型に合わせて作る。
 
 ## 2. 合わせる
@@ -102,6 +112,9 @@ python -B $model build --project '<project>' --model Coat_Fit
 }
 ```
 
+- `menu` で出し入れするには VRCFury が要る。VRCFury が無い、または常に着るなら `menu` を空にする。
+  そのときは `hide` のオブジェクトがシーン上でオフになる（取り外すと戻る）。
+
 - `hide` には、新しい衣装と重なるアバターの元の服を入れる（名前は `shapes --filter Costume` などで確かめる）。
 - `vrc-accessory` の 3〜4 のとおり `capture` で前後を見て、`preview` → 確認 → `apply --verify-sdk`。
 - 撮影で大きくずれていたら、2 のレシピを直して build し直す（付けた小物は新しい FBX をそのまま使う）。
@@ -129,7 +142,9 @@ python -B $shape shapes --project '<project>' --scene 'Assets/Avatar.unity' --av
 ```
 
 - `sync` には 2 の `followedShapes` に出たメッシュとキーを入れる（衣装側は同じ名前で作られている）。
-- `remove` には、この衣装で完全に隠れる部位の縮めるキーだけを入れる。メニューで衣装を外せるなら、
+- `remove` には、この衣装で完全に隠れる部位の縮めるキーだけを入れる。首元が開いた服（V ネック、襟元が開く）で
+  `Chest_1_OFF` などを入れると、服の内側が見えて穴になる。透けるストッキングの下の脚も残す。
+  撮影の下段で首元・袖口・裾を拡大して確かめる。メニューで衣装を外せるなら、
   外したときに体に穴が開くので、ユーザーに伝えて判断してもらう（常に着るなら問題ない）。
 - `vrc-shape-adjust` の 3〜4 のとおり撮影 → `preview` → 確認 → `apply --verify-sdk`。
 
