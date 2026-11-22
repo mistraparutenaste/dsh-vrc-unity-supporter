@@ -27,7 +27,8 @@ Add-Check 'package' 'PASS' $pkgRoot
 if ($env:DSH_PROFILE) {
     Add-Check 'dsh profile' 'PASS' "$env:DSH_PROFILE  ($env:DSH_PROFILE_DIR)"
 } else {
-    Add-Check 'dsh profile' 'WARN' 'DSH_PROFILE is not set (running outside a dsh-launched shell?)'
+    # Claude Code and Codex never set DSH_PROFILE, so its absence is not a problem by itself.
+    Add-Check 'dsh profile' 'INFO' 'DSH の外で実行しています（Claude Code・Codex では問題ありません）'
 }
 
 # --- Unity Hub / editors ----------------------------------------------------

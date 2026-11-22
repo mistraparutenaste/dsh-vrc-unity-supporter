@@ -7,3 +7,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.log
+
+# BOOTH ZIP built by tools/build-booth.ps1
+dist/
