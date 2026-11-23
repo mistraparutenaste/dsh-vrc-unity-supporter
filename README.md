@@ -1,5 +1,7 @@
 # dsh-vrc-unity-supporter
 
+日本語 | [English](README.en.md) | [简体中文](README.zh-CN.md) | [한국어](README.ko.md)
+
 このプラグインは、AI エージェントを使って VRChat のアバター改変を行うためのものです。
 
 ## 導入方法
