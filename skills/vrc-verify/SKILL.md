@@ -60,6 +60,7 @@ DSH 以外のギミックや、組み合わせを試すときは、テストを 
 結果の読み方:
 
 - `unity.states[]`：`changedShapes`（何もしていない状態からの変化。`メッシュ:シェイプキー: 前 -> 後`）、`turnedOn` / `turnedOff`、`frozenInWorld`、`layerStates`（どのレイヤーがどのステートにいるか）、`checks`（期待値の合否）。
+- `mixing[]` に、作者の表情が混ざった状態とシェイプキーが出る（直し方は `vrc-auto-adjust`）。
 - `summary.failedStates` が 0 でなければ、`changedShapes` と `layerStates` から原因を探し、レシピを直して apply し、もう一度テストする。
   例：作者の表情が混ざる → `changedShapes` に、レシピに無いシェイプキーが出る。DSH のレイヤーに入っていない → `layerStates` で分かる。
 - `unity.image`：何もしていない状態を先頭に、状態ごとの画像（`rows` の順）。画像を読めるなら見て判断し、読めないときはパスを伝える。

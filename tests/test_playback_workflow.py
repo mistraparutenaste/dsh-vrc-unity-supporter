@@ -63,6 +63,16 @@ class PlaybackTests(unittest.TestCase):
         failed = self.cli("unity_playback.py", "test", "--scene", SCENE)
         self.assertIn("--spec", json.loads(failed.stdout)["error"])
 
+    def test_mixing_reports_face_shapes_the_recipe_does_not_set(self):
+        spec = {"states": [{"label": "Face: right Fist", "recipeShapes": ["smile"], "fix": "Face: gesture right Fist"},
+                           {"label": "hat"}]}
+        output = {"unity": {"states": [
+            {"label": "Face: right Fist", "checks": [{"resolved": "Body:smile"}],
+             "changedShapes": ["Body:smile: 0 -> 100", "Body:eye_close: 0 -> 100", "Hair:wind: 0 -> 5"]},
+            {"label": "hat", "changedShapes": ["Body:x: 0 -> 1"]}]}}
+        hints = unity_playback.mixed_shapes(output, spec)
+        self.assertEqual([(h["state"], h["mixedShapes"]) for h in hints], [("Face: right Fist", ["eye_close"])])
+        self.assertEqual(output["unity"]["states"][0]["mixedShapes"], ["eye_close"])
 
 if __name__ == "__main__":
     unittest.main()

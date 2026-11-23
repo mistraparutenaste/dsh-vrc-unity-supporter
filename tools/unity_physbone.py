@@ -65,6 +65,11 @@ def target(item, label):
 
 def load_recipe(root, name):
     recipe, path = KIND.read(root, name)
+    return parse_recipe(recipe), path
+
+
+def parse_recipe(recipe):
+    """Check a recipe (as written in recipe.json) and turn it into the Unity request."""
     bones, colliders = recipe.get("bones", []), recipe.get("colliders", [])
     if any(not isinstance(items, list) or len(items) > MAX_ITEMS or not all(isinstance(i, dict) for i in items)
            for items in (bones, colliders)):
@@ -114,7 +119,7 @@ def load_recipe(root, name):
             "insideBounds": inside_bounds,
             "targets": [dict(target(t, "collider target"), values=[]) for t in targets],
         })
-    return {"name": recipe["name"], "bones": request_bones, "colliders": request_colliders}, path
+    return {"name": recipe["name"], "bones": request_bones, "colliders": request_colliders}
 
 
 def plan(root, args):
@@ -127,7 +132,7 @@ def plan(root, args):
 MOTIONS = ("sway", "walk", "sit")
 
 
-def simulate(root, args, recipe_name):
+def simulate(root, args, recipe=None):
     """Play mode run of the PhysBones (see DshPhysBoneSim): swing, settling and depth into the legs."""
     motions = [m.strip() for m in args.motions.split(",") if m.strip()]
     if not motions or any(m not in MOTIONS for m in motions):
@@ -137,11 +142,153 @@ def simulate(root, args, recipe_name):
         raise WorkflowError(reason)
     request = {"motions": ",".join(motions), "views": args.views, "size": args.size, "filter": args.filter,
                "recipeJson": ""}
-    if recipe_name:
-        recipe, _ = load_recipe(root, recipe_name)
+    if recipe:
         request["recipeJson"] = json.dumps(recipe, ensure_ascii=False)
     return toggle.read_only_task(root, args, request, "Run", "PhysBoneSim", "physbone-sim", "DshPhysBoneSim",
                                  graphics=True, keep_running=True)
+
+
+GOALS = {"softer": "sway,walk", "stiffer": "sway,walk", "no-clip": "walk,sit"}
+
+
+def chain_metrics(output, target):
+    for chain in (output.get("unity") or {}).get("chains") or []:
+        if chain["target"] == target:
+            settle = chain["settleSeconds"]
+            return {"swing": max(list(chain["maxSwing"].values()) or [0]),
+                    "settle": settle if isinstance(settle, (int, float)) else 99.0,
+                    "depth": max(list(chain["legDepth"].values()) or [0])}
+    raise WorkflowError(f"The simulation did not measure {target}. Use a target from the list command.")
+
+
+def satisfied(goal, now, base):
+    if goal == "softer":
+        return now["swing"] >= base["swing"] * 1.25 and 0.25 <= now["settle"] <= 1.5
+    if goal == "stiffer":
+        return now["swing"] <= base["swing"] * 0.75 and now["settle"] <= max(base["settle"], 0.3)
+    return now["depth"] <= 0.01
+
+
+def number_of(values, field, default):
+    try:
+        return float(values.get(field, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def propose(goal, raw, start, step, radii):
+    """The next recipe: one step towards the goal from the values now. Returns False at the end of the range."""
+    changed = False
+    if goal in ("softer", "stiffer"):
+        for target, values in start.items():
+            entry = next((b for b in raw["bones"] if b.get("target") == target), None)
+            if entry is None:
+                entry = {"target": target, "values": {}}
+                raw["bones"].append(entry)
+            current = dict(values, **entry.get("values", {}))
+            pull, stiffness = number_of(current, "pull", 0.2), number_of(current, "stiffness", 0.2)
+            spring = number_of(current, "spring", 0.2)
+            immobile = number_of(current, "immobile", 0)
+            if goal == "softer":
+                wanted = {"pull": max(0.05, round(pull * 0.75, 3)), "stiffness": max(0.0, round(stiffness * 0.6, 3)),
+                          "spring": min(0.9, round(spring + 0.15, 3))}
+                # From the second step, loosen what holds the chain back: its angle limit and immobile.
+                if step >= 2:
+                    wanted["immobile"] = round(immobile * 0.5, 3)
+                    if current.get("limitType", "None") != "None":
+                        for axis in ("maxAngleX", "maxAngleZ"):
+                            wanted[axis] = min(90.0, number_of(current, axis, 45) + 15)
+            else:
+                wanted = {"pull": min(0.9, round(pull * 1.3 + 0.05, 3)),
+                          "stiffness": min(0.9, round(stiffness + 0.15, 3)), "spring": max(0.0, round(spring * 0.6, 3)),
+                          "immobile": min(0.9, round(immobile + 0.15, 3))}
+            for field, value in wanted.items():
+                if abs(value - number_of(current, field, value)) > 1e-4:
+                    entry.setdefault("values", {})[field] = value
+                    changed = True
+        return changed
+    # no-clip: capsules on the thighs, then the shins, a little thicker each step (up to 4 cm over the leg)
+    targets = [{"target": t} for t in start]
+    for side in ("Left", "Right"):
+        for segment, first_step in (("UpperLeg", 1), ("LowerLeg", 3)):
+            if step < first_step:
+                continue
+            name = f"Tune{side}{segment}"
+            leg = radii.get(f"{side}{segment}", 0.06)
+            radius = round(min(leg + 0.04, leg + 0.01 * (step - first_step + 1)), 3)
+            entry = next((c for c in raw["colliders"] if c.get("name") == name), None)
+            if entry is None:
+                raw["colliders"].append({"name": name, "bone": f"{side}{segment}", "radius": radius, "targets": targets})
+                changed = True
+            elif entry["radius"] < radius:
+                entry["radius"] = radius
+                changed = True
+    return changed
+
+
+def copy(value):
+    return json.loads(json.dumps(value))
+
+
+def tune(root, args):
+    """Try recipes in memory until the targets meet the goal (or the steps run out); write the best as a recipe."""
+    goal = args.goal
+    base_raw = KIND.read(root, args.recipe)[0] if args.recipe else {"bones": [], "colliders": []}
+    out = args.out or (f"{args.recipe}_{goal}" if args.recipe else f"Tuned_{goal}").replace("-", "_")
+    folder = KIND.recipe_dir(root, out)
+    listing = toggle.read_only_task(root, args, {"filter": ""}, "List", "PhysBones", "physbones", KIND.helper)
+    if not listing.get("ok"):
+        return listing
+    bones = listing["unity"].get("physBones") or []
+    found = {b["target"]: b["values"] for b in bones}
+    roots = {b["root"]: b["target"] for b in bones}
+    targets = [roots.get(t, t) for t in args.target]
+    missing = [t for t in targets if t not in found]
+    if missing:
+        raise WorkflowError(f"No PhysBone at {', '.join(missing)}. Use a target from the list command.")
+    start = {t: found[t] for t in targets}
+    args.motions = GOALS[goal]
+    raw = copy(dict(base_raw, name=out))
+    raw.setdefault("bones", [])
+    raw.setdefault("colliders", [])
+
+    def run(recipe_raw):
+        has = recipe_raw["bones"] or recipe_raw["colliders"]
+        result = simulate(root, args, parse_recipe(recipe_raw) if has else None)
+        if not result.get("ok"):
+            raise WorkflowError(result.get("error") or "The simulation failed.")
+        return result
+
+    last = run(raw)
+    radii = (last.get("unity") or {}).get("legRadii") or {}
+    base = {t: chain_metrics(last, t) for t in targets}
+    history = [{"step": 0, "metrics": base, "recipe": args.recipe or "as it is"}]
+    best, best_raw = last, copy(raw)
+    met = goal == "no-clip" and all(satisfied(goal, base[t], base[t]) for t in targets)
+    for step in range(1, args.iterations + 1):
+        if met:
+            break
+        if not propose(goal, raw, start, step, radii):
+            history.append({"step": step, "stopped": "the values reached the end of the allowed range"})
+            break
+        last = run(raw)
+        metrics = {t: chain_metrics(last, t) for t in targets}
+        history.append({"step": step, "metrics": metrics, "values": copy(
+            {"bones": [b for b in raw["bones"] if b.get("target") in targets], "colliders": raw["colliders"]})})
+        if goal == "softer" and any(m["settle"] > 1.5 for m in metrics.values()):
+            history[-1]["stopped"] = "too bouncy (still moving 1.5 s after stopping); the step before is kept"
+            break
+        best, best_raw = last, copy(raw)
+        met = all(satisfied(goal, metrics[t], base[t]) for t in targets)
+    output = {"ok": True, "goal": goal, "targets": targets, "met": met, "history": history,
+              "image": (best.get("unity") or {}).get("image")}
+    if best_raw["bones"] or best_raw["colliders"]:
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "recipe.json").write_text(json.dumps(best_raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        output["recipe"] = folder.relative_to(root).as_posix() + "/recipe.json"
+        output["next"] = (f"Show the history and the image, then preview and apply the recipe {out} as usual "
+                          "(nothing has been saved to the scene)." + ("" if met else " The goal was not fully met; say so."))
+    return output
 
 
 def compare(before, after):
@@ -173,6 +320,17 @@ def main():
     sim.add_argument("--filter", default="")
     sim.add_argument("--views", default="front,left")
     sim.add_argument("--size", type=int, default=384)
+    tuning = commands.add_parser("tune", help="Try recipes in play mode until the targets meet a goal; write the best")
+    dsh_recipe.common_arguments(tuning, "tune", needs_recipe=False)
+    tuning.add_argument("--prepare", action="store_true")
+    tuning.add_argument("--goal", required=True, choices=sorted(GOALS))
+    tuning.add_argument("--target", action="append", required=True, help="A PhysBone target or root from list")
+    tuning.add_argument("--recipe", default="", help="Start from this recipe (it is not changed)")
+    tuning.add_argument("--out", default="", help="Name of the recipe to write (default <recipe>_<goal>)")
+    tuning.add_argument("--iterations", type=int, default=4)
+    tuning.add_argument("--views", default="front,left")
+    tuning.add_argument("--size", type=int, default=320)
+    tuning.add_argument("--filter", default="")
     for name in ("preview", "apply", "remove"):
         dsh_recipe.common_arguments(commands.add_parser(name), name)
     args = parser.parse_args()
@@ -186,14 +344,18 @@ def main():
         elif args.command == "list":
             output = toggle.read_only_task(root, args, {"filter": args.filter}, "List", "PhysBones", "physbones",
                                            KIND.helper)
+        elif args.command == "tune":
+            if not 1 <= args.iterations <= 8:
+                raise WorkflowError("--iterations must be from 1 to 8 (each step runs Unity for about a minute).")
+            output = tune(root, args)
         elif args.command == "simulate":
             if not 64 <= args.size <= 2048:
                 raise WorkflowError("--size must be from 64 to 2048.")
             if args.compare and not args.recipe:
                 raise WorkflowError("--compare needs --recipe.")
-            output = simulate(root, args, args.recipe)
+            output = simulate(root, args, load_recipe(root, args.recipe)[0] if args.recipe else None)
             if args.compare and output.get("ok"):
-                before = simulate(root, args, "")
+                before = simulate(root, args, None)
                 output = {"ok": before.get("ok", False), "recipe": output, "now": before,
                           "comparison": compare(before, output)}
                 if not before.get("ok"):

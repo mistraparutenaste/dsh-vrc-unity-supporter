@@ -180,6 +180,29 @@ class DynamicsWorkflowTests(unittest.TestCase):
                                  "now": {"maxSwing": {"sway": 0.3}, "settleSeconds": 0.4, "legDepth": {}},
                                  "recipe": {"maxSwing": {"sway": 0.4}, "settleSeconds": 0.7, "legDepth": {}}}])
 
+    def test_tuning_steps_and_goals(self):
+        sys.path.insert(0, str(base.TOOLS))
+        import unity_physbone as pb
+        start = {"PB/Hair": {"pull": "0.2", "spring": "0.1", "stiffness": "0.2", "immobile": "0.4",
+                             "limitType": "Angle", "maxAngleX": "20", "maxAngleZ": "80"}}
+        raw = {"bones": [], "colliders": []}
+        self.assertTrue(pb.propose("softer", raw, start, 1, {}))
+        self.assertEqual(raw["bones"][0]["values"], {"pull": 0.15, "stiffness": 0.12, "spring": 0.25})
+        self.assertTrue(pb.propose("softer", raw, start, 2, {}))
+        values = raw["bones"][0]["values"]
+        self.assertEqual((values["immobile"], values["maxAngleX"], values["maxAngleZ"]), (0.2, 35.0, 90.0))
+        clip = {"bones": [], "colliders": []}
+        self.assertTrue(pb.propose("no-clip", clip, {"PB/Skirt": {}}, 1, {"LeftUpperLeg": 0.08, "RightUpperLeg": 0.07}))
+        self.assertEqual([(c["name"], c["radius"]) for c in clip["colliders"]],
+                         [("TuneLeftUpperLeg", 0.09), ("TuneRightUpperLeg", 0.08)])
+        self.assertTrue(pb.propose("no-clip", clip, {"PB/Skirt": {}}, 3, {"LeftUpperLeg": 0.08, "RightUpperLeg": 0.07}))
+        self.assertEqual(len(clip["colliders"]), 4)  # the shins join from the third step
+        self.assertTrue(pb.satisfied("softer", {"swing": 0.08, "settle": 0.4}, {"swing": 0.06, "settle": 0.2}))
+        self.assertFalse(pb.satisfied("softer", {"swing": 0.08, "settle": 3}, {"swing": 0.06, "settle": 0.2}))
+        self.assertTrue(pb.satisfied("no-clip", {"depth": 0.004}, {"depth": 0.05}))
+        self.assertIn("--iterations", self.error("unity_physbone.py", "tune", *SCENE, "--goal", "softer",
+                                                 "--target", "PB/Hair", "--iterations", "20"))
+
     def test_undo_entries_keep_the_first_value_per_key(self):
         sys.path.insert(0, str(base.TOOLS))
         import dsh_recipe

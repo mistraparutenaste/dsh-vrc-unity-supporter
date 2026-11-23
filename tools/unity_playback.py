@@ -96,10 +96,12 @@ def auto_states(root, scene_path, avatar):
                     hand = "left" if g["hand"] == "left" else "right"
                     names = {v: k for k, v in GESTURES.items()}
                     states.append({"label": f"{name}: {g['label']}", "gesture": {hand: names[g["gesture"]]},
-                                   "expect": shapes(g)})
+                                   "expect": shapes(g), "recipeShapes": [s["shape"] for s in g["shapes"]],
+                                   "fix": f"Assets/DSH/Expressions/{name}: gesture {hand} {names[g['gesture']]}"})
                 for lock in recipe["locks"]:
                     states.append({"label": f"{name}: {lock['label']}", "menu": [f"{recipe['menu']}/{lock['label']}"],
-                                   "expect": shapes(lock)})
+                                   "expect": shapes(lock), "recipeShapes": [s["shape"] for s in lock["shapes"]],
+                                   "fix": f"Assets/DSH/Expressions/{name}: lock {lock['label']}"})
                 for t in recipe["toggles"]:
                     states.append({"label": f"{name}: {t['label']}", "menu": [f"{recipe['menu']}/{t['label']}"],
                                    "expect": shapes(t)})
@@ -129,6 +131,31 @@ def auto_states(root, scene_path, avatar):
     return {"states": states[:MAX_STATES]}
 
 
+def mixed_shapes(output, spec):
+    """For expression states: face shapes that moved although the recipe does not set them, i.e. the avatar's own
+    expression layers mixing in, with the recipe change that keeps each one out."""
+    hints = []
+    wanted = {s["label"]: s for s in spec.get("states", []) if s.get("recipeShapes") is not None}
+    for state in (output.get("unity") or {}).get("states") or []:
+        source = wanted.get(state.get("label"))
+        checks = state.get("checks") or []
+        if not source or not checks or ":" not in str(checks[0].get("resolved", "")):
+            continue
+        face = checks[0]["resolved"].split(":")[0]
+        extra = []
+        for line in state.get("changedShapes") or []:
+            key = line.split(": ")[0]
+            mesh, _, shape = key.partition(":")
+            if mesh == face and shape not in source["recipeShapes"]:
+                extra.append(shape)
+        if extra:
+            state["mixedShapes"] = extra
+            hints.append({"state": state["label"], "recipe": source["fix"], "mixedShapes": extra,
+                          "fix": "Add these shapes with 0 to that entry to keep the avatar's own expression out. They "
+                                 "then stay at rest for the avatar's other gestures too, so tell the user first."})
+    return hints
+
+
 def run(root, args):
     _, scene_path = toggle.scene_asset(root, args.scene)
     if args.spec:
@@ -141,7 +168,7 @@ def run(root, args):
         spec = auto_states(root, scene_path, args.avatar)
     else:
         raise WorkflowError("Give --spec <file> or --auto.")
-    states = load_states(spec)
+    states = load_states(spec)  # extra keys (recipeShapes, fix) stay in spec for the mixing report
     if args.render:
         reason = toggle.prepare_sdk_outputs(root)
         if reason:
@@ -150,7 +177,11 @@ def run(root, args):
     output = toggle.read_only_task(root, args, request, "Test", "Playback", "playback", "DshPlayback", graphics=True)
     unity = output.get("unity") or {}
     if output.get("ok"):
-        output["summary"] = {"states": len(states), "failedStates": unity.get("failedStates", 0)}
+        hints = mixed_shapes(output, spec)
+        output["summary"] = {"states": len(states), "failedStates": unity.get("failedStates", 0),
+                             "mixedStates": len(hints)}
+        if hints:
+            output["mixing"] = hints
         if unity.get("failedStates"):
             output["next"] = ("Some expectations failed. Read each state's checks and changedShapes, fix the recipe, "
                               "apply it again and run the test again.")
