@@ -120,6 +120,52 @@ class DynamicsWorkflowTests(unittest.TestCase):
         record = json.loads((self.project / ".dsh/physbones/Soft.json").read_text(encoding="utf-8"))
         self.assertEqual(record["scenes"], {})
 
+    def test_expression_recipe_errors_and_preview(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        args = ("unity_expression.py", "preview", *SCENE, "--recipe", "Face")
+        smile = {"eye_smile": 100}
+        cases = [
+            ({}, "changes nothing"),
+            ({"gestures": [{"hand": "both", "gesture": "Fist", "shapes": smile}]}, "'hand'"),
+            ({"gestures": [{"gesture": "Wave", "shapes": smile}]}, "'gesture'"),
+            ({"gestures": [{"gesture": "Fist", "shapes": {}}]}, "'shapes'"),
+            ({"gestures": [{"gesture": "Fist", "shapes": {"eye": 120}}]}, "0 to 100"),
+            ({"gestures": [{"gesture": "Fist", "shapes": smile}, {"hand": "left", "gesture": "Fist", "shapes": smile}]},
+             "appears twice"),
+            ({"locks": [{"name": "Smile", "shapes": smile}]}, "'menu'"),
+            ({"menu": "Face", "locks": [{"name": "A/B", "shapes": smile}]}, "unique 'name'"),
+            ({"menu": "Face", "toggles": [{"name": f"T{i}", "shapes": smile} for i in range(9)]}, "at most 8"),
+            ({"override": "some", "gestures": [{"gesture": "Fist", "shapes": smile}]}, "'override'"),
+        ]
+        for body, message in cases:
+            self.recipe("Expressions", "Face", **body)
+            self.assertIn(message, self.error(*args))
+        self.recipe("Expressions", "Face", menu="Face", gestures=[{"gesture": "Peace", "shapes": smile}],
+                    locks=[{"name": "Smile", "shapes": smile}], toggles=[{"name": "Blush", "shapes": {"cheek": 100}}])
+        plan = self.json_output(self.cli(*args))
+        self.assertEqual([(g["hand"], g["gesture"]) for g in plan["request"]["gestures"]], [("left", 4), ("right", 4)])
+        self.assertEqual(plan["summary"], {"gestures": 2, "locks": 1, "toggles": 1, "override": "listed"})
+        self.assertEqual(plan["parameterBudget"]["adds"], 9)  # an 8-bit lock and a 1-bit toggle
+        self.assertTrue(plan["request"]["toggles"][0]["saved"])
+
+    def test_held_and_world_accessories_are_checked(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.write("Assets/Props/Cup.prefab", "prefab\n")
+        args = ("unity_accessory.py", "preview", *SCENE, "--recipe", "Cup")
+        base_recipe = {"asset": "Assets/Props/Cup.prefab", "mode": "bone", "bone": "RightHand", "menu": "Props/Cup"}
+        for body, message in [({"hold": "yes"}, "'hold'"), ({"hold": {"drop": ""}, "world": True}, "'world'"),
+                              ({"hold": {"drop": "Props/Cup"}}, "different menu"),
+                              ({"hold": True, "mode": "armature"}, "mode 'bone'")]:
+            self.recipe("Accessories", "Cup", **dict(base_recipe, **body))
+            self.assertIn(message, self.error(*args))
+        self.recipe("Accessories", "Cup", **dict(base_recipe, hold={"drop": "Props/Put down"}))
+        plan = self.json_output(self.cli(*args))
+        self.assertEqual((plan["request"]["follow"], plan["request"]["dropMenu"]), ("constraint", "Props/Put down"))
+        self.assertIn("Assets/DSH/Accessories/Cup/Cup_drop.anim", plan["plannedPaths"])
+        self.assertEqual(plan["parameterBudget"]["adds"], 2)
+        self.recipe("Accessories", "Cup", **dict(base_recipe, world=True))
+        self.assertEqual(self.json_output(self.cli(*args))["request"]["follow"], "world")
+
     def test_undo_entries_keep_the_first_value_per_key(self):
         sys.path.insert(0, str(base.TOOLS))
         import dsh_recipe

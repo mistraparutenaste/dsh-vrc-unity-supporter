@@ -126,6 +126,8 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 - 別アバター用の衣装・髪を着せる → `vrc-outfit-fit`
 - 既存の PhysBone の値、ボーンに付けるコライダー → `vrc-physbone`
 - ビューポイント、ボーン単位の大きさ → `vrc-proportion`
+- 表情（ジェスチャー、メニューで選ぶ表情、ほほ染めなどのトグル） → `vrc-expression`（既存の FX は変えずにレイヤーを足す）
+- 手に持って置ける小物、ワールドに固定する小物 → `vrc-accessory` の `hold` / `world`
 - 上のどれにも当たらない構造の変更（新しい PhysBone、コンタクト / SPS、MA のメニュー、アニメーター） → `vrc-edit-script` でスクリプト化して適用
 - 数値の判断 → `vrc-perf-budget`
 - 適用後 → `vrc-verify`

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -41,6 +42,8 @@ namespace DSH.Editor
             public bool verifySdk = false;
             public string folder = "";
             public bool keepFiles = false;
+            public string follow = "proxy";   // proxy (MA Bone Proxy), constraint (held: VRC Parent Constraint), world
+            public string dropMenu = "";      // with constraint: a menu toggle that leaves the item where it is
         }
 
         [Serializable]
@@ -60,6 +63,8 @@ namespace DSH.Editor
         private const string BoneProxyType = "nadena.dev.modular_avatar.core.ModularAvatarBoneProxy";
         private const string MergeArmatureType = "nadena.dev.modular_avatar.core.ModularAvatarMergeArmature";
         private const string SetupOutfitType = "nadena.dev.modular_avatar.core.editor.SetupOutfit";
+        private const string WorldFixedType = "nadena.dev.modular_avatar.core.ModularAvatarWorldFixedObject";
+        public const string DropHolder = "DSH Drop";
         private const int MaxCandidates = 60;
         private const float Tolerance = 1e-4f;
         // An asset whose meshes already sit this close to the bone was made in the avatar's space (hair or
@@ -345,6 +350,8 @@ namespace DSH.Editor
             else item = items[0];
 
             changes.AddRange(CopyMaterials(item, request));
+            if (mode != "bone" && request.follow != "proxy")
+                throw new InvalidOperationException("Holding or fixing in the world works for items attached to a bone (mode 'bone').");
             if (mode == "bone") changes.AddRange(PlaceOnBone(avatar, item, asset, request, out _));
             else
             {
@@ -354,6 +361,7 @@ namespace DSH.Editor
                 if (item.GetComponent(DshVrc.LoadedType(BoneProxyType)) != null)
                     throw new InvalidOperationException("The accessory was attached to a bone before. Remove it, then apply again in armature mode.");
             }
+            if (inScene) changes.AddRange(EnsureDropToggle(avatar, holder, item, request));
             if (inScene && !string.IsNullOrEmpty(request.menu))
             {
                 var clip = HideClip(avatar, holder, request, changes);
@@ -583,6 +591,14 @@ namespace DSH.Editor
                 changes.Add($"placed on {boneId} (origin {origin}) offset {Vector(request.position)} rotation {Vector(request.rotation)} scale {factor}");
             }
 
+            if (request.follow != "proxy")
+            {
+                if (DshVrc.LoadedType(BoneProxyType) is Type existing && item.GetComponent(existing) != null)
+                    throw new InvalidOperationException("The accessory follows its bone through Bone Proxy from an earlier apply. Remove it, then apply again.");
+                if (changes.Count > 0) PrefabUtility.RecordPrefabInstancePropertyModifications(t);
+                changes.AddRange(request.follow == "world" ? EnsureWorldFixed(item) : EnsureHoldConstraint(item, bone));
+                return changes;
+            }
             var proxyType = DshVrc.LoadedType(BoneProxyType)
                 ?? throw new InvalidOperationException("Modular Avatar is not installed. Add it in VCC/ALCOM to attach accessories.");
             var proxy = item.GetComponent(proxyType);
@@ -609,6 +625,127 @@ namespace DSH.Editor
                 PrefabUtility.RecordPrefabInstancePropertyModifications(proxy);
                 PrefabUtility.RecordPrefabInstancePropertyModifications(t);
             }
+            return changes;
+        }
+
+        private static Type ParentConstraintType => DshReflect.Find("VRCParentConstraint", "VRC")
+            ?? throw new InvalidOperationException("VRChat constraints are unavailable. Update the VRChat SDK to 3.7 or later in VCC/ALCOM.");
+
+        /// <summary>
+        /// A held item stays under the accessory object and follows the hand through a VRC Parent Constraint whose
+        /// offsets keep its current pose. Its path never changes at build time, so the drop animation can find it.
+        /// </summary>
+        private static List<string> EnsureHoldConstraint(GameObject item, Transform bone)
+        {
+            var changes = new List<string>();
+            var type = ParentConstraintType;
+            var constraints = item.GetComponents(type);
+            if (constraints.Length > 1) throw new InvalidOperationException("The accessory has several parent constraints.");
+            var constraint = constraints.FirstOrDefault();
+            if (constraint != null)
+            {
+                var sources = ConstraintSources(constraint);
+                if (sources.Count != 1 || sources[0] != bone)
+                    throw new InvalidOperationException("The accessory's parent constraint follows another bone. Remove it, then apply again.");
+                return changes;
+            }
+            constraint = item.AddComponent(type);
+            var sourceType = DshVrc.LoadedType("VRC.Dynamics.VRCConstraintSource")
+                ?? throw new InvalidOperationException("The VRChat SDK constraint source type is unavailable.");
+            var source = Activator.CreateInstance(sourceType);
+            void SetSource(string name, object value) =>
+                (sourceType.GetField(name) ?? throw new InvalidOperationException($"VRCConstraintSource has no {name}."))
+                    .SetValue(source, value);
+            SetSource("SourceTransform", bone);
+            SetSource("Weight", 1f);
+            var sourcesField = DshReflect.Field(type, "Sources");
+            var list = sourcesField.GetValue(constraint);
+            var add = list.GetType().GetMethod("Add", new[] { sourceType })
+                ?? throw new InvalidOperationException("The VRChat SDK constraint source list cannot be added to.");
+            add.Invoke(list, new[] { source });
+            sourcesField.SetValue(constraint, list);
+            // ActivateConstraint bakes the offsets from the current pose, locks and turns the constraint on.
+            var activate = type.GetMethod("ActivateConstraint", Type.EmptyTypes)
+                ?? throw new InvalidOperationException("The VRChat SDK constraint has no ActivateConstraint.");
+            activate.Invoke(constraint, null);
+            DshReflect.Field(type, "FreezeToWorld").SetValue(constraint, false);
+            DshReflect.Dirty(constraint);
+            changes.Add($"added VRC Parent Constraint following {bone.name}");
+            return changes;
+        }
+
+        private static List<Transform> ConstraintSources(Component constraint)
+        {
+            var found = new List<Transform>();
+            if (!(DshReflect.Field(constraint.GetType(), "Sources").GetValue(constraint) is IEnumerable sources)) return found;
+            foreach (var source in sources)
+                found.Add(source?.GetType().GetField("SourceTransform")?.GetValue(source) as Transform);
+            return found;
+        }
+
+        private static List<string> EnsureWorldFixed(GameObject item)
+        {
+            var type = DshVrc.LoadedType(WorldFixedType)
+                ?? throw new InvalidOperationException("This Modular Avatar has no World Fixed Object. Update Modular Avatar in VCC/ALCOM.");
+            if (item.GetComponent(type) != null) return new List<string>();
+            item.AddComponent(type);
+            return new List<string> { "added MA World Fixed Object" };
+        }
+
+        /// <summary>
+        /// "Drop": a second menu toggle on a child object that plays a clip setting the hold constraint's Freeze To
+        /// World, so the item stays where it is in the world until the toggle is turned off again.
+        /// </summary>
+        private static List<string> EnsureDropToggle(GameObject avatar, GameObject holder, GameObject item, Request request)
+        {
+            var changes = new List<string>();
+            var existing = holder.transform.Cast<Transform>().Where(t => t.name == DropHolder).ToArray();
+            if (string.IsNullOrEmpty(request.dropMenu))
+            {
+                if (existing.Length > 0)
+                    throw new InvalidOperationException("The accessory has a drop toggle but the recipe has none. Remove it, then apply again.");
+                return changes;
+            }
+            if (request.follow != "constraint")
+                throw new InvalidOperationException("A drop toggle needs a held item (hold).");
+            var path = AnimationUtility.CalculateTransformPath(item.transform, avatar.transform);
+            var clipPath = $"{request.folder}/{request.name}_drop.anim";
+            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+            var binding = EditorCurveBinding.FloatCurve(path, ParentConstraintType, "FreezeToWorld");
+            var current = clip == null ? null : AnimationUtility.GetEditorCurve(clip, binding);
+            if (clip == null || current == null || AnimationUtility.GetCurveBindings(clip).Length != 1)
+            {
+                if (request.folder != "Assets/DSH/Accessories/" + request.name || !AssetDatabase.IsValidFolder(request.folder))
+                    throw new InvalidOperationException("The recipe folder Assets/DSH/Accessories/<name> is missing.");
+                if (clip == null)
+                {
+                    clip = new AnimationClip { name = request.name + "_drop" };
+                    AssetDatabase.CreateAsset(clip, clipPath);
+                }
+                clip.ClearCurves();
+                AnimationUtility.SetEditorCurve(clip, binding, AnimationCurve.Constant(0, 0, 1));
+                EditorUtility.SetDirty(clip);
+                AssetDatabase.SaveAssets();
+                changes.Add($"drop clip {clipPath}");
+            }
+            if (existing.Length == 0)
+            {
+                if (DshVrc.LoadedType("com.vrcfury.api.FuryComponents") == null)
+                    throw new InvalidOperationException("A drop toggle needs VRCFury. Install it in VCC/ALCOM, or leave out 'drop'.");
+                CheckMenu(avatar, request.dropMenu);
+                var dropObject = new GameObject(DropHolder);
+                dropObject.transform.SetParent(holder.transform, false);
+                var toggle = DshVrc.CreateFuryToggle(dropObject);
+                DshVrc.CallPublic(toggle, "SetMenuPath", request.dropMenu);
+                DshVrc.CallPublic(DshVrc.CallPublic(toggle, "GetActions"), "AddAnimationClip", clip);
+                changes.Add($"added drop toggle {request.dropMenu}");
+                return changes;
+            }
+            var data = existing.Length == 1
+                ? existing[0].GetComponents<Component>().Where(DshVrc.IsFury).Select(DshVrc.ToggleData).FirstOrDefault(d => d != null)
+                : null;
+            if (data == null || data.FindPropertyRelative("name")?.stringValue != request.dropMenu)
+                throw new InvalidOperationException("The accessory's drop toggle differs from the recipe. Remove the accessory, then apply again.");
             return changes;
         }
 
@@ -760,6 +897,14 @@ namespace DSH.Editor
                     var (_, parameter, location) = DshVrc.GeneratedToggle(DshAvatarScene.Descriptor(copy), request.menu);
                     result["menuLocation"] = location;
                     result["parameter"] = parameter;
+                    // Build plugins may move the item (World Fixed Object); the toggle must still reach it.
+                    var shown = DshVrc.FxClips(DshAvatarScene.Descriptor(copy), parameter)
+                        .SelectMany(AnimationUtility.GetCurveBindings)
+                        .Where(b => b.type == typeof(GameObject) && b.propertyName == "m_IsActive").Select(b => b.path).Distinct().ToArray();
+                    var missing = shown.Where(p => copy.transform.Find(p) == null).ToArray();
+                    result["toggleAnimation"] = $"{shown.Length - missing.Length}/{shown.Length}";
+                    if (missing.Length > 0)
+                        throw new InvalidOperationException("After the build the menu toggle animates objects that are not there: " + string.Join(", ", missing.Take(3)));
                 }
                 if (copyItem == null || !copyItem.IsChildOf(copy.transform))
                 {
@@ -767,7 +912,34 @@ namespace DSH.Editor
                     result["reason"] = "A build plugin removed or moved the accessory object. Check it in Build & Test.";
                     return result;
                 }
-                if (mode == "bone")
+                if (!string.IsNullOrEmpty(request.dropMenu))
+                {
+                    var (_, dropParameter, dropLocation) = DshVrc.GeneratedToggle(DshAvatarScene.Descriptor(copy), request.dropMenu);
+                    result["dropMenuLocation"] = dropLocation;
+                    result["dropParameter"] = dropParameter;
+                    // The built drop animation must reach the constraint on the item.
+                    var bindings = DshVrc.FxClips(DshAvatarScene.Descriptor(copy), dropParameter)
+                        .SelectMany(AnimationUtility.GetCurveBindings).Where(b => b.propertyName == "FreezeToWorld").ToArray();
+                    var reaches = bindings.Count(b => copy.transform.Find(b.path)?.GetComponent(ParentConstraintType) != null);
+                    result["dropAnimation"] = $"{reaches}/{bindings.Length}";
+                    if (reaches == 0)
+                        throw new InvalidOperationException("After the build the drop animation does not reach the accessory's constraint.");
+                }
+                if (mode == "bone" && request.follow == "constraint")
+                {
+                    Enum.TryParse<HumanBodyBones>(request.bone, out var holdId);
+                    var hand = copy.GetComponent<Animator>()?.GetBoneTransform(holdId);
+                    var constraint = copyItem.GetComponent(ParentConstraintType);
+                    var sources = constraint == null ? new List<Transform>() : ConstraintSources(constraint);
+                    result["follows"] = sources.Count == 1 && sources[0] != null ? sources[0].name : null;
+                    if (hand == null || sources.Count != 1 || sources[0] != hand)
+                        throw new InvalidOperationException($"After the build the accessory's constraint does not follow the {holdId} bone.");
+                }
+                else if (mode == "bone" && request.follow == "world")
+                {
+                    result["parentAfterBuild"] = copyItem.parent == null ? "" : copyItem.parent.name;
+                }
+                else if (mode == "bone")
                 {
                     Enum.TryParse<HumanBodyBones>(request.bone, out var boneId);
                     var bone = copy.GetComponent<Animator>()?.GetBoneTransform(boneId);

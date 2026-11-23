@@ -34,7 +34,8 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | 配置済み衣装のオン・オフ（排他を含む）、トグルの取り外し | `vrc-first-run` |
 | 付属 PSD からの色違い、lilToon・Poiyomi の値の調整 | `vrc-texture-variant`、`vrc-material-adjust` |
 | シェイプキーの値、衣装の追従、服の下の体の削除 | `vrc-shape-adjust` |
-| 小物・髪・衣装の取り付け（ボーン、骨組みの統合）、メニュー、元の髪などを隠す、取り外し | `vrc-accessory` |
+| 小物・髪・衣装の取り付け（ボーン、骨組みの統合、手に持って置ける、ワールド固定）、メニュー、元の髪などを隠す、取り外し | `vrc-accessory` |
+| ジェスチャーの表情、メニューで選ぶ表情、ほほ染めなどのトグル | `vrc-expression` |
 | Blender での簡単な形の作成、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
 | 既存の PhysBone の値（揺れ方、掴める・ポーズできるか）、ボーンに付けるコライダー | `vrc-physbone` |
 | ビューポイント、ボーン単位の大きさ（頭・手など） | `vrc-proportion` |
@@ -43,7 +44,7 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | Editor スクリプトで行う（`vrc-edit-script`） |
 |---|
 | 新しい揺れ物への PhysBone の追加、コンタクト / SPS |
-| Modular Avatar のメニューの組み替え、既存のアニメーター・FX レイヤーの変更（`vrc-avatar-edit` §7 を先に読む） |
+| Modular Avatar のメニューの組み替え、既存のアニメーター・FX レイヤーの変更（`vrc-avatar-edit` §7 を先に読む。表情は `vrc-expression`） |
 | アバターの prefab をシーンに置く、上の表にない設定の変更 |
 
 - シーン・Prefab・アセットの YAML を直接編集しない。`.meta` なしでファイルを移動・削除しない
@@ -70,7 +71,8 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | 色違い・肌・髪・瞳の色、ロゴ（付属 PSD から） | `vrc-texture-variant` |
 | lilToon・Poiyomi の色・影・輪郭線・発光・リムの調整（PSD なしで） | `vrc-material-adjust` |
 | 体型・顔の調整、衣装の貫通、隠れる部分の削除 | `vrc-shape-adjust` |
-| 小物・髪・衣装の取り付け、付け替え、取り外し | `vrc-accessory` |
+| 小物・髪・衣装の取り付け、付け替え、取り外し、手に持つ・置く小物 | `vrc-accessory` |
+| 表情の差し替え・固定・追加（ジェスチャー、メニュー、ほほ染め・涙） | `vrc-expression` |
 | 非対応衣装・髪を着せる（合わせる→付ける→追従・削除→確認） | `vrc-outfit-fit` |
 | Blender での小物作成、FBX の合わせ込みだけ | `vrc-blender-model` |
 | 髪・スカート・しっぽの揺れ方、掴めないように、スカートの脚への貫通 | `vrc-physbone` |

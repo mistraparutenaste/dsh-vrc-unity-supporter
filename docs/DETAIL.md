@@ -9,6 +9,8 @@
 - **Body shape**: change blendshapes, make outfits follow the body, and remove body parts hidden under clothes at build time, without editing the FBX.
 - **Accessories**: attach hats, hair, accessories or outfits to a bone or merge their armature, switch them from the menu, and hide the original hair while they are on.
 - **Blender**: make simple shapes. Hair and outfits made for another avatar are fitted to this avatar's skeleton and to the body-shape difference from the avatar they were made for, get the avatar's body shape keys, and are then attached, made to follow the body, and the body hidden underneath removed (uses [Blender](https://www.blender.org/)).
+- **Expressions**: replace hand-gesture expressions, pick and keep an expression from the menu, and add toggles such as a blush, by adding a layer without changing the avatar's animators.
+- **Held props**: have the avatar hold a prop and leave it in place with "Put down" in the menu, or fix a prop in the world.
 - **Swinging parts**: change PhysBone values of hair, skirts and tails (how they swing, whether they can be grabbed or posed), and add colliders on the legs or body so they do not pass through.
 - **View position and sizes**: put the view position between the eyes again, and make the head, hands or other single bones bigger or smaller.
 - **Parameter memory**: count the synced parameters (256-bit limit) as built, and show what is left before a toggle is added.

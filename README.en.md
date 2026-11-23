@@ -161,6 +161,7 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, 
 | Make things in Blender, wear unsupported outfits | "Put this coat made for Selestia on Salt" | Blender, Modular Avatar |
 | Adjust swinging parts | "Make the back hair swing more softly, and stop people grabbing the tail" | Nothing |
 | Change the view position and single sizes | "The view is too low, fix it. Make the head a little bigger" | Modular Avatar, to change only a hand or the chest |
+| Change expressions | "Make the right fist a smile, and let me pick a half-closed-eye look from the menu" | Modular Avatar |
 | Check the performance rank and parameter memory | "Check the performance rank", "How many parameter bits are left?" | Nothing |
 
 Add VRCFury, Modular Avatar and Avatar Optimizer to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
@@ -223,6 +224,7 @@ Attaches existing hats, hair, accessories and outfits (prefabs or FBX) to the av
 - **Attach to a bone**: attaches hats, ribbons or hair made for the avatar to a bone such as the head (Modular Avatar's Bone Proxy).
 - **Merge the armature**: things with their own armature, such as outfits, are merged into the avatar's armature (Modular Avatar's Setup Outfit).
 - **Show and hide from the menu**: you can switch attached items on and off from the menu, and hide the original hair and so on only while they are worn.
+- **Hold and put down**: have the avatar hold a prop such as a sword or a cup, and leave it where it is with "Put down" in the menu. Props fixed in the world are possible too.
 
 ```text
 Attach this wolf-cut hair, and let me switch the original hair from the menu
@@ -270,6 +272,16 @@ The view is too low, fix it. Make the head a little bigger
 
 The agent shows a before/after image with the view position marked in red before applying. Ask "Undo BigHead" to go back.
 
+### Change expressions
+
+Replace the expressions on hand gestures, pick an expression from the menu and keep it, or switch shape keys such as a blush, tears or sweat on and off. The avatar's own animators stay as they are; DSH adds a layer for the expressions (Modular Avatar).
+
+```text
+Make the right fist a smile, and let me pick a half-closed-eye look from the menu
+```
+
+The agent looks at the face's shape keys and the avatar's own gesture expressions (which hand sign moves which shape keys), shows the recipe, and confirms with a face image for each expression before applying. The author's expressions stay; only the shape keys in the recipe are overridden. Ask "Remove the Face expressions" to take them off.
+
 ### Check the performance rank
 
 Ask "Check the performance rank" and it shows the PC and Mobile performance ranks, the items that set the rank (such as the number of skinned meshes), and what to change to reach the next rank up. These are estimates counted from the original prefab before the build, so check the final rank in the VRChat SDK build panel.
@@ -295,6 +307,7 @@ You can undo changes made by this plugin by asking as below. Before removing any
 | Accessories and hair | "Remove WolfHair" |
 | Swing adjustments | "Undo the SoftHair swing adjustment" |
 | View position and single sizes | "Undo BigHead" |
+| Expressions | "Remove the Face expressions" |
 
 For other changes, put the scene back from the Git restore point. Ask in the chat how to do it.
 

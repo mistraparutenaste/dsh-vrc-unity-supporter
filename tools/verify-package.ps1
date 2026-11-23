@@ -36,6 +36,7 @@ $required = @(
     'templates/Editor/DshDynamics.cs', 'templates/Editor/DshParameters.cs', 'templates/Editor/DshPhysBone.cs',
     'templates/Editor/DshProportion.cs', 'tools/dsh_recipe.py', 'tools/unity_params.py', 'tools/unity_physbone.py',
     'tools/unity_proportion.py', 'skills/vrc-physbone/SKILL.md', 'skills/vrc-proportion/SKILL.md',
+    'templates/Editor/DshExpression.cs', 'tools/unity_expression.py', 'skills/vrc-expression/SKILL.md',
     'templates/Blender/dsh_blender.py', 'tools/blender_model.py', 'skills/vrc-blender-model/SKILL.md', 'skills/vrc-outfit-fit/SKILL.md',
     'install.cmd',
     'installer/install.cmd', 'installer/install.ps1',

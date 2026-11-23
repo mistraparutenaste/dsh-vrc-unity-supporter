@@ -1,6 +1,6 @@
 ---
 name: vrc-accessory
-description: 帽子・髪・小物・衣装の prefab / FBX を、ボーンに付けるか（MA Bone Proxy）骨組みを統合して（MA Setup Outfit）アバターに付け、メニューで出し入れする。付け替え・取り外しにも使う。
+description: 帽子・髪・小物・衣装の prefab / FBX をボーンに付ける・骨組みを統合する・手に持って置ける・ワールドに固定する形でアバターに付け、メニューで出し入れする。
 ---
 
 # 小物・髪・衣装を付ける
@@ -65,6 +65,8 @@ python -B $acc candidates --project '<project>' --scene 'Assets/Avatar.unity' --
 | `hide` | 小物を付けている間だけ隠す、アバターのオブジェクト（アバターからのパス）。髪の差し替えで元の髪を隠すときなど。`menu` があればトグルと一緒に切り替わる。`menu` が空なら常に着る扱いで、シーン上でオフにする（取り外すとオンに戻る） |
 | `materialsFrom` | 同じ名前のメッシュのマテリアルを写す元の prefab / FBX（マテリアルやシェーダーが欠けていればエラーで止まる。パッケージを丸ごと入れ直してもらう。マテリアルが同じ商品の別の共通パッケージにあることも多い。prefab が参照するのにプロジェクトに無いマテリアルは `preview` の `missingMaterials` に出る）。Blender で合わせた FBX は Unity の標準マテリアルで取り込まれるので、元の衣装・髪の prefab を指定する（シーン上の上書きとして保存。FBX は変えない） |
 | `defaultOn` | メニューの初期状態（既定 true）。トグルは保存される（ワールドを移っても残る） |
+| `hold` | 手に持つ小物。`true` か `{"drop": "Props/Put down"}`。Bone Proxy の代わりに VRC Parent Constraint で `bone`（`RightHand` など）に追従する。`drop` を書くと「置く」トグルができ、オンの間はその場（ワールド）に残る。VRChat SDK 3.7 以降。追加のパラメータは 1 bit |
+| `world` | `true` でワールドに固定する（MA World Fixed Object）。読み込んだ時点の位置に置かれ、アバターが動いても動かない |
 
 - アバター専用の髪・小物は、たいてい `mode: bone`、`origin: auto` のままでよい（元の位置に付く）。
 - 汎用の帽子・キャップ・ベレー（特定のアバター用でないもの）は、`bone: Head`、`scale: "auto"` から始める。
@@ -72,6 +74,9 @@ python -B $acc candidates --project '<project>' --scene 'Assets/Avatar.unity' --
 - 衣装（Hips から骨組みがある）は `mode: armature`。ボーン名がアバターと合っている必要がある（合わない衣装は `vrc-blender-model` で合わせてから付ける）。
 - 別アバター用の髪や帽子（骨組みが Head から始まるもの）を `vrc-blender-model` で合わせた FBX は、`mode: bone`、`bone: Head` で付ける（`origin: auto` で元の位置になる）。
 - 元の髪を隠すオブジェクト名は、`unity_shape.py shapes --filter Hair` などで確かめる。
+- 手に持つ小物（剣、カップ、ぬいぐるみ）は `mode: bone`、`bone: RightHand`（か `LeftHand`）、`origin: bone`、`hold` で、撮影しながら `position` / `rotation` を手のひらに合わせる。
+  `drop` の「置く」は、オンにしたときの場所に残り、オフで手に戻る。動きは撮影では分からないので、Gesture Manager で確かめてもらう。
+- `hold` と `world` は `mode: bone` の小物だけ。`scale: "auto"`（帽子の自動合わせ）とは一緒に使えない。
 - 書いたら、付けるもの、付け方、メニュー名、隠すものをユーザーに伝えて確認を取る。
 
 ## 3. 撮影して位置を調整する（シーンは保存しない）
@@ -97,7 +102,8 @@ python -B $acc apply @a --approved-preview '<preview の値>'
 
 - preview の `plannedPaths`（シーンと、`hide` を使うなら隠すためのクリップ）を伝え、明示的な確認を得てから apply する。
 - 適用後に位置だけ直したいときは、レシピの `position` などを変えて preview / apply し直す（`unity.applied` に変わった点だけが出る）。付けるもの、付け方、メニューを変えるときは、いったん取り外してから付け直す。
-- `unity.sdkVerification` に、ビルド後に付いたボーン（`attachedTo`）または統合された衣装のメッシュ数（`mergedRenderers`）、メニューの場所（`menuLocation`）が出る。
+- `unity.sdkVerification` に、ビルド後に付いたボーン（`attachedTo`）または統合された衣装のメッシュ数（`mergedRenderers`）、メニューの場所（`menuLocation`）、トグルのアニメーションが届くオブジェクトの数（`toggleAnimation`）が出る。`hold` では追従するボーン（`follows`）と「置く」のアニメーションが届く数（`dropAnimation`）、`world` ではビルド後の親（`parentAfterBuild`）も出る。
+- preview の `parameterBudget` で、パラメータの残りを確かめる（`vrc-perf-budget` §5）。
 - Git の扱いは衣装トグル・色違いと同じ（チェックポイントが必要、DSH が保存したシーンはコミットなしで続けられる）。
 
 ## 5. 一覧と取り外し

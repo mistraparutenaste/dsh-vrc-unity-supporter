@@ -101,6 +101,26 @@ def load_recipe(root, name):
         if (not isinstance(materials_from, str) or not materials_from.startswith("Assets/") or "\\" in materials_from or
                 not materials_from.lower().endswith(ASSET_SUFFIXES) or not inside(root, materials_from).is_file()):
             raise WorkflowError("'materialsFrom' must be an existing .prefab or .fbx under Assets/.")
+    follow, drop_menu = "proxy", ""
+    hold, world = recipe.get("hold", False), recipe.get("world", False)
+    if hold not in (False, None):
+        if hold is True:
+            hold = {}
+        if not isinstance(hold, dict) or set(hold) - {"drop"}:
+            raise WorkflowError("'hold' must be true, or {\"drop\": \"menu path\"} to add a toggle that leaves it in place.")
+        drop_menu = hold.get("drop", "")
+        if (not isinstance(drop_menu, str) or len(drop_menu) > 200 or
+                (drop_menu and any(not part.strip() for part in drop_menu.split("/")))):
+            raise WorkflowError("'drop' must be a menu path such as 'Props/Put down'.")
+        if drop_menu and drop_menu == menu:
+            raise WorkflowError("'drop' needs a different menu path from 'menu'.")
+        follow = "constraint"
+    if world not in (False, None):
+        if world is not True or follow != "proxy":
+            raise WorkflowError("'world' must be true, and cannot be used with 'hold'.")
+        follow = "world"
+    if follow != "proxy" and (mode == "armature" or fit_head):
+        raise WorkflowError("'hold' and 'world' work for items attached to a bone (mode 'bone' or 'auto' for a rigid item).")
     default_on = recipe.get("defaultOn", True)
     if not isinstance(default_on, bool):
         raise WorkflowError("'defaultOn' must be true or false.")
@@ -108,7 +128,7 @@ def load_recipe(root, name):
                "position": vector(recipe, "position", 2, "metres from the bone"),
                "rotation": vector(recipe, "rotation", 360, "degrees"),
                "scale": float(scale), "fitHead": fit_head, "menu": menu, "hide": hide, "materialsFrom": materials_from,
-               "defaultOn": default_on,
+               "defaultOn": default_on, "follow": follow, "dropMenu": drop_menu,
                "folder": (ACCESSORIES / name).as_posix()}
     return request, path
 
@@ -200,10 +220,13 @@ def plan(root, args):
     planned = [scene_path]
     if recipe["hide"] and recipe["menu"]:
         planned.append(f"{recipe['folder']}/{recipe['name']}_hide.anim")
+    if recipe["dropMenu"]:
+        planned.append(f"{recipe['folder']}/{recipe['name']}_drop.anim")
     output, helpers = toggle.scene_plan(root, request, scene, planned, fingerprint(root, recipe, path))
     output["alreadyInScene"] = scene_path in scenes_with_holder(root, recipe["name"])
     output["parameterBudget"] = toggle.parameter_budget(
-        root, scene_path, args.avatar, 1 if recipe["menu"] and not output["alreadyInScene"] else 0)
+        root, scene_path, args.avatar,
+        0 if output["alreadyInScene"] else (1 if recipe["menu"] else 0) + (1 if recipe["dropMenu"] else 0))
     if recipe["materialsFrom"]:
         missing = missing_materials(root, recipe["materialsFrom"])
         if missing:
