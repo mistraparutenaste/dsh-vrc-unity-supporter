@@ -212,6 +212,13 @@ namespace DSH.Editor
             DshAvatarScene.Finish("PhysBoneRemove", result);
         }
 
+        /// <summary>Apply a recipe request (JSON) to an avatar in memory, for the simulation; returns the changes.</summary>
+        internal static List<string> TryRecipe(GameObject avatar, string json)
+        {
+            var recipe = JsonUtility.FromJson<Request>(json) ?? throw new InvalidOperationException("The recipe to try is not valid.");
+            return ApplyRecipe(avatar, recipe, null);
+        }
+
         internal static void Save(UnityEngine.SceneManagement.Scene scene, string digest, Dictionary<string, object> result, string note)
         {
             DshAvatarScene.RequireSceneDigest(scene.path, digest);

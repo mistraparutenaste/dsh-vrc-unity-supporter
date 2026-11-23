@@ -124,6 +124,36 @@ def plan(root, args):
     return KIND.plan(root, args, recipe, path, summary)
 
 
+MOTIONS = ("sway", "walk", "sit")
+
+
+def simulate(root, args, recipe_name):
+    """Play mode run of the PhysBones (see DshPhysBoneSim): swing, settling and depth into the legs."""
+    motions = [m.strip() for m in args.motions.split(",") if m.strip()]
+    if not motions or any(m not in MOTIONS for m in motions):
+        raise WorkflowError(f"--motions must be a comma list of {', '.join(MOTIONS)}.")
+    reason = toggle.prepare_sdk_outputs(root)
+    if reason:
+        raise WorkflowError(reason)
+    request = {"motions": ",".join(motions), "views": args.views, "size": args.size, "filter": args.filter,
+               "recipeJson": ""}
+    if recipe_name:
+        recipe, _ = load_recipe(root, recipe_name)
+        request["recipeJson"] = json.dumps(recipe, ensure_ascii=False)
+    return toggle.read_only_task(root, args, request, "Run", "PhysBoneSim", "physbone-sim", "DshPhysBoneSim",
+                                 graphics=True, keep_running=True)
+
+
+def compare(before, after):
+    """Per chain: the measurements without and with the recipe, side by side."""
+    rows = {}
+    for label, output in (("now", before), ("recipe", after)):
+        for chain in (output.get("unity") or {}).get("chains") or []:
+            rows.setdefault(chain["target"], {"part": chain["part"]})[label] = {
+                key: chain[key] for key in ("maxSwing", "settleSeconds", "legDepth")}
+    return [dict({"target": target}, **row) for target, row in rows.items()]
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -134,6 +164,15 @@ def main():
     dsh_recipe.common_arguments(listing, "list", needs_recipe=False)
     listing.add_argument("--filter", default="")
     listing.add_argument("--prepare", action="store_true")
+    sim = commands.add_parser("simulate", help="Run the PhysBones in play mode and measure them (Unity with graphics)")
+    dsh_recipe.common_arguments(sim, "simulate", needs_recipe=False)
+    sim.add_argument("--prepare", action="store_true")
+    sim.add_argument("--recipe", default="", help="Try this recipe in memory (nothing is saved)")
+    sim.add_argument("--compare", action="store_true", help="With --recipe: also run without it and compare")
+    sim.add_argument("--motions", default="sway,walk,sit")
+    sim.add_argument("--filter", default="")
+    sim.add_argument("--views", default="front,left")
+    sim.add_argument("--size", type=int, default=384)
     for name in ("preview", "apply", "remove"):
         dsh_recipe.common_arguments(commands.add_parser(name), name)
     args = parser.parse_args()
@@ -147,6 +186,18 @@ def main():
         elif args.command == "list":
             output = toggle.read_only_task(root, args, {"filter": args.filter}, "List", "PhysBones", "physbones",
                                            KIND.helper)
+        elif args.command == "simulate":
+            if not 64 <= args.size <= 2048:
+                raise WorkflowError("--size must be from 64 to 2048.")
+            if args.compare and not args.recipe:
+                raise WorkflowError("--compare needs --recipe.")
+            output = simulate(root, args, args.recipe)
+            if args.compare and output.get("ok"):
+                before = simulate(root, args, "")
+                output = {"ok": before.get("ok", False), "recipe": output, "now": before,
+                          "comparison": compare(before, output)}
+                if not before.get("ok"):
+                    output["error"] = before.get("error")
         elif args.command == "preview":
             output, _ = plan(root, args)
         elif args.command == "apply":

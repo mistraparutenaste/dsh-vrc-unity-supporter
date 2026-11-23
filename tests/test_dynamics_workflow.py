@@ -166,6 +166,20 @@ class DynamicsWorkflowTests(unittest.TestCase):
         self.recipe("Accessories", "Cup", **dict(base_recipe, world=True))
         self.assertEqual(self.json_output(self.cli(*args))["request"]["follow"], "world")
 
+    def test_simulation_options_and_comparison(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        args = ("unity_physbone.py", "simulate", *SCENE)
+        self.assertIn("--motions", self.error(*args, "--motions", "dance"))
+        self.assertIn("needs --recipe", self.error(*args, "--compare"))
+        sys.path.insert(0, str(base.TOOLS))
+        import unity_physbone
+        chain = {"target": "PB/Tail", "part": "tail", "maxSwing": {"sway": 0.3}, "settleSeconds": 0.4, "legDepth": {}}
+        softer = dict(chain, maxSwing={"sway": 0.4}, settleSeconds=0.7)
+        rows = unity_physbone.compare({"unity": {"chains": [chain]}}, {"unity": {"chains": [softer]}})
+        self.assertEqual(rows, [{"target": "PB/Tail", "part": "tail",
+                                 "now": {"maxSwing": {"sway": 0.3}, "settleSeconds": 0.4, "legDepth": {}},
+                                 "recipe": {"maxSwing": {"sway": 0.4}, "settleSeconds": 0.7, "legDepth": {}}}])
+
     def test_undo_entries_keep_the_first_value_per_key(self):
         sys.path.insert(0, str(base.TOOLS))
         import dsh_recipe

@@ -305,7 +305,7 @@ Ask "How many parameter bits are left?" to count the synced parameters (the limi
 - **It confirms before applying**: the agent shows the target, the planned changes and the files it will create before applying. If the scene or recipe changes after you confirm, it asks again.
 - **Git restore points**: for a project that has never used Git, it guides you through making a restore point on your PC. If a project already managed with Git has unrecorded changes, it asks you to record them first.
 - **Keep Unity closed**: applying and capturing start a separate Unity. Save the scene and close any Unity that has the project open.
-- **It checks the motion before you look**: expressions, menu items and "Put down" are checked by driving an avatar built as for VRChat with gestures and menu items (in place of Gesture Manager). Please do the final check of how things swing and the first-person view.
+- **It checks the motion before you look**: expressions, menu items and "Put down" are checked by driving an avatar built as for VRChat with gestures and menu items (in place of Gesture Manager). Swinging parts are run in Unity's play mode while the avatar sways, walks and sits, to measure how they swing and how far they go into the legs. Please do the final check of how things swing and the first-person view.
 - **It restores the scene on failure**: if the check after saving in Unity fails, it puts the scene back as it was before the run.
 - **You can keep going**: a scene saved and checked by this plugin can be changed again without recording it in Git again, until you change it by hand.
 

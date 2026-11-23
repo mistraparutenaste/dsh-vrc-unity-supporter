@@ -15,6 +15,7 @@
 - **Swinging parts**: change PhysBone values of hair, skirts and tails (how they swing, whether they can be grabbed or posed), and add colliders on the legs or body so they do not pass through.
 - **View position and sizes**: put the view position between the eyes again, and make the head, hands or other single bones bigger or smaller.
 - **Parameter memory**: count the synced parameters (256-bit limit) as built, and show what is left before a toggle is added.
+- **PhysBone simulation**: run the avatar in play mode while it sways, walks and sits, and measure each swinging part's swing, settling time and depth into the legs; recipes can be tried in memory and compared.
 - **Playback test**: drive the built avatar with gestures and menu items and check that expressions and toggles work (in place of Gesture Manager).
 - **Verify**: check the generated menu and animations with VRChat SDK preprocessing; color variants are also rendered before and after in Unity.
 

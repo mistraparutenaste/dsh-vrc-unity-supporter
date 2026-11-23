@@ -7,9 +7,10 @@ description: 髪・スカート・しっぽの揺れ方、掴める・ポーズ�
 
 ```
 読む（PhysBone とコライダーを一覧）
- → レシピを書いて確認
+ → 今の揺れを測る（simulate）
+ → レシピを書いて、メモリ上で試して比べる（simulate --recipe --compare）
  → 適用（preview → 確認 → apply、SDK 検証）
- → Gesture Manager で揺れ方を見てもらう
+ → 最後の見た目は Gesture Manager か VRChat で見てもらう
 ```
 
 元の prefab は変えない。値はシーンのオーバーライドとして保存し、コライダーは Humanoid のボーンの下に
@@ -75,7 +76,36 @@ python -B $pb list --project '<project>' --scene 'Assets/Avatar.unity' --avatar 
 - スカートが脚を貫通するときは、左右の `UpperLeg` にカプセルを足して、スカートの PhysBone を `targets` にする。
 - 書いたら、変える値（今 → 後）と足すコライダーをユーザーに伝えて確認を取る。
 
-## 3. 適用する
+## 3. 動かして測る（simulate。シーンは保存しない）
+
+```powershell
+python -B $pb simulate --project '<project>' --scene 'Assets/Avatar.unity' --avatar 'Avatar'
+python -B $pb simulate ... --recipe SoftHair --compare          # レシピをメモリ上で試し、今と比べる
+python -B $pb simulate ... --motions sit --filter Skirt          # 座ったときのスカートだけ
+```
+
+Unity を Play モードで動かし（VRCFury・MA の Play モード処理と、VRChat SDK の PhysBone がそのまま動く）、
+アバターに Humanoid のポーズで動き（`sway` 左右に揺れて振り向く、`walk` 歩く、`sit` 座って立つ）をつけ、そのあと止める。
+グラフィックス有りで起動し、1 回 1 分ほどかかる。
+
+`unity.chains[]`（揺れ物ごと）:
+
+| 項目 | 内容 |
+|---|---|
+| `maxSwing` | 動きごとの、先端の最大の振れ（メートル。揺れ物の根元の親ボーンから見た、静止時からの距離） |
+| `settleSeconds` | 止まってから揺れが収まるまでの秒数（`over 4` は 4 秒たっても揺れている） |
+| `legDepth` / `legFrames` | 揺れ物のボーンが太もも・すねに入り込んだ深さ（メートル）と、そのフレーム数。脚に付いた揺れ物（脚のベルトなど）は数えない |
+
+`unity.legRadii` は、素体のメッシュから測った脚の太さ。`unity.image` は、静止・各動きの山場・止まって 0.5 秒後の画像（`rows` の順）。
+
+読み方の目安:
+
+- 「もっとふわっと」：`maxSwing` が増え、`settleSeconds` が少し延びる（0.3〜1 秒）ならねらいどおり。`over 4` は揺れすぎ（`pull` か `spring` を下げる）。
+- 「硬く」：`maxSwing` と `settleSeconds` が減る。
+- スカート・しっぽの貫通：`legDepth` の `sit` や `walk` が 0.01（1 cm）を超えるなら、太ももにコライダーを足す（§2 の `colliders`）。足したら `--compare` で `legDepth` が減ったかを確かめる。
+- ポーズは目安の動きで、実際の歩き方やフルボディとは違う。数値は「前より良くなったか」の比較に使う。
+
+## 4. 適用する
 
 ```powershell
 $a = @('--project', '<project>', '--scene', 'Assets/Avatar.unity', '--avatar', 'Avatar', '--recipe', 'SoftHair')
@@ -88,7 +118,7 @@ python -B $pb apply @a --verify-sdk --approved-preview '<preview の値>'
 - Git の扱いは衣装トグル・体型調整と同じ。
 - 揺れ方は撮影では分からない。適用後、Gesture Manager（Play モード）で髪やスカートを揺らして確かめてもらう（`vrc-verify`）。
 
-## 4. 元に戻す
+## 5. 元に戻す
 
 ```powershell
 python -B $pb remove @a

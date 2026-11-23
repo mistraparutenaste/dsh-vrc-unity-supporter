@@ -56,12 +56,13 @@ LEGACY = {
     # Added in 0.14.0 (shared reflection helpers first, so the copy order keeps them ahead of their users).
     "DshDynamics.cs": (),
     "DshParameters.cs": (),
-    "DshPhysBone.cs": (),
+    "DshPhysBone.cs": ("cf7dc5933426e04249ffeffe06b9bc5a1bc528f6",),  # 0.14.0 - 0.17.0
     "DshProportion.cs": (),
     "DshExpression.cs": ("56a7267b0b496aaa8661e9c2c89e8ab82ecbc0cd",   # 0.15.0
                          "d314ea13afd8f869382d51c4aecaf51f4e9e09b5"),  # 0.16.0
     "DshMigrate.cs": (),  # added in 0.16.0
     "DshPlayback.cs": (),  # added in 0.17.0
+    "DshPhysBoneSim.cs": (),  # added in 0.18.0
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -609,7 +610,7 @@ def unity_ready(root, prepare):
     return helpers, None
 
 
-def read_only_task(root, args, request, method, task, name, helper_class, graphics=False):
+def read_only_task(root, args, request, method, task, name, helper_class, graphics=False, keep_running=False):
     helpers, blocked = unity_ready(root, args.prepare)
     if blocked:
         return blocked
@@ -619,7 +620,7 @@ def read_only_task(root, args, request, method, task, name, helper_class, graphi
         before = digest(scene)
         request["expectedSceneDigest"] = before
         run, result, log = run_task(root, request, helpers, method, task, name,
-                                           helper_class=helper_class, graphics=graphics)
+                                           helper_class=helper_class, graphics=graphics, keep_running=keep_running)
         unchanged = scene.is_file() and digest(scene) == before
     ok = run.returncode == 0 and result.get("ok") is True and unchanged
     output = {"ok": ok, "log": str(log), "unity": result}
@@ -673,7 +674,8 @@ def run_error(run):
     return (run.stderr.strip() or run.stdout.strip())[-4000:]
 
 
-def run_task(root, request, helpers, method, task, name, helper_class="DshOutfitToggle", graphics=False):
+def run_task(root, request, helpers, method, task, name, helper_class="DshOutfitToggle", graphics=False,
+             keep_running=False):
     run_id = uuid.uuid4().hex
     request_path = inside(root, f".dsh/requests/{run_id}.json")
     request_path.parent.mkdir(parents=True, exist_ok=True)
@@ -690,6 +692,8 @@ def run_task(root, request, helpers, method, task, name, helper_class="DshOutfit
     ]
     if graphics:
         command.append("-AllowGraphics")
+    if keep_running:
+        command.append("-KeepRunning")
     run = subprocess.run(command, capture_output=True, encoding="utf-8", errors="replace", check=False)
     return run, read_result(result_path), run_dir / f"{name}.log"
 

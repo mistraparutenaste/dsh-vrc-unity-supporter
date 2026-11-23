@@ -38,7 +38,7 @@ $required = @(
     'tools/unity_proportion.py', 'skills/vrc-physbone/SKILL.md', 'skills/vrc-proportion/SKILL.md',
     'templates/Editor/DshExpression.cs', 'tools/unity_expression.py', 'skills/vrc-expression/SKILL.md',
     'templates/Editor/DshMigrate.cs', 'tools/unity_migrate.py', 'skills/vrc-avatar-update/SKILL.md',
-    'templates/Editor/DshPlayback.cs', 'tools/unity_playback.py',
+    'templates/Editor/DshPlayback.cs', 'tools/unity_playback.py', 'templates/Editor/DshPhysBoneSim.cs',
     'templates/Blender/dsh_blender.py', 'tools/blender_model.py', 'skills/vrc-blender-model/SKILL.md', 'skills/vrc-outfit-fit/SKILL.md',
     'install.cmd',
     'installer/install.cmd', 'installer/install.ps1',
