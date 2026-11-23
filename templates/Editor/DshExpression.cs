@@ -423,8 +423,11 @@ namespace DSH.Editor
             var component = type == null ? null : holder.GetComponent(type);
             if (wanted.Count == 0)
             {
-                if (component != null) changes.Add(write ? "kept MA Parameters" : "differs: MA Parameters");
-                return write ? new List<string>() : changes;
+                // The recipe no longer has locks or toggles: the parameters would only use up synced bits.
+                if (component == null) return changes;
+                if (!write) return new List<string> { "differs: MA Parameters" };
+                UnityEngine.Object.DestroyImmediate(component);
+                return new List<string> { "removed MA Parameters" };
             }
             component = Ensure(holder, ParametersType, "Parameters", write, changes);
             if (component == null) return new List<string> { "MA Parameters is missing" };

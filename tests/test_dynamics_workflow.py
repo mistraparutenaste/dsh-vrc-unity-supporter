@@ -193,6 +193,16 @@ class DynamicsWorkflowTests(unittest.TestCase):
         refused = self.error("unity_toggle.py", "apply", *toggle_args[2:], "--approved-preview", plan["preview"])
         self.assertIn("parameter bits", refused)
 
+        # The same toggle already in the saved scene adds no bit, so applying it again is not stopped.
+        holder = "DSH Outfit Toggle 1"
+        self.write(".dsh/outfits/r.json", json.dumps({"output": {"ok": True, "unity": {
+            "holder": holder, "outfit": "Avatar/Hoodie", "menu": "Outfit/Hoodie"}}}))
+        scene = self.write("Assets/Avatar.unity", f"scene\n  m_Name: {holder}\n")
+        record["sceneDigest"] = digest(scene)
+        cache.write_text(json.dumps(record), encoding="utf-8")
+        again = self.json_output(self.cli(*toggle_args))["parameterBudget"]
+        self.assertEqual((again["adds"], again["overLimit"]), (0, False))
+
         self.write("Assets/Avatar.unity", "edited\n")  # measured before this edit: warn, do not stop
         plan = self.json_output(self.cli(*toggle_args))
         self.assertTrue(plan["parameterBudget"]["stale"])

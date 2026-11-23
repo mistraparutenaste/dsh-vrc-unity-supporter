@@ -58,7 +58,8 @@ LEGACY = {
     "DshParameters.cs": (),
     "DshPhysBone.cs": (),
     "DshProportion.cs": (),
-    "DshExpression.cs": ("56a7267b0b496aaa8661e9c2c89e8ab82ecbc0cd",),  # 0.15.0
+    "DshExpression.cs": ("56a7267b0b496aaa8661e9c2c89e8ab82ecbc0cd",   # 0.15.0
+                         "d314ea13afd8f869382d51c4aecaf51f4e9e09b5"),  # 0.16.0
     "DshMigrate.cs": (),  # added in 0.16.0
 }
 HELPERS = tuple(LEGACY)
@@ -303,7 +304,15 @@ def preview(root, args):
     return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token, "sceneDigest": scene_digest,
             "plannedPaths": planned, "unityMayCreate": sorted(meta_paths), "sceneInCheckpoint": scene_in_checkpoint,
             "vrcFury": packages.get("com.vrcfury.vrcfury"),
-            "parameterBudget": parameter_budget(root, scene_path, args.avatar, 1)}, helpers
+            "parameterBudget": parameter_budget(root, scene_path, args.avatar,
+                                                0 if toggle_in_scene(root, scene_path, args.outfit, args.menu) else 1)}, helpers
+
+
+def toggle_in_scene(root, scene_path, outfit, menu):
+    """Whether the saved scene already holds a DSH toggle for this outfit and menu (applying it again adds no bit)."""
+    holders = scene_holders(root, TOGGLE_HOLDER).get(scene_path, [])
+    return any(holder in holders and known.get("outfit") == outfit and known.get("menu") == menu
+               for holder, known in toggle_receipts(root).items())
 
 
 def parameter_budget(root, scene_path, avatar, adds):

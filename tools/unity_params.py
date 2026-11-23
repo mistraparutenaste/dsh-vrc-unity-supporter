@@ -59,7 +59,9 @@ def budget(root, scene_path, avatar, adds):
     after = record["usedBits"] + adds
     stale = record.get("sceneDigest") != digest(inside(root, scene_path))
     result = {"measured": True, "usedBits": record["usedBits"], "adds": adds, "afterBits": after, "limit": LIMIT,
-              "afterBuild": record.get("built", False), "overLimit": after > LIMIT and not stale}
+              "afterBuild": record.get("built", False),
+              # A change that adds nothing (applying it again) never stops, even on an avatar already over the limit.
+              "overLimit": adds > 0 and after > LIMIT and not stale}
     if stale:
         result["stale"] = True
         result["next"] = "The scene changed after the last measurement; measure again for an exact count."
