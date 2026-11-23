@@ -6,13 +6,13 @@ description: 衣装・髪・メニュー・PhysBone・コンタクト / SPS の�
 # VRChat アバター改変
 
 アバターの改変を「何を・どの順序で・どこに適用するか」まで決めるためのスキル。
-実際の適用は `vrc-edit-script`、確認は `vrc-verify` が担う。
+実際の適用は、同梱のコマンドがあればそのスキル（§9）、無ければ `vrc-edit-script`、確認は `vrc-verify` が担う。
 
 ## 0. 前提と範囲
 
 - 対象: 既存の VRChat Unity プロジェクト（Unity 2022.3.22f1、SDK 導入済み）
 - 対象外: Unity/ALCOM の導入、プロジェクト作成・修復、ワールド、アップロード
-- 変更は **Editor スクリプト経由**でのみ行う。シーン/プレハブ YAML の直接編集は禁止
+- 変更は **同梱のコマンドか Editor スクリプト経由**でのみ行う（同梱のコマンドが先）。シーン/プレハブ YAML の直接編集は禁止
 
 ## 1. 最初に事実を確定させる
 
@@ -117,13 +117,14 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 
 ## 9. 委任の切り方
 
-- 構造の変更を伴う → `vrc-edit-script` でスクリプト化して適用
 - 読み取りだけで済む → `vrc-asset-read` の `unity_inspect.py`
+- 配置済み衣装のオン・オフ → `vrc-first-run`
 - 色違い・肌色・ロゴ（付属 PSD から） → `vrc-texture-variant`
 - lilToon・Poiyomi の色・影・輪郭線・発光の調整（マテリアルの値） → `vrc-material-adjust`
 - 体型・貫通・隠れる部分の削除（シェイプキー、MA、AAO） → `vrc-shape-adjust`
 - 小物・髪・衣装の取り付け、付け替え、取り外し → `vrc-accessory`
 - 別アバター用の衣装・髪を着せる → `vrc-outfit-fit`
+- 上のどれにも当たらない構造の変更（PhysBone、コンタクト / SPS、MA のメニュー、アニメーター） → `vrc-edit-script` でスクリプト化して適用
 - 数値の判断 → `vrc-perf-budget`
 - 適用後 → `vrc-verify`
 

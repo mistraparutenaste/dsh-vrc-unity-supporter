@@ -26,7 +26,24 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 
 ## 変更の約束
 
-- 変更はすべて Unity Editor スクリプトを書き、プロジェクトのツールでバッチモード実行して適用する（`vrc-edit-script`）
+- 変更は、まず同梱のコマンドで適用する。コマンドはレシピを検証し、preview → 確認 → apply、Git の確認、取り外しの記録まで行う
+- 同梱のコマンドで足りない改変だけ、Editor スクリプトを書いてバッチモードで適用する（`vrc-edit-script`）。依頼を同梱のコマンドに無理に当てはめず、足りないと判断した理由をユーザーに伝える
+
+| 同梱のコマンドで行う | スキル |
+|---|---|
+| 配置済み衣装のオン・オフ（排他を含む）、トグルの取り外し | `vrc-first-run` |
+| 付属 PSD からの色違い、lilToon・Poiyomi の値の調整 | `vrc-texture-variant`、`vrc-material-adjust` |
+| シェイプキーの値、衣装の追従、服の下の体の削除 | `vrc-shape-adjust` |
+| 小物・髪・衣装の取り付け（ボーン、骨組みの統合）、メニュー、元の髪などを隠す、取り外し | `vrc-accessory` |
+| Blender での簡単な形の作成、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
+| 読み取り、性能ランク、コンパイル確認 | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |
+
+| Editor スクリプトで行う（`vrc-edit-script`） |
+|---|
+| PhysBone・コライダーの追加や値の変更、コンタクト / SPS |
+| Modular Avatar のメニューの組み替え、既存のアニメーター・FX レイヤーの変更（`vrc-avatar-edit` §7 を先に読む） |
+| アバターの prefab をシーンに置く、上の表にない設定の変更 |
+
 - シーン・Prefab・アセットの YAML を直接編集しない。`.meta` なしでファイルを移動・削除しない
 - 各変更は git 差分でレビューできる単位にし、ユーザーが承認していない破壊的な手順の前で止まる
 - アップロード、公開、force-push はしない。アップロードを頼まれたら、アップロード前チェックリスト（`vrc-verify` §5）を出す
@@ -54,7 +71,7 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | 小物・髪・衣装の取り付け、付け替え、取り外し | `vrc-accessory` |
 | 非対応衣装・髪を着せる（合わせる→付ける→追従・削除→確認） | `vrc-outfit-fit` |
 | Blender での小物作成、FBX の合わせ込みだけ | `vrc-blender-model` |
-| Editor スクリプトでの適用 | `vrc-edit-script` |
+| 同梱のコマンドで足りない改変（PhysBone、コンタクト、メニューの組み替えなど） | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |
 | 性能ランクの試算 | `vrc-perf-budget` |
 | 適用後の確認、アップロード前チェック | `vrc-verify` |
