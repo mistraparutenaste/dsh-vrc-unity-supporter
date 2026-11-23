@@ -36,11 +36,13 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | シェイプキーの値、衣装の追従、服の下の体の削除 | `vrc-shape-adjust` |
 | 小物・髪・衣装の取り付け（ボーン、骨組みの統合）、メニュー、元の髪などを隠す、取り外し | `vrc-accessory` |
 | Blender での簡単な形の作成、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
-| 読み取り、性能ランク、コンパイル確認 | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |
+| 既存の PhysBone の値（揺れ方、掴める・ポーズできるか）、ボーンに付けるコライダー | `vrc-physbone` |
+| ビューポイント、ボーン単位の大きさ（頭・手など） | `vrc-proportion` |
+| 読み取り、性能ランク、パラメータ容量（256 bit）、コンパイル確認 | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |
 
 | Editor スクリプトで行う（`vrc-edit-script`） |
 |---|
-| PhysBone・コライダーの追加や値の変更、コンタクト / SPS |
+| 新しい揺れ物への PhysBone の追加、コンタクト / SPS |
 | Modular Avatar のメニューの組み替え、既存のアニメーター・FX レイヤーの変更（`vrc-avatar-edit` §7 を先に読む） |
 | アバターの prefab をシーンに置く、上の表にない設定の変更 |
 
@@ -71,9 +73,11 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | 小物・髪・衣装の取り付け、付け替え、取り外し | `vrc-accessory` |
 | 非対応衣装・髪を着せる（合わせる→付ける→追従・削除→確認） | `vrc-outfit-fit` |
 | Blender での小物作成、FBX の合わせ込みだけ | `vrc-blender-model` |
-| 同梱のコマンドで足りない改変（PhysBone、コンタクト、メニューの組み替えなど） | `vrc-edit-script` |
+| 髪・スカート・しっぽの揺れ方、掴めないように、スカートの脚への貫通 | `vrc-physbone` |
+| 目線（ビューポイント）のずれ、頭を大きく・手を小さく | `vrc-proportion` |
+| 同梱のコマンドで足りない改変（新しい PhysBone、コンタクト、メニューの組み替えなど） | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |
-| 性能ランクの試算 | `vrc-perf-budget` |
+| 性能ランクの試算、パラメータ容量（256 bit） | `vrc-perf-budget` |
 | 適用後の確認、アップロード前チェック | `vrc-verify` |
 
 ユーザーが別の言語で書かない限り、日本語で答える。

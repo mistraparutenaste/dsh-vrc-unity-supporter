@@ -1,6 +1,6 @@
 ---
 name: vrc-perf-budget
-description: VRChat の性能ランク（PC / Mobile）の上限表と数え方。三角形・マテリアル・PhysBone・コンタクトなどを測り、Good を目標に判断する。
+description: VRChat の性能ランク（PC / Mobile）の上限表と数え方、パラメータ容量（256 bit）の測り方。三角形・PhysBone などを測り、Good を目標に判断する。
 ---
 
 # 性能予算
@@ -76,7 +76,7 @@ Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクス�
    メッシュの削除。ほぼ無設定で効く
 2. **マテリアル統合** — 同じシェーダ・同じテクスチャなら 1 スロットに寄せる（TexTransTool）
 3. **メッシュ統合** — 同一マテリアルのメッシュを結合
-4. **PhysBone の統合** — 揺れ物ごとに分かれた PhysBone をまとめる
+4. **PhysBone の統合** — 揺れ物ごとに分かれた PhysBone をまとめる（値やコライダーの調整は `vrc-physbone`）
 5. **テクスチャ圧縮** — 1024 以下に落とす、使っていないチャンネルを削る
 
 ## 4. 判断の指針
@@ -89,3 +89,26 @@ Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクス�
 | SPS を入れる | Contacts 8 個で Excellent 満杯。プラグ+ソケット 1 組で約 8 |
 
 「測ってから言う」。改変前に現状値を出し、改変後に再度測って差分を報告する。
+
+## 5. パラメータ容量（256 bit）
+
+VRChat は同期するパラメータを合計 **256 bit** までしか許さない（Bool 1 bit、Int・Float 8 bit。ローカルだけのものは数えない）。
+超えるとアップロードできない。トグルを足すたびに増えるので、改変の前に測る。
+
+```powershell
+python -B "<pkg>\tools\unity_params.py" measure --project '<project>' --scene 'Assets/Avatar.unity' --avatar 'Avatar' --prepare
+```
+
+既定では SDK ビルドしたコピーも数えるので、VRCFury や Modular Avatar がビルド時に足す分も入る（グラフィックス有りで起動する）。
+`unity.built.usedBits` が合計、`byOwner` が出どころ別（avatar / VRCFury / Modular Avatar / other）、`parameters` が bit の大きい順の一覧。
+`--no-build` ではシーン上の分だけを数える（速いが、ビルド時に足される分は入らない）。
+
+測った値は `.dsh/params` に残り、衣装トグル・小物・表情の preview が `parameterBudget` に「今 + 追加 = 後」を出す。
+後が 256 を超える apply は止まる。シーンが測ったあとに変わっていると `stale` になり、止めずに測り直しを促す。
+
+減らし方（効く順）:
+
+1. 自分だけが見ればよいトグル（デバッグ用、カメラ用）を同期しないようにする（MA Parameters の Local Only、VRCFury の Local Only）
+2. 同時に 1 つしか使わない衣装を、Bool をいくつも使わず 1 つの Int で切り替える（Modular Avatar の Menu Item で値を割り当てる）
+3. VRCFury の Parameter Compressor を入れる（複数の値を交代で同期して、使う bit を減らす。切り替えに少し遅れが出る）
+4. 使っていないギミックを外す

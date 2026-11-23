@@ -159,7 +159,9 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, 
 | Adjust body shape and fix clipping | "Remove the body under the clothes and make the chest a little bigger" | Modular Avatar, Avatar Optimizer |
 | Attach accessories, hair and outfits | "Attach this wolf-cut hair" | Modular Avatar |
 | Make things in Blender, wear unsupported outfits | "Put this coat made for Selestia on Salt" | Blender, Modular Avatar |
-| Check the performance rank | "Check the performance rank" | Nothing |
+| Adjust swinging parts | "Make the back hair swing more softly, and stop people grabbing the tail" | Nothing |
+| Change the view position and single sizes | "The view is too low, fix it. Make the head a little bigger" | Modular Avatar, to change only a hand or the chest |
+| Check the performance rank and parameter memory | "Check the performance rank", "How many parameter bits are left?" | Nothing |
 
 Add VRCFury, Modular Avatar and Avatar Optimizer to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
 
@@ -243,9 +245,36 @@ What it fits automatically: bone positions, directions and lengths, body differe
 
 Blender is free from [blender.org](https://www.blender.org/download/) (or `winget install BlenderFoundation.Blender`).
 
+### Adjust swinging parts
+
+Changes how hair, skirts, tails and other parts swing, through the values of the avatar's PhysBones. The original prefab stays as it is; the change is saved in the scene.
+
+- **How they swing**: start from presets such as soft, stiff or heavy, then fine-tune pull, gravity and more.
+- **Grabbing and posing**: stop other people from grabbing or posing them.
+- **Keep them out of the body**: add colliders on the thighs or body so skirts and straps do not pass through the legs.
+
+```text
+Make the back hair swing more softly, and stop people grabbing the tail
+```
+
+The agent lists the swinging parts and their values (including how many bones each one moves) and shows what changes (before → after) before applying. Images cannot show how something swings, so check it in Gesture Manager or VRChat afterwards. Ask "Undo the SoftHair swing adjustment" to go back.
+
+### Change the view position and single sizes
+
+- **View position**: put the first-person view between the eyes again, or move it up or down a little.
+- **Single sizes**: make the head a little bigger or the hands a little smaller, one bone at a time. A bigger head also enlarges the hair, ears and any hat on it. You can also change only that part, such as just the palm or the chest (Modular Avatar Scale Adjuster).
+
+```text
+The view is too low, fix it. Make the head a little bigger
+```
+
+The agent shows a before/after image with the view position marked in red before applying. Ask "Undo BigHead" to go back.
+
 ### Check the performance rank
 
 Ask "Check the performance rank" and it shows the PC and Mobile performance ranks, the items that set the rank (such as the number of skinned meshes), and what to change to reach the next rank up. These are estimates counted from the original prefab before the build, so check the final rank in the VRChat SDK build panel.
+
+Ask "How many parameter bits are left?" to count the synced parameters (the limit is 256 bits), including what VRCFury and Modular Avatar add when the avatar is built. After a measurement, adding an outfit toggle or accessory shows how many bits remain, and a change that would go over the limit stops before it is applied.
 
 ## How it keeps you safe, and how to undo
 
@@ -264,6 +293,8 @@ You can undo changes made by this plugin by asking as below. Before removing any
 | Color variants and lilToon adjustments | "Delete the Hoodie_Blue color variant" |
 | Body adjustments | "Undo the Fit_Hoodie body adjustment" |
 | Accessories and hair | "Remove WolfHair" |
+| Swing adjustments | "Undo the SoftHair swing adjustment" |
+| View position and single sizes | "Undo BigHead" |
 
 For other changes, put the scene back from the Git restore point. Ask in the chat how to do it.
 

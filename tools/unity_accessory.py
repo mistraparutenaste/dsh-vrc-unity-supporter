@@ -202,6 +202,8 @@ def plan(root, args):
         planned.append(f"{recipe['folder']}/{recipe['name']}_hide.anim")
     output, helpers = toggle.scene_plan(root, request, scene, planned, fingerprint(root, recipe, path))
     output["alreadyInScene"] = scene_path in scenes_with_holder(root, recipe["name"])
+    output["parameterBudget"] = toggle.parameter_budget(
+        root, scene_path, args.avatar, 1 if recipe["menu"] and not output["alreadyInScene"] else 0)
     if recipe["materialsFrom"]:
         missing = missing_materials(root, recipe["materialsFrom"])
         if missing:

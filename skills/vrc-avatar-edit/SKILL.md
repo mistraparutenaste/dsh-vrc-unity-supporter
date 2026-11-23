@@ -106,7 +106,7 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 | ボーンが二重になる | MA と VRCFury の併用 | 片方を外す |
 | メニューが消える | 排他タグの付け忘れ / Menu Path の重複 | タグと Path を確認 |
 | 服が貫通する | 体型を変えたのに衣装が追従していない / 服の下の体が残っている / 別アバター用の衣装 | `vrc-shape-adjust`（追従・削除）、非対応衣装なら `vrc-outfit-fit` |
-| スカートや紐が体を突き抜ける | 揺れものの PhysBone コライダーが無い | 衣装 prefab の PhysBone とコライダーを確認 |
+| スカートや紐が体を突き抜ける | 揺れものの PhysBone コライダーが無い | `vrc-physbone` で脚などにコライダーを足す |
 | 髪が動かない | Bone Proxy 未設定 / PhysBone の root が違う | 階層を確認 |
 | アップロード時に警告 | WriteDefaults 混在 / 参照切れ | `vrc-verify` へ |
 | 開いた瞬間 `error CS0246`（`VTPTests.cs` など SDK 内） | SDK が要求する `com.unity.*` が `manifest.json` に無い | `Packages/com.vrchat.base/package.json` の `dependencies` を確認し、不足分を `manifest.json` に追加 |
@@ -124,7 +124,9 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 - 体型・貫通・隠れる部分の削除（シェイプキー、MA、AAO） → `vrc-shape-adjust`
 - 小物・髪・衣装の取り付け、付け替え、取り外し → `vrc-accessory`
 - 別アバター用の衣装・髪を着せる → `vrc-outfit-fit`
-- 上のどれにも当たらない構造の変更（PhysBone、コンタクト / SPS、MA のメニュー、アニメーター） → `vrc-edit-script` でスクリプト化して適用
+- 既存の PhysBone の値、ボーンに付けるコライダー → `vrc-physbone`
+- ビューポイント、ボーン単位の大きさ → `vrc-proportion`
+- 上のどれにも当たらない構造の変更（新しい PhysBone、コンタクト / SPS、MA のメニュー、アニメーター） → `vrc-edit-script` でスクリプト化して適用
 - 数値の判断 → `vrc-perf-budget`
 - 適用後 → `vrc-verify`
 

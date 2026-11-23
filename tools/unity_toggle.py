@@ -52,6 +52,11 @@ LEGACY = {
     "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",  # 0.8.0 - 0.9.0
                         "d79661a2f6585c578b1c11f288dc48c3d1608d78",  # 0.9.1
                         "59380d4af0be549483c156c771697c21cc2f865f"),  # 0.9.2 - 0.12.0
+    # Added in 0.14.0 (shared reflection helpers first, so the copy order keeps them ahead of their users).
+    "DshDynamics.cs": (),
+    "DshParameters.cs": (),
+    "DshPhysBone.cs": (),
+    "DshProportion.cs": (),
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -66,9 +71,12 @@ TOGGLE_HOLDER = "DSH Outfit Toggle "
 SHAPES = "Assets/DSH/Shapes"
 # Accessory recipes (which prefab or model is attached where); DSH owns this folder.
 ACCESSORIES = "Assets/DSH/Accessories"
+# PhysBone value and collider recipes, and view position and bone size recipes; DSH owns these folders.
+PHYSBONES = "Assets/DSH/PhysBones"
+PROPORTIONS = "Assets/DSH/Proportions"
 # Models made or fitted in Blender (FBX, textures, the .blend and its recipe); DSH owns this folder.
 MODELS = "Assets/DSH/Models"
-MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS)
+MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS, PHYSBONES, PROPORTIONS)
 # Files that Unity editor extensions rewrite (or create) whenever Unity opens the project, so they are never a
 # user change. lilToon records the graphics API, which differs between batch runs with and without -nographics.
 # Poiyomi's editor (Thry) keeps its preset caches and settings in Thry/ at the project root and updates them
@@ -289,7 +297,21 @@ def preview(root, args):
     token = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
     return {"ok": True, "project": str(root), "request": request, "git": state, "preview": token, "sceneDigest": scene_digest,
             "plannedPaths": planned, "unityMayCreate": sorted(meta_paths), "sceneInCheckpoint": scene_in_checkpoint,
-            "vrcFury": packages.get("com.vrcfury.vrcfury")}, helpers
+            "vrcFury": packages.get("com.vrcfury.vrcfury"),
+            "parameterBudget": parameter_budget(root, scene_path, args.avatar, 1)}, helpers
+
+
+def parameter_budget(root, scene_path, avatar, adds):
+    """The last parameter measurement plus what this change adds (see unity_params.py)."""
+    import unity_params  # imported here: unity_params uses this module
+    return unity_params.budget(root, scene_path, avatar, adds)
+
+
+def require_parameter_room(plan):
+    budget = plan.get("parameterBudget") or {}
+    if budget.get("overLimit"):
+        raise WorkflowError(f"This change would use {budget['afterBits']} of {budget['limit']} synced parameter bits, "
+                            "and VRChat refuses avatars over the limit. Free some bits first (see vrc-perf-budget).")
 
 
 @contextmanager
@@ -391,6 +413,7 @@ def apply(root, args):
         raise WorkflowError("A project Git checkpoint is required. Review the checkpoint command before applying.")
     if not plan["sceneInCheckpoint"]:
         raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
+    require_parameter_room(plan)
     with workflow_lock(inside(root, ".dsh/outfit.lock")):
         return apply_with_lock(root, args)
 
@@ -623,6 +646,7 @@ def run_approved(root, args, make_plan, method, task, name, helper_class, verify
         raise WorkflowError("A project Git checkpoint is required. Run unity_toggle.py checkpoint first.")
     if not plan["sceneInCheckpoint"]:
         raise WorkflowError("The selected scene is missing from the Git checkpoint. Track and commit that scene before applying.")
+    require_parameter_room(plan)
     with workflow_lock(inside(root, ".dsh/outfit.lock")):
         plan, helpers = make_plan()
         if plan["preview"] != args.approved_preview:

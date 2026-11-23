@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "VRChat avatar supporter",
-    "description": "Lets the agent do VRChat avatar modification work: it reads scenes and prefabs without opening Unity, designs the change, applies it through generated Editor scripts in batch mode, and verifies the result. It can also make outfit, skin, hair and eye color variants from the avatar's layered PSDs and switch them from the menu (using PhotoCraft), adjust body shape or remove body parts hidden under clothes without editing the FBX, attach accessories, hair and outfits, and make simple shapes or fit outfits made for other avatars in Blender. Assumes Unity 2022.3.22f1, an activated licence, and VCC or ALCOM. It never uploads and never edits scene YAML directly.",
+    "description": "Lets the agent do VRChat avatar modification work: it reads scenes and prefabs without opening Unity, designs the change, applies it through generated Editor scripts in batch mode, and verifies the result. It can also make outfit, skin, hair and eye color variants from the avatar's layered PSDs and switch them from the menu (using PhotoCraft), adjust body shape or remove body parts hidden under clothes without editing the FBX, attach accessories, hair and outfits, make simple shapes or fit outfits made for other avatars in Blender, tune how PhysBones swing, move the view position or resize single bones, and check the 256-bit parameter memory. Assumes Unity 2022.3.22f1, an activated licence, and VCC or ALCOM. It never uploads and never edits scene YAML directly.",
     "detail": "docs/DETAIL.md"
   }
 }
