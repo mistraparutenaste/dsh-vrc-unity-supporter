@@ -36,6 +36,7 @@ description: VRChat アバター改変の入口（Claude Code 用）。プロジ
 | シェイプキーの値、衣装の追従、服の下の体の削除 | `vrc-shape-adjust` |
 | 小物・髪・衣装の取り付け（ボーン、骨組みの統合、手に持って置ける、ワールド固定）、メニュー、元の髪などを隠す、取り外し | `vrc-accessory` |
 | ジェスチャーの表情、メニューで選ぶ表情、ほほ染めなどのトグル | `vrc-expression` |
+| アバターの新しい版への改変の引き継ぎ（一覧、参照チェック、まとめてかけ直す） | `vrc-avatar-update` |
 | Blender での簡単な形の作成、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
 | 既存の PhysBone の値（揺れ方、掴める・ポーズできるか）、ボーンに付けるコライダー | `vrc-physbone` |
 | ビューポイント、ボーン単位の大きさ（頭・手など） | `vrc-proportion` |
@@ -70,6 +71,7 @@ description: VRChat アバター改変の入口（Claude Code 用）。プロジ
 | 体型・顔の調整、衣装の貫通、隠れる部分の削除 | `vrc-shape-adjust` |
 | 小物・髪・衣装の取り付け、付け替え、取り外し、手に持つ・置く小物 | `vrc-accessory` |
 | 表情の差し替え・固定・追加（ジェスチャー、メニュー、ほほ染め・涙） | `vrc-expression` |
+| アバターを更新した（新しい版を入れた）ので改変を引き継ぎたい | `vrc-avatar-update` |
 | 非対応衣装・髪を着せる（合わせる→付ける→追従・削除→確認） | `vrc-outfit-fit` |
 | Blender での小物作成、FBX の合わせ込みだけ | `vrc-blender-model` |
 | 髪・スカート・しっぽの揺れ方、掴めないように、スカートの脚への貫通 | `vrc-physbone` |

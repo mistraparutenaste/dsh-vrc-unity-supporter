@@ -117,7 +117,8 @@ def plan(root, args):
     request = dict(recipe, scene=scene_path, avatar=args.avatar, avatarId=args.avatar_id)
     if args.verify_sdk:
         request["verifySdk"] = True
-    planned = [scene_path, f"{recipe['folder']}/Generated/ (controller, clips and menu, written again on change)"]
+    planned = [scene_path, f"{recipe['folder']}/Generated/<id>/ (controller, clips and menu; a new <id> when the "
+                           "recipe changes, and builds no saved scene uses are deleted)"]
     output, helpers = toggle.scene_plan(root, request, scene, planned, [[path.name, digest(path)]])
     in_scene = scene_path in scenes_with_holder(root, recipe["name"])
     output["alreadyInScene"] = in_scene
@@ -135,11 +136,15 @@ def remove_plan(root, args):
     generated = folder / "Generated"
     if not in_scene and not generated.is_dir():
         raise WorkflowError(f"No expression named {args.recipe} is in {scene_path} or generated in this project.")
+    # Generated assets that another saved scene still uses stay (Unity checks the scenes' dependencies).
+    others = [s for s in scenes_with_holder(root, args.recipe) if s != scene_path]
     request = {"scene": scene_path, "avatar": args.avatar, "avatarId": args.avatar_id, "name": args.recipe,
                "folder": folder.relative_to(root).as_posix(), "remove": True}
-    planned = ([scene_path] if in_scene else []) + ([f"{request['folder']}/Generated/ (deleted)"] if generated.is_dir() else [])
+    planned = ([scene_path] if in_scene else []) + (
+        [f"{request['folder']}/Generated/ (the parts no saved scene uses any more are deleted)"] if generated.is_dir() else [])
     output, helpers = toggle.scene_plan(root, request, scene, planned, [])
-    output.update(inScene=in_scene, note="The recipe file stays.")
+    output.update(inScene=in_scene, otherScenes=others,
+                  note="The recipe file stays. Generated assets that other scenes use stay with them.")
     return output, helpers
 
 

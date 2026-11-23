@@ -162,6 +162,7 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, 
 | Adjust swinging parts | "Make the back hair swing more softly, and stop people grabbing the tail" | Nothing |
 | Change the view position and single sizes | "The view is too low, fix it. Make the head a little bigger" | Modular Avatar, to change only a hand or the chest |
 | Change expressions | "Make the right fist a smile, and let me pick a half-closed-eye look from the menu" | Modular Avatar |
+| Carry changes over to an updated avatar | "I updated Salt to the new version; carry my changes over" | Nothing (beyond what each change needs) |
 | Check the performance rank and parameter memory | "Check the performance rank", "How many parameter bits are left?" | Nothing |
 
 Add VRCFury, Modular Avatar and Avatar Optimizer to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
@@ -281,6 +282,16 @@ Make the right fist a smile, and let me pick a half-closed-eye look from the men
 ```
 
 The agent looks at the face's shape keys and the avatar's own gesture expressions (which hand sign moves which shape keys), shows the recipe, and confirms with a face image for each expression before applying. The author's expressions stay; only the shape keys in the recipe are overridden. Ask "Remove the Face expressions" to take them off.
+
+### Carry changes over to an updated avatar
+
+When the author updates the avatar, the changes made with this plugin (outfit toggles, color variants, body shape, accessories, swinging parts, view position and sizes, expressions) are applied again to the new version.
+
+```text
+I updated Salt to the new version; carry my changes over. The new version is in Assets/DSHTest/SaltV2.unity
+```
+
+The agent lists the changes on the current avatar and the values changed by hand (in the Inspector, for example). It then reads the new version and checks, change by change, that the meshes, shape keys and bones it uses are there, with close names for anything renamed. Changes that are ready are applied again after one confirmation. Values changed by hand are not copied; they are shown as a list to redo.
 
 ### Check the performance rank
 

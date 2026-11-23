@@ -130,6 +130,10 @@ namespace DSH.Editor
                 if (remaining.Count > 0)
                     throw new InvalidOperationException("The saved scene does not hold the expression: " + string.Join("; ", remaining.Take(5)));
                 result["holder"] = HolderPrefix + request.name;
+                var inUse = System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(
+                    AssetDatabase.LoadAssetAtPath<UnityEngine.Object>($"{request.folder}/Generated/{plan.Fingerprint.Substring(0, 8)}/{request.name}.controller")))?.Replace('\\', '/');
+                result["generated"] = inUse;
+                result["deletedUnused"] = DeleteUnused(request.folder + "/Generated", inUse ?? "");
                 result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
                 result["sdkVerification"] = request.verifySdk ? VerifySdk(avatar, request)
                     : new Dictionary<string, object> { { "status", "not-requested" }, { "clientTested", false } };
@@ -166,12 +170,7 @@ namespace DSH.Editor
                     if (DshVrc.FindHolder(avatar, HolderPrefix + request.name) != null)
                         throw new InvalidOperationException("The expression is still in the saved scene.");
                 }
-                var generated = request.folder + "/Generated";
-                if (AssetDatabase.IsValidFolder(generated))
-                {
-                    if (!AssetDatabase.DeleteAsset(generated)) throw new InvalidOperationException($"Unity could not delete {generated}.");
-                    result["deleted"] = generated;
-                }
+                result["deleted"] = DeleteUnused(request.folder + "/Generated", "");
                 result["sceneDigest"] = DshAvatarScene.SceneDigest(scene.path);
                 result["ok"] = true;
                 result["verified"] = true;
@@ -324,7 +323,9 @@ namespace DSH.Editor
         {
             plan = Plan(avatar, request);
             var changes = new List<string>();
-            var generated = request.folder + "/Generated";
+            // One folder per fingerprint: another scene (or another version of the avatar) may still use an
+            // earlier build, so a change never rewrites assets in place.
+            var generated = $"{request.folder}/Generated/{plan.Fingerprint.Substring(0, 8)}";
             var controllerPath = $"{generated}/{request.name}.controller";
             var importer = AssetImporter.GetAtPath(controllerPath);
             var current = importer != null && importer.userData == "dsh:" + plan.Fingerprint;
@@ -350,6 +351,31 @@ namespace DSH.Editor
             changes.AddRange(EnsureParameters(holder, request, write));
             changes.AddRange(EnsureInstaller(holder, menu, write));
             return changes;
+        }
+
+        /// <summary>
+        /// Delete the generated folders (one per fingerprint) that no saved scene depends on, except the one in use;
+        /// the Generated folder goes too once it is empty. Returns what was deleted.
+        /// </summary>
+        internal static string[] DeleteUnused(string generated, string keep)
+        {
+            if (!AssetDatabase.IsValidFolder(generated)) return Array.Empty<string>();
+            var used = new HashSet<string>(AssetDatabase.FindAssets("t:Scene", new[] { "Assets" })
+                .SelectMany(guid => AssetDatabase.GetDependencies(AssetDatabase.GUIDToAssetPath(guid), true)));
+            var deleted = new List<string>();
+            foreach (var folder in AssetDatabase.GetSubFolders(generated))
+            {
+                if (folder == keep || used.Any(p => p.StartsWith(folder + "/", StringComparison.Ordinal))) continue;
+                if (AssetDatabase.DeleteAsset(folder)) deleted.Add(folder);
+            }
+            // 0.15.0 wrote the assets straight into Generated; drop those once no scene uses them.
+            foreach (var path in AssetDatabase.FindAssets("", new[] { generated }).Select(AssetDatabase.GUIDToAssetPath).Distinct()
+                         .Where(p => !AssetDatabase.IsValidFolder(p) && System.IO.Path.GetDirectoryName(p)?.Replace('\\', '/') == generated).ToArray())
+                if (!used.Contains(path) && AssetDatabase.DeleteAsset(path)) deleted.Add(path);
+            if (AssetDatabase.GetSubFolders(generated).Length == 0 &&
+                AssetDatabase.FindAssets("", new[] { generated }).Length == 0 && AssetDatabase.DeleteAsset(generated))
+                deleted.Add(generated);
+            return deleted.ToArray();
         }
 
         private static Component Ensure(GameObject holder, string typeName, string what, bool write, List<string> changes)
@@ -452,9 +478,11 @@ namespace DSH.Editor
         {
             if (!AssetDatabase.IsValidFolder(request.folder))
                 throw new InvalidOperationException($"The recipe folder {request.folder} is missing.");
+            var parent = request.folder + "/Generated";
+            if (!AssetDatabase.IsValidFolder(parent)) AssetDatabase.CreateFolder(request.folder, "Generated");
             if (AssetDatabase.IsValidFolder(generated) && !AssetDatabase.DeleteAsset(generated))
                 throw new InvalidOperationException($"Unity could not empty {generated}.");
-            AssetDatabase.CreateFolder(request.folder, "Generated");
+            AssetDatabase.CreateFolder(parent, generated.Substring(parent.Length + 1));
 
             AnimationClip Clip(string file, Dictionary<string, float> values)
             {

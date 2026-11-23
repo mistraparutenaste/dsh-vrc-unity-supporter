@@ -11,6 +11,7 @@
 - **Blender**: make simple shapes. Hair and outfits made for another avatar are fitted to this avatar's skeleton and to the body-shape difference from the avatar they were made for, get the avatar's body shape keys, and are then attached, made to follow the body, and the body hidden underneath removed (uses [Blender](https://www.blender.org/)).
 - **Expressions**: replace hand-gesture expressions, pick and keep an expression from the menu, and add toggles such as a blush, by adding a layer without changing the avatar's animators.
 - **Held props**: have the avatar hold a prop and leave it in place with "Put down" in the menu, or fix a prop in the world.
+- **Avatar updates**: apply the changes made with this plugin again to a new version of the avatar, and list the values changed by hand.
 - **Swinging parts**: change PhysBone values of hair, skirts and tails (how they swing, whether they can be grabbed or posed), and add colliders on the legs or body so they do not pass through.
 - **View position and sizes**: put the view position between the eyes again, and make the head, hands or other single bones bigger or smaller.
 - **Parameter memory**: count the synced parameters (256-bit limit) as built, and show what is left before a toggle is added.
