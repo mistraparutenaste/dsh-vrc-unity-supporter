@@ -128,13 +128,13 @@ It does not upload. Upload with the VRChat SDK yourself.
 
 ### Installation
 
-See `00_README_JA.txt` in the ZIP (Japanese). You can also paste the setup prompt from the README into your AI agent's chat and let the agent install it. An English overview is on GitHub (docs/DETAIL.md).
+See `00_README_EN.txt` in the ZIP. You can also open your AI agent in the extracted folder and ask it to read that file and install the plugin for you.
 
 ### Tested so far
 
 In the author's environment (Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23), the features above were checked up to applying them in Unity and the SDK build preprocessing (lilToon adjustments only up to comparing before/after captures). Only a few avatars were tested; other avatars and outfits may not work.
 
-What has not been tested is listed under 「動作の確認状況」 in `00_README_JA.txt`. In particular, **the Codex version has not been tested in the author's environment yet**.
+What has not been tested is listed under "Tested so far" in `00_README_EN.txt`. In particular, **the Codex version has not been tested in the author's environment yet**.
 
 ### About AI
 
@@ -195,13 +195,13 @@ Source code and latest version: https://github.com/mistraparutenaste/dsh-vrc-uni
 
 ### 安装方法
 
-请参阅 ZIP 中的 `00_README_JA.txt`（日语）。也可以把 README 里的安装提示词粘贴到 AI 代理的聊天中，让它代为安装。GitHub 上有英文简介（docs/DETAIL.md）。
+请参阅 ZIP 中的 `00_README_ZH.txt`。也可以在解压后的文件夹中打开 AI 代理，让它阅读这个文件并代为安装。
 
 ### 测试情况
 
 在作者的环境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）中，上述功能已测试到在 Unity 中应用以及 SDK 的预处理（lilToon 调整仅测试到修改前后的截图对比）。测试过的模型有限，其他模型或服装可能无法正常使用。
 
-尚未测试的内容写在 `00_README_JA.txt` 的「動作の確認状況」中。特别是，**Codex 版尚未在作者的环境中测试**。
+尚未测试的内容写在 `00_README_ZH.txt` 的「测试情况」中。特别是，**Codex 版尚未在作者的环境中测试**。
 
 ### 关于 AI
 
@@ -262,13 +262,13 @@ DeepSeek Harness, Claude Code, Codex에서 사용할 수 있습니다.
 
 ### 설치 방법
 
-ZIP 안의 `00_README_JA.txt`(일본어)를 참고해 주세요. README의 설치용 문장을 AI 에이전트 채팅에 붙여 넣어 설치를 맡길 수도 있습니다. GitHub에 영어 소개가 있습니다(docs/DETAIL.md).
+ZIP 안의 `00_README_KO.txt`를 참고해 주세요. 압축을 푼 폴더에서 AI 에이전트를 열고, 이 파일을 읽고 설치해 달라고 맡길 수도 있습니다.
 
 ### 동작 확인 상황
 
 작자의 환경(Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23)에서 위 기능을 Unity에서의 적용과 SDK 전처리까지 확인했습니다(lilToon 조정은 개변 전후 촬영 비교까지). 확인한 아바타는 한정되어 있어, 다른 아바타나 의상에서는 잘 되지 않을 수 있습니다.
 
-아직 확인하지 않은 것은 `00_README_JA.txt`의 「動作の確認状況」에 적혀 있습니다. 특히 **Codex 버전은 아직 작자의 환경에서 동작을 확인하지 않았습니다**.
+아직 확인하지 않은 것은 `00_README_KO.txt`의 「동작 확인 상황」에 적혀 있습니다. 특히 **Codex 버전은 아직 작자의 환경에서 동작을 확인하지 않았습니다**.
 
 ### AI에 대해
 

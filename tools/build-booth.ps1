@@ -4,8 +4,9 @@
 
 .DESCRIPTION
   Copies the files a user needs (the plugin for DSH, Claude Code and Codex, its docs and
-  the DSH installer) into one folder named dsh-vrc-unity-supporter, adds 00_README_JA.txt
-  from booth/ with the version filled in, and zips it as
+  the DSH installer) into one folder named dsh-vrc-unity-supporter, adds the README for
+  BOOTH users from booth/ (00_README_JA.txt plus the EN, ZH and KO translations) with the
+  version filled in, and zips it as
   dist/booth/dsh-vrc-unity-supporter-<version>.zip.
 
   The folder name carries no version, so a user who replaces the folder in place keeps
@@ -35,6 +36,7 @@ $include = @(
     'cordis.patch.yml', 'icon.svg', 'install.cmd'
 )
 $exclude = @('tools/publish.ps1', 'tools/build-booth.ps1', 'tools/verify-package.ps1')
+$readmes = @('00_README_JA.txt', '00_README_EN.txt', '00_README_ZH.txt', '00_README_KO.txt')
 
 function Invoke-Git {
     param([string[]]$Arguments)
@@ -48,7 +50,7 @@ function Invoke-Git {
 if ($LASTEXITCODE -ne 0) { throw 'verify-package failed; fix it before building the BOOTH ZIP' }
 
 # 2. The shipped files match a commit, unless this is a preview.
-$dirty = @(Invoke-Git (@('status', '--porcelain', '--') + $include + @('booth/00_README_JA.txt')))
+$dirty = @(Invoke-Git (@('status', '--porcelain', '--') + $include + @($readmes | ForEach-Object { "booth/$_" })))
 if ($dirty.Count -gt 0 -and -not $AllowDirty) {
     $dirty | ForEach-Object { Write-Host "  $_" }
     throw 'uncommitted changes in shipped files; commit them or pass -AllowDirty for a preview'
@@ -73,10 +75,12 @@ try {
         Copy-Item -LiteralPath $source -Destination $target
     }
 
-    # 4. The README for BOOTH users: version filled in, CRLF and a BOM so Notepad shows it right.
-    $readme = Get-Content (Join-Path $root 'booth\00_README_JA.txt') -Raw -Encoding UTF8
-    $readme = ($readme -replace '\{\{VERSION\}\}', $version) -replace "\r?\n", "`r`n"
-    [IO.File]::WriteAllText((Join-Path $top '00_README_JA.txt'), $readme, (New-Object Text.UTF8Encoding $true))
+    # 4. The READMEs for BOOTH users: version filled in, CRLF and a BOM so Notepad shows them right.
+    foreach ($readmeName in $readmes) {
+        $readme = Get-Content (Join-Path $root "booth\$readmeName") -Raw -Encoding UTF8
+        $readme = ($readme -replace '\{\{VERSION\}\}', $version) -replace "\r?\n", "`r`n"
+        [IO.File]::WriteAllText((Join-Path $top $readmeName), $readme, (New-Object Text.UTF8Encoding $true))
+    }
 
     # 5. Zip with forward-slash entry names (Windows and other unzip tools both read them).
     $null = New-Item -ItemType Directory -Force -Path $OutDir
@@ -98,5 +102,5 @@ try {
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $size = [math]::Round((Get-Item -LiteralPath $zipPath).Length / 1KB)
 if ($dirty.Count -gt 0) { Write-Host 'build-booth: PREVIEW built from uncommitted changes' -ForegroundColor Yellow }
-Write-Host "build-booth: $zipPath ($size KB, $($files.Count + 1) files)" -ForegroundColor Green
+Write-Host "build-booth: $zipPath ($size KB, $($files.Count + $readmes.Count) files)" -ForegroundColor Green
 Write-Host "sha256: $hash"

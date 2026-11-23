@@ -1,6 +1,6 @@
 {
   "name": "dsh-vrc-unity-supporter",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "VRChat avatar modification in an existing Unity 2022.3.22f1 project: read the project without opening the editor, design the change, apply it through generated Editor scripts in batch mode, and verify the result.",
   "author": {
     "name": "mistraparutenaste",
