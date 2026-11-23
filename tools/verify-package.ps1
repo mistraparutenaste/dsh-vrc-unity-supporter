@@ -38,8 +38,7 @@ $required = @(
     'installer/install.cmd', 'installer/install.ps1',
     'installer/uninstall.cmd', 'installer/uninstall.ps1',
     'installer/README.md',
-    'booth/00_README_JA.txt', 'booth/00_README_EN.txt', 'booth/00_README_ZH.txt', 'booth/00_README_KO.txt',
-    'tools/build-booth.ps1'
+    'booth/00_README_JA.txt', 'tools/build-booth.ps1'
 )
 foreach ($rel in $required) {
     if (-not (Test-Path (Join-Path $root $rel))) { $problems.Add("missing: $rel") }

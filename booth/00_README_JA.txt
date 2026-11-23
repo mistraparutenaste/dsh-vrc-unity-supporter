@@ -5,8 +5,6 @@ AI エージェント（DeepSeek Harness / Claude Code / Codex）に、VRChat �
 改変を手伝わせるためのプラグインです。Unity を開かずにプロジェクトを調べ、
 変更は Unity の Editor スクリプトで適用し、結果を確認します。アップロードはしません。
 
-English: 00_README_EN.txt / 中文: 00_README_ZH.txt / 한국어: 00_README_KO.txt
-
 
 ■ はじめに必ず確認してください
 --------------------------------------------------------------------
