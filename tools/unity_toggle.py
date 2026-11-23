@@ -61,6 +61,7 @@ LEGACY = {
     "DshExpression.cs": ("56a7267b0b496aaa8661e9c2c89e8ab82ecbc0cd",   # 0.15.0
                          "d314ea13afd8f869382d51c4aecaf51f4e9e09b5"),  # 0.16.0
     "DshMigrate.cs": (),  # added in 0.16.0
+    "DshPlayback.cs": (),  # added in 0.17.0
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"

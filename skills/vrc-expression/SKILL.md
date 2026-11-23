@@ -98,4 +98,5 @@ python -B $ex remove @a --approved-preview '<値>'
 - preview の `summary`、`parameterBudget`、`plannedPaths` を伝え、明示的な確認を得てから apply する。Git の扱いは衣装トグルと同じ。
 - `unity.sdkVerification` に、ビルド後の FX にある DSH のレイヤー、アニメーションの届く先、`layerOrder`（DSH のレイヤーが作者のジェスチャーレイヤーより後ろにあるか）、メニューの位置が出る。
 - レシピを書き換えて apply すると、`Generated/` を作り直す。
+- 適用したら、`vrc-verify` §3 の再生テスト（`unity_playback.py test --auto`）で、ビルド後に表情・メニュー・「置く」が動くかを確かめてから、ユーザーに Gesture Manager での確認を頼む。
 - remove は `DSH Expression <名前>` と `Generated/` を消す。レシピのファイルは残る。`python -B $ex recipes` でレシピと適用先のシーンを一覧にできる。

@@ -1,6 +1,6 @@
 ---
 name: vrc-verify
-description: 改変を適用した直後に読む。コンパイル確認、SDK 前処理の結果の読み方、人が行う動作確認とアップロード前チェックリストを扱う。
+description: 改変を適用した直後に読む。コンパイル確認、SDK 前処理の結果、AI が回す再生テスト（ジェスチャー・メニュー）、人が行う確認とアップロード前チェックを扱う。
 ---
 
 # 検証（アップロードしない）
@@ -28,7 +28,44 @@ python <pkg>/tools/unity_inspect.py hierarchy "Assets\Avatar.prefab"
 意図したオブジェクト・コンポーネントが増えているか、参照切れが無いかを確認する。
 シーンや大きな prefab では `--filter <対象名>` で変更箇所に絞る（既定は 300 ノード・約 48KB まで。`truncated` を確認する）。
 
-## 3. 動作の確認（人間が行う）
+## 3. 再生テスト（AI が実行する。Gesture Manager の代わり）
+
+SDK でビルドしたコピーの FX を、ジェスチャー・メニュー・パラメータで動かし、状態ごとに何が変わったかを返す。
+VRCFury と Modular Avatar が統合したあとの FX そのものを動かすので、レシピの撮影より VRChat に近い。シーンは変えない。
+
+```powershell
+$pb = '<pkg>\tools\unity_playback.py'
+python -B $pb test --project '<project>' --scene 'Assets/Avatar.unity' --avatar 'Avatar' --auto --prepare
+```
+
+`--auto` は、このアバターにかかっている DSH の表情・小物（メニュー、置く）・衣装トグルから、状態と期待値を作る。
+DSH 以外のギミックや、組み合わせを試すときは、テストを JSON で書いて `--spec` で渡す（置き場所は `.dsh/playback/` など、Assets の外）。
+
+```json
+{"states": [
+  {"label": "右手グー", "gesture": {"right": "Fist"}, "expect": [{"path": "@face", "shape": "eye_smile_1", "min": 90}]},
+  {"label": "帽子を外す", "menu": ["!Props/Cap"], "expect": [{"path": "**/Cap", "active": false}]},
+  {"label": "置く", "menu": ["Props/Cap", "Props/Put down"], "expect": [{"path": "**/Cap", "freezeToWorld": true}]},
+  {"label": "髪型 2", "parameters": {"Hair": 2}}
+]}
+```
+
+| 項目 | 内容 |
+|---|---|
+| `gesture` | `left` / `right` に Neutral、Fist、Open、Point、Peace、RockNRoll、Gun、ThumbsUp |
+| `menu` | ビルド後のメニューのパス。そのトグルの値を入れる。先頭の `!` はオフにする（初期状態がオンのトグル） |
+| `parameters` | パラメータ名と値（FX にあるもの。`unity.states[].parameters.notInFx` に、FX に無い名前が出る） |
+| `expect` | `path` はビルド後のアバターからのパス、`@face`（Lip Sync のメッシュ）、`**/名前`（ビルドでボーンの下に移る小物）。`shape` と `min` / `max`、`active`、`freezeToWorld` のどれか |
+
+結果の読み方:
+
+- `unity.states[]`：`changedShapes`（何もしていない状態からの変化。`メッシュ:シェイプキー: 前 -> 後`）、`turnedOn` / `turnedOff`、`frozenInWorld`、`layerStates`（どのレイヤーがどのステートにいるか）、`checks`（期待値の合否）。
+- `summary.failedStates` が 0 でなければ、`changedShapes` と `layerStates` から原因を探し、レシピを直して apply し、もう一度テストする。
+  例：作者の表情が混ざる → `changedShapes` に、レシピに無いシェイプキーが出る。DSH のレイヤーに入っていない → `layerStates` で分かる。
+- `unity.image`：何もしていない状態を先頭に、状態ごとの画像（`rows` の順）。画像を読めるなら見て判断し、読めないときはパスを伝える。
+- 揺れ物（PhysBone）、IK、ネットワーク同期は動かさない。揺れ方や一人称の見え方は、次の §4 で人に見てもらう。
+
+## 4. 動作の確認（人間が行う）
 
 衣装トグルの適用で `--verify-sdk` を使った場合は、まず `unity.sdkVerification` を読む。SDKの前処理で生成されたメニュー項目・初期値・対象衣装のオンとオフのキーを確認する。シーンへの保存結果、SDKの前処理結果、VRChatクライアントでの動作確認を報告し、クライアントで試すメニュー名と操作を具体的に伝える。
 
@@ -47,7 +84,7 @@ VRCFury の前提設定（OFF だと Play でトグルが動かない）:
 - `Tools > VRCFury > Settings > Enable VRCFury in play mode`
 - `Tools > VRCFury > Settings > Enable VRCFury for uploads`（セッション中のみ保持）
 
-## 4. 性能の再測定（AI が実行する）
+## 5. 性能の再測定（AI が実行する）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File `
@@ -58,7 +95,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 `result.json` を `unity_inspect.py rank` に渡してランクを出し（`vrc-perf-budget` §2）、改変前後で比較してランクが落ちた項目（`limitedBy`）を名指しで報告する。
 判断基準は `vrc-perf-budget`。
 
-## 5. アップロード前チェックリスト（人間が実行する）
+## 6. アップロード前チェックリスト（人間が実行する）
 
 AI はこのリストを出して、**ユーザーの確認を待つ**。代行しない。
 
@@ -72,7 +109,7 @@ AI はこのリストを出して、**ユーザーの確認を待つ**。代行�
 - [ ] コンテンツギャラリー（公開範囲・年齢制限）の設定を確認した
 - [ ] 別アバターを誤って上書きしない（Blueprint ID を確認）
 
-## 6. 報告の型
+## 7. 報告の型
 
 ```
 変更: <何をしたか>

@@ -40,7 +40,7 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | Blender での簡単な形の作成、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
 | 既存の PhysBone の値（揺れ方、掴める・ポーズできるか）、ボーンに付けるコライダー | `vrc-physbone` |
 | ビューポイント、ボーン単位の大きさ（頭・手など） | `vrc-proportion` |
-| 読み取り、性能ランク、パラメータ容量（256 bit）、コンパイル確認 | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |
+| 読み取り、性能ランク、パラメータ容量（256 bit）、コンパイル確認、再生テスト（ジェスチャー・メニューを動かして確かめる） | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |
 
 | Editor スクリプトで行う（`vrc-edit-script`） |
 |---|
@@ -82,6 +82,6 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | 同梱のコマンドで足りない改変（新しい PhysBone、コンタクト、メニューの組み替えなど） | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |
 | 性能ランクの試算、パラメータ容量（256 bit） | `vrc-perf-budget` |
-| 適用後の確認、アップロード前チェック | `vrc-verify` |
+| 適用後の確認（再生テスト）、アップロード前チェック | `vrc-verify` |
 
 ユーザーが別の言語で書かない限り、日本語で答える。

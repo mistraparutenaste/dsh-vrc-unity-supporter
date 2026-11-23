@@ -103,6 +103,7 @@ python -B $acc apply @a --approved-preview '<preview の値>'
 - preview の `plannedPaths`（シーンと、`hide` を使うなら隠すためのクリップ）を伝え、明示的な確認を得てから apply する。
 - 適用後に位置だけ直したいときは、レシピの `position` などを変えて preview / apply し直す（`unity.applied` に変わった点だけが出る）。付けるもの、付け方、メニューを変えるときは、いったん取り外してから付け直す。
 - `unity.sdkVerification` に、ビルド後に付いたボーン（`attachedTo`）または統合された衣装のメッシュ数（`mergedRenderers`）、メニューの場所（`menuLocation`）、トグルのアニメーションが届くオブジェクトの数（`toggleAnimation`）が出る。`hold` では追従するボーン（`follows`）と「置く」のアニメーションが届く数（`dropAnimation`）、`world` ではビルド後の親（`parentAfterBuild`）も出る。
+- 適用したら、`vrc-verify` §3 の再生テスト（`unity_playback.py test --auto`）で、ビルド後に表情・メニュー・「置く」が動くかを確かめてから、ユーザーに Gesture Manager での確認を頼む。
 - preview の `parameterBudget` で、パラメータの残りを確かめる（`vrc-perf-budget` §5）。
 - Git の扱いは衣装トグル・色違いと同じ（チェックポイントが必要、DSH が保存したシーンはコミットなしで続けられる）。
 
