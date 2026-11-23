@@ -142,6 +142,7 @@ if ($Project) {
         # VPM packages can live in manifest.json (VCC/ALCOM), vpm-manifest.json (legacy
         # vrc-get) or as packages embedded under Packages/<id>/package.json.
         $vpmPkgs = [ordered]@{}
+        $declared = @{}
         foreach ($mf in @('manifest.json', 'vpm-manifest.json')) {
             $mp = Join-Path $proj "Packages\$mf"
             if (Test-Path -LiteralPath $mp) {
@@ -153,6 +154,7 @@ if ($Project) {
                         $val = $prop.Value
                         $ver = if ($val -is [string]) { $val } elseif ($val.version) { [string]$val.version } else { '' }
                         $vpmPkgs[$prop.Name] = $ver
+                        if ($ver) { $declared[$prop.Name] = $ver }
                     }
                 } catch { }
             }
@@ -167,6 +169,25 @@ if ($Project) {
                     }
                 } catch { }
             }
+        }
+        # A BOOTH package that bundles an old copy of a shared package (lilToon is the usual one) can overwrite the
+        # files in Packages/<id> when it is imported. The folder then mixes two versions and Unity stops compiling,
+        # so every Unity step fails. The folder's own package.json shows the version that was copied in.
+        $overwritten = @()
+        foreach ($dir in @(Get-ChildItem -LiteralPath (Join-Path $proj 'Packages') -Directory -ErrorAction SilentlyContinue)) {
+            $pkgJson = Join-Path $dir.FullName 'package.json'
+            if (-not (Test-Path -LiteralPath $pkgJson)) { continue }
+            try { $meta = Get-Content -LiteralPath $pkgJson -Raw -Encoding UTF8 | ConvertFrom-Json } catch { continue }
+            $want = if ($meta.name) { $declared[[string]$meta.name] } else { $null }
+            if ($want -and $want -notmatch '[\^~*<>x|]' -and [string]$meta.version -and [string]$meta.version -ne $want) {
+                $overwritten += "$($meta.name) は $want のはずが、フォルダの中身は $($meta.version)"
+            }
+        }
+        if ($overwritten) {
+            Add-Check 'package overwritten' 'FAIL' (($overwritten -join '、') + '。インポートしたパッケージに古い版が同梱されていて、上書きされた可能性があります。VCC / ALCOM でそのパッケージを入れ直してください（Git で記録していれば、そのフォルダを戻せます）')
+        }
+        if (Test-Path -LiteralPath (Join-Path $proj 'Assets\lilToon') -PathType Container) {
+            Add-Check 'lilToon in Assets' 'WARN' 'Assets/lilToon があります。古い lilToon の unitypackage が入っている可能性があります。Packages の lilToon とコードが重なるとコンパイルが止まります（説明書だけなら問題ありません）'
         }
         $vpmList = @($vpmPkgs.Keys | ForEach-Object { "$_@$($vpmPkgs[$_])" })
         if ($vpmList.Count -gt 0) {

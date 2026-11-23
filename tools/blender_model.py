@@ -202,9 +202,19 @@ def fit_request(root, recipe):
                    sourceShapes=shape_values(recipe.get("sourceShapes", {}), "sourceShapes"))
     request.update(body=body, boneMap=bone_map, weights=weights, scaleBones=scale_bones, exclude=exclude,
                    push=number(recipe.get("push", 0.002), 0, 0.02, "push"),
-                   scale=number(recipe.get("scale", 1), 0.5, 2, "scale"),
+                   # "auto" (default): items matched at the head only are scaled to clear the avatar's head.
+                   scale=fit_scale(recipe.get("scale", "auto")),
                    offset=numbers(recipe.get("offset", [0, 0, 0]), 3, -0.5, 0.5, "offset"))
     return request
+
+
+def fit_scale(value):
+    """\"auto\" (items matched at the head only get a size that clears the avatar's head) or a fixed factor."""
+    if value == "auto":
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.5 <= value <= 2:
+        raise WorkflowError("'scale' must be \"auto\" or a number from 0.5 to 2.")
+    return float(value)
 
 
 def load_recipe(root, name):

@@ -292,7 +292,7 @@ class TextureWorkflowTests(unittest.TestCase):
         self.write("Assets/Mat/Hair.png", "texture")
         self.write("Assets/DSH/Variants/Other/Copy.mat", "variant material")
         cases = [
-            ({"_SrcBlend": 1}, "not a lilToon value"),
+            ({"_SrcBlend": 1}, "not a lilToon or Poiyomi value"),
             ({"_UseRim": 1}, "true or false"),
             ({"_ShadowStrength": 2}, "from 0 to 1"),
             ({"_ShadowColor": "blue"}, "is a color"),
@@ -343,15 +343,27 @@ class TextureWorkflowTests(unittest.TestCase):
         self.assertEqual(len(plan["request"]["swaps"]), 1)
         self.assertEqual([edit["property"] for edit in plan["request"]["edits"]], ["_OutlineWidth"])
 
-    def test_python_and_unity_allow_the_same_liltoon_values(self):
+    def test_python_and_unity_allow_the_same_shader_values(self):
         import re
         sys.path.insert(0, str(base.TOOLS))
         import unity_texture
         source = (base.TOOLS.parent / "templates/Editor/DshAvatarTools.cs").read_text(encoding="utf-8")
-        block = source[source.index("Allowed = new Dictionary"):]
-        block = block[:block.index("};")]
-        unity = dict(re.findall(r'\{\s*"(_\w+)",\s*"(\w+)"\s*\}', block))
-        self.assertEqual(unity, {name: spec[0] for name, spec in unity_texture.LILTOON.items()})
+        for table, python in (("AllowedLilToon", unity_texture.LILTOON), ("AllowedPoiyomi", unity_texture.POIYOMI)):
+            block = source[source.index(table + " = new Dictionary"):]
+            block = block[:block.index("};")]
+            unity = dict(re.findall(r'\{\s*"(_\w+)",\s*"(\w+)"\s*\}', block))
+            self.assertEqual(unity, {name: spec[0] for name, spec in python.items()}, table)
+
+    def test_poiyomi_color_adjustment_switches_itself_on(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.material_variant({"_MainHueShift": 0.3, "_LineColor": "#203040"})
+        args = ("--scene", "Assets/Avatar.unity", "--avatar", "Avatar", "--variant", "Hair_Ash")
+        edits = {e["property"]: e for e in self.json_output(self.cli("unity_texture.py", "preview", *args))["request"]["edits"]}
+        self.assertEqual((edits["_MainColorAdjustToggle"]["x"], edits["_MainHueShiftToggle"]["x"]), (1, 1))
+        self.assertEqual((edits["_MainHueShift"]["kind"], edits["_LineColor"]["kind"]), ("float", "color"))
+        self.material_variant({"_MainHueShift": 0.3, "_MainHueShiftToggle": False})
+        edits = {e["property"]: e for e in self.json_output(self.cli("unity_texture.py", "preview", *args))["request"]["edits"]}
+        self.assertEqual(edits["_MainHueShiftToggle"]["x"], 0)  # an explicit value wins
 
 
 if __name__ == "__main__":

@@ -36,6 +36,9 @@ class AccessoryWorkflowTests(unittest.TestCase):
             ({"position": [0, 3, 0]}, "'position'"),
             ({"rotation": [0, 0]}, "'rotation'"),
             ({"scale": 0}, "'scale'"),
+            ({"scale": "big"}, "'scale'"),
+            ({"scale": "auto", "bone": "Chest"}, "Head bone"),
+            ({"scale": "auto", "origin": "avatar"}, "Head bone"),
             ({"menu": "Accessory//Hat"}, "'menu'"),
             ({"hide": "Hair", "menu": "Hat"}, "'hide'"),
             ({"defaultOn": "yes"}, "'defaultOn'"),
@@ -61,6 +64,16 @@ class AccessoryWorkflowTests(unittest.TestCase):
         asset.write_text("prefab changed\n")
         changed = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))
         self.assertNotEqual(changed["preview"], plan["preview"])
+
+    def test_auto_scale_asks_unity_to_size_the_item_to_the_head(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.write("Assets/Items/Hat.prefab", "prefab\n")
+        self.recipe(bone="Head", scale="auto", position=[0, -0.01, 0])
+        request = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))["request"]
+        self.assertEqual((request["fitHead"], request["scale"], request["position"]), (True, 1.0, [0, -0.01, 0]))
+        self.recipe(bone="Head", scale=0.2)
+        request = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))["request"]
+        self.assertEqual((request["fitHead"], request["scale"]), (False, 0.2))
 
     def test_preview_reports_materials_the_prefab_refers_to_but_the_project_lacks(self):
         self.write("Assets/Avatar.unity", "scene\n")

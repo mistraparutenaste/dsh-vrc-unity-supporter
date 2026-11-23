@@ -325,15 +325,57 @@ def main_child(armature, name, pairs):
     return direct[0] if len(direct) == 1 else None
 
 
-def pose_to_avatar(outfit, avatar, pairs, scale_bones, extra_scale=1.0, offset=(0, 0, 0)):
+SCALES = {}
+BODY_SCALE = [None, None, None]  # used, height ratio, width ratio
+# Torso bones are short and their joints sit in different places on different rigs (the spine joint just above
+# the hips on one avatar, well above it on another), so their own length ratio is not a size: one short hips
+# segment scaled a whole coat skirt by 1.9. They keep the body scale instead.
+TORSO = {"hips", "spine", "chest", "upperchest", "neck", "left shoulder", "right shoulder"}
+LIMB_RANGE = (0.8, 1.25)  # limbs follow their own length, within this range of the body scale
+
+
+def body_scale(outfit, avatar, pairs, to_outfit):
+    """The avatar's body size over the outfit's: the geometric mean of the hips-to-head height ratio and the
+    shoulder width ratio (either alone when the other is missing). None when the outfit spans neither, as with
+    hair or a hat that matches at the head only."""
+    by_key = {}
+    for name, target in pairs.items():
+        key = humanoid_key(target) or humanoid_key(name)
+        if key and key not in by_key:
+            by_key[key] = name
+
+    def ratio(a, b):
+        if a not in by_key or b not in by_key:
+            return None
+        have = (outfit.data.bones[by_key[a]].head_local - outfit.data.bones[by_key[b]].head_local).length
+        want = (to_outfit @ avatar.data.bones[pairs[by_key[a]]].head_local -
+                to_outfit @ avatar.data.bones[pairs[by_key[b]]].head_local).length
+        return want / have if have > 1e-5 and want > 1e-5 else None
+
+    height = ratio("hips", "head") or ratio("hips", "neck")
+    width = ratio("left upperarm", "right upperarm")
+    found = [value for value in (height, width) if value]
+    if not found:
+        BODY_SCALE[:] = [None, None, None]
+        return None
+    body = max(0.5, min(2.0, (found[0] * found[-1]) ** 0.5))
+    BODY_SCALE[:] = [round(body, 3), round(height, 3) if height else None, round(width, 3) if width else None]
+    return body
+
+
+def pose_to_avatar(outfit, avatar, pairs, scale_bones, extra_scale=1.0, offset=(0, 0, 0), pivot_shift=None):
     """Pose each mapped outfit bone so its head and direction match the avatar's rest pose (parents first).
 
     extra_scale and offset (Unity axes, metres) apply to the top mapped bones: they are for items that match
     the avatar at one bone only (hair or a hat on the head), whose size cannot be read from the skeleton.
+    With scale_bones, a whole outfit takes the avatar's body scale (hips to head) and each limb follows its own
+    length within LIMB_RANGE of it; unmapped bones (skirts, sleeves, ribbons) inherit their parent's scale.
     """
     to_outfit = outfit.matrix_world.inverted() @ avatar.matrix_world
     avatar_head = {name: to_outfit @ avatar.data.bones[name].head_local for name in set(pairs.values())}
     shift = outfit.matrix_world.inverted().to_3x3() @ unity_vector(offset)
+    body = body_scale(outfit, avatar, pairs, to_outfit) if scale_bones else None
+    cumulative = {}
     report = []
     bpy.context.view_layer.objects.active = outfit
     bpy.ops.object.mode_set(mode="POSE")
@@ -355,13 +397,25 @@ def pose_to_avatar(outfit, avatar, pairs, scale_bones, extra_scale=1.0, offset=(
                 rotation = have_vector.rotation_difference(want_vector).to_matrix().to_4x4()
                 if scale_bones:
                     factor = max(0.5, min(2.0, want_vector.length / have_vector.length))
-        top = not any(parent.name in pairs for parent in outfit.data.bones[name].parent_recursive)
+        mapped_parent = next((parent.name for parent in outfit.data.bones[name].parent_recursive
+                              if parent.name in pairs), None)
+        inherited = cumulative.get(mapped_parent, 1.0)
+        if body is not None:
+            key = humanoid_key(pairs[name]) or humanoid_key(name)
+            if key in TORSO:
+                factor = body / inherited
+            else:
+                total = max(body * LIMB_RANGE[0], min(body * LIMB_RANGE[1], inherited * factor))
+                factor = total / inherited
+        top = mapped_parent is None
         if top:
-            want = want + shift
+            want = want + shift + (pivot_shift if pivot_shift is not None else Vector())
             factor *= extra_scale
+        cumulative[name] = inherited * factor
         moved = (Matrix.Translation(want) @ rotation @ Matrix.Scale(factor, 4) @ Matrix.Translation(-head) @ current)
         pose.matrix = moved
         report.append(name)
+        SCALES[name] = round(cumulative[name], 3)
     bpy.context.view_layer.update()
     bpy.ops.object.mode_set(mode="OBJECT")
     return report
@@ -616,6 +670,111 @@ def restore_names(keep, others):
         obj.name = source_name(obj)
 
 
+def inside_count_evaluated(tree, obj, limit=0.05, min_z=None):
+    """inside_count on the posed (evaluated) mesh, before the pose is baked; with min_z, only vertices above it."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated = obj.evaluated_get(depsgraph)
+    mesh = evaluated.to_mesh()
+    try:
+        count = 0
+        for vertex in mesh.vertices:
+            point = evaluated.matrix_world @ vertex.co
+            if min_z is not None and point.z < min_z:
+                continue
+            location, normal, _, _ = tree.find_nearest(point, limit)
+            if location is not None and (point - location).dot(normal) < 0:
+                count += 1
+        return count
+    finally:
+        evaluated.to_mesh_clear()
+
+
+def head_center(avatar_objects, bone_name):
+    """World-space centre of the avatar vertices that follow the head bone (the skull, not the neck joint)."""
+    total, count = Vector(), 0
+    for obj in avatar_objects:
+        if obj.type != "MESH" or bone_name not in obj.vertex_groups:
+            continue
+        index = obj.vertex_groups[bone_name].index
+        for vertex in obj.data.vertices:
+            if any(g.group == index and g.weight > 0.5 for g in vertex.groups):
+                total += obj.matrix_world @ vertex.co
+                count += 1
+    return total / count if count >= 20 else None
+
+
+def head_needs(tree, meshes, centre, min_z, limit=0.05):
+    """For each posed vertex above min_z that sits inside the body: the scale about centre that would bring it
+    out to the surface (radially)."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    needs = []
+    for obj in meshes:
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        try:
+            for vertex in mesh.vertices:
+                point = evaluated.matrix_world @ vertex.co
+                if point.z < min_z:
+                    continue
+                location, normal, _, _ = tree.find_nearest(point, limit)
+                if location is None or (point - location).dot(normal) >= 0:
+                    continue
+                reach = (point - centre).length
+                if reach > 1e-4:
+                    needs.append(((location - centre).length + 0.002) / reach)
+        finally:
+            evaluated.to_mesh_clear()
+    return needs
+
+
+HEAD_COVER = 0.8   # the scale clears this share of the vertices inside the head; the push handles the rest
+HEAD_RANGE = (0.8, 1.35)
+
+
+def auto_head_scale(outfit, avatar, pairs, meshes, tree, avatar_objects, offset):
+    """For items matched at one bone (hair, hats), whose size the skeleton cannot tell: the scale about the centre
+    of the avatar's head that brings HEAD_COVER of the vertices inside the head out to its surface, or, when
+    almost none are inside, the smallest scale that keeps it so. Only vertices above the head joint count: long
+    hair resting on the neck and back touches the body by design. Returns (scale, pivot_shift, detail)."""
+    top = [name for name in pairs
+           if not any(parent.name in pairs for parent in outfit.data.bones[name].parent_recursive)]
+    if len(top) != 1:
+        return None
+    joint_name = pairs[top[0]]
+    centre_world = head_center(avatar_objects, joint_name)
+    if centre_world is None:
+        return None
+    to_outfit = outfit.matrix_world.inverted()
+    joint_world = avatar.matrix_world @ avatar.data.bones[joint_name].head_local
+    pivot = to_outfit @ centre_world - to_outfit @ joint_world
+    vertices = sum(len(obj.data.vertices) for obj in meshes)
+    allowed = max(5, vertices // 200)
+
+    def pose(scale):
+        for bone in outfit.pose.bones:
+            bone.matrix_basis = Matrix.Identity(4)
+        bpy.context.view_layer.update()
+        pose_to_avatar(outfit, avatar, pairs, False, scale, offset, (1 - scale) * pivot)
+        bpy.context.view_layer.update()
+        return head_needs(tree, meshes, centre_world, joint_world.z)
+
+    needs = pose(1.0)
+    detail = {"insideAt1": len(needs)}
+    if len(needs) > allowed:
+        needs.sort()
+        scale = needs[min(len(needs) - 1, int(len(needs) * HEAD_COVER))]
+    else:
+        scale = 1.0
+        while scale - 0.02 >= HEAD_RANGE[0] and len(pose(round(scale - 0.02, 2))) <= allowed:
+            scale = round(scale - 0.02, 2)
+    scale = round(max(HEAD_RANGE[0], min(HEAD_RANGE[1], scale)), 3)
+    detail["insideAfter"] = len(pose(scale))
+    for bone in outfit.pose.bones:
+        bone.matrix_basis = Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    return scale, (1 - scale) * pivot, detail
+
+
 def fit(request):
     reset_scene()
     # The outfit comes first so its materials keep their names when the avatar uses the same ones.
@@ -639,7 +798,9 @@ def fit(request):
         raise ValueError("avatarShapes needs the avatar body mesh.")
     bpy.context.view_layer.update()
     tree = body_tree(body) if body else None
-    pose_args = (request.get("scaleBones", True), request.get("scale", 1.0), request.get("offset", [0, 0, 0]))
+    auto_scale = request.get("scale", 1.0) == "auto"
+    pose_args = (request.get("scaleBones", True), 1.0 if auto_scale else request.get("scale", 1.0),
+                 request.get("offset", [0, 0, 0]))
 
     # The avatar the outfit was made for, posed the same way: the gap between its body and the avatar's body
     # is carried onto the outfit (chest, waist, arm thickness: what the skeleton alone cannot tell).
@@ -660,6 +821,13 @@ def fit(request):
         field, matched, total = body_difference(source_body, tree)
         surface = {"sourceBody": source_name(source_body), "matchedPoints": f"{matched}/{total}"}
 
+    head_scale = None
+    if auto_scale and tree is not None and body_scale(outfit, avatar, pairs,
+                                                       outfit.matrix_world.inverted() @ avatar.matrix_world) is None:
+        found = auto_head_scale(outfit, avatar, pairs, meshes, tree, avatar_objects, pose_args[2])
+        if found is not None:
+            head_scale = dict(found[2], scale=found[0])
+            pose_args = (False, found[0], pose_args[2], found[1])
     posed = pose_to_avatar(outfit, avatar, pairs, *pose_args)
     for obj in meshes:
         bake_deform(obj)
@@ -714,7 +882,9 @@ def fit(request):
         export_fbx(request["output"], exported)
     unmatched = [b.name for b in outfit.data.bones if b.name not in pairs and b.name not in renamed.values()]
     result = {"ok": True, "output": request.get("output", ""), "weights": weights,
-              "mappedBones": len(pairs), "humanoidBones": len(humanoid), "posedBones": len(posed),
+              "mappedBones": len(pairs), "humanoidBones": len(humanoid), "posedBones": len(posed), "bodyScale": dict(zip(("used", "height", "width"), BODY_SCALE)), "headScale": head_scale,
+              # Bones whose own length set a scale other than the body scale (limbs within LIMB_RANGE).
+              "boneScales": {k: v for k, v in SCALES.items() if not BODY_SCALE[0] or abs(v - BODY_SCALE[0]) > 0.03},
               "renamedBones": dict(list(renamed.items())[:MAX_LISTED]),
               # Swaying bones (skirt, hair, strings) need no match; a main bone left here does.
               "unmatchedHumanoidBones": [name for name in unmatched if humanoid_key(name)][:MAX_LISTED],

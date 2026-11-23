@@ -120,7 +120,7 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 - 構造の変更を伴う → `vrc-edit-script` でスクリプト化して適用
 - 読み取りだけで済む → `vrc-asset-read` の `unity_inspect.py`
 - 色違い・肌色・ロゴ（付属 PSD から） → `vrc-texture-variant`
-- lilToon の色・影・輪郭線・発光の調整（マテリアルの値） → `vrc-material-adjust`
+- lilToon・Poiyomi の色・影・輪郭線・発光の調整（マテリアルの値） → `vrc-material-adjust`
 - 体型・貫通・隠れる部分の削除（シェイプキー、MA、AAO） → `vrc-shape-adjust`
 - 小物・髪・衣装の取り付け、付け替え、取り外し → `vrc-accessory`
 - 別アバター用の衣装・髪を着せる → `vrc-outfit-fit`

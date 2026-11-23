@@ -93,6 +93,7 @@ python -B $model build --project '<project>' --model Coat_Fit
 | 結果 | 基準 | 直し方 |
 |---|---|---|
 | `preview`（正面・横、衣装はオレンジ） | 肩・袖・裾・靴が体の位置にある | 大きくずれるなら `boneMap` |
+| `bodyScale` | `used` が 0.8〜1.3 程度。`height` と `width` が近い | 極端なら `boneMap`（腰・頭・腕の対応）を確かめる |
 | `unmatchedHumanoidBones` | 空（つま先程度なら可） | `boneMap` で補う |
 | `surfaceFit.matchedPoints` | 半分以上 | 少ないなら `source` が違う素体、または `sourceBody` を指定 |
 | `verticesInsideBody.afterPush` | 各メッシュ数十以下 | `push` を少し上げる、または 4 で体側を消す |
@@ -100,7 +101,10 @@ python -B $model build --project '<project>' --model Coat_Fit
 
 - `avatarShapes` は「今の体型」を基本形として作る。後で値を変えたいキーは `followShapes` に入れる（同じキーを両方に入れない。二重に動く）。
 - 縮めるキー（`*_OFF`）や顔のキーは `followShapes` に入れない（衣装まで縮む）。
-- 髪・帽子（骨組みが Head から始まる）も同じ手順でよい。`source` があれば頭の形の差も写る。無ければ `scale` / `offset` で合わせる。
+- 髪・帽子（骨組みが Head から始まる）も 2 は同じ。`scale` を書かなければ、頭に埋まらない大きさを自動で探す（結果の `headScale`）。
+  `source` があれば頭の形の差も写る。3 では `mode: bone`、`bone: Head` で付ける（Hips が無いので `armature` は止まる）。
+- アバターに体型キーも縮めるキーも無い場合（`inspect --shapes <体のメッシュ>` が空。例: Mulicia）は、4 の追従と削除はできない。
+  押し出しで止まった姿勢の貫通は防げるが、動いたときの貫通は残りうると伝える。
 
 ## 3. 付ける
 

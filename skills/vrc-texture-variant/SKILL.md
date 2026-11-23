@@ -13,7 +13,7 @@ description: 付属のレイヤー PSD から、衣装・肌・髪・瞳の色�
  → 適用（preview → 確認 → apply）: 複製マテリアル + メニューで切り替え
 ```
 
-PSD が無い、またはテクスチャでなく lilToon の値（主色・影・輪郭線・発光）で変えたいときは `vrc-material-adjust`。
+PSD が無い、またはテクスチャでなく lilToon・Poiyomi の値（主色・影・輪郭線・発光）で変えたいときは `vrc-material-adjust`。
 
 元の PSD、テクスチャ、マテリアルは変えない。成果物はすべて `Assets/DSH/Variants/<名前>/` に入る
 （`recipe.json`、書き出した PNG、複製マテリアル、切り替え用アニメーション）。このフォルダは DSH が管理する。

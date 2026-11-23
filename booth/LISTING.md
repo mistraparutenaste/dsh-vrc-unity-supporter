@@ -36,7 +36,7 @@ DeepSeek Harness・Claude Code・Codex で使えます。
 - プロジェクトの診断（アバター、導入済みパッケージ、参照切れ）
 - 配置済みの衣装をメニューでオン・オフ（VRCFury）
 - 衣装に付属の PSD から色違いを作る（PhotoCraft）
-- lilToon の色・影・輪郭線・発光を、マテリアルの値で調整する（PSD 不要）
+- lilToon・Poiyomi の色・影・輪郭線・発光を、マテリアルの値で調整する（PSD 不要）
 - 体型の調整、服の下に隠れる体の削除（Modular Avatar・Avatar Optimizer）
 - 小物・髪をボーンに付ける、外す（Modular Avatar）
 - 別アバター用の衣装を Blender で合わせて着せる（Blender）
@@ -65,7 +65,7 @@ ZIP の中の `00_README_JA.txt` を見てください。AI エージェント�
 
 ### 動作の確認状況
 
-作者の環境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）で、上の機能を Unity での適用と SDK の前処理まで確認しています（lilToon の調整は、改変前後の撮影での比較まで）。確認したアバターは限られていて、ほかのアバターや衣装ではうまくいかないことがあります。
+作者の環境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）で、上の機能を Unity での適用と SDK の前処理まで確認しています。確認したアバターは限られていて、ほかのアバターや衣装ではうまくいかないことがあります。
 
 まだ確認していないことは、`00_README_JA.txt` の「動作の確認状況」に書いています。特に **Codex 版は、まだ作者の環境で動作を確認していません**。
 
@@ -103,7 +103,7 @@ Ask things like "Look into the avatars in this project" or "I want to switch the
 - Diagnose a project (avatars, installed packages, missing references)
 - Switch outfits already placed in the scene on and off from the menu (VRCFury)
 - Make color variants from the layered PSD that comes with an outfit (PhotoCraft)
-- Adjust lilToon colors, shadows, outlines and emission through material values (no PSD needed)
+- Adjust lilToon and Poiyomi colors, shadows, outlines and emission through material values (no PSD needed)
 - Adjust body shape, and remove body parts hidden under clothes (Modular Avatar, Avatar Optimizer)
 - Attach accessories and hair to bones, and remove them (Modular Avatar)
 - Fit an outfit made for another avatar in Blender and dress your avatar in it (Blender)
@@ -132,7 +132,7 @@ See `00_README_JA.txt` in the ZIP (Japanese). You can also paste the setup promp
 
 ### Tested so far
 
-In the author's environment (Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23), the features above were checked up to applying them in Unity and the SDK build preprocessing (lilToon adjustments only up to comparing before/after captures). Only a few avatars were tested; other avatars and outfits may not work.
+In the author's environment (Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23), the features above were checked up to applying them in Unity and the SDK build preprocessing. Only a few avatars were tested; other avatars and outfits may not work.
 
 What has not been tested is listed under 「動作の確認状況」 in `00_README_JA.txt`. In particular, **the Codex version has not been tested in the author's environment yet**.
 
@@ -170,7 +170,7 @@ Source code and latest version: https://github.com/mistraparutenaste/dsh-vrc-uni
 - 诊断项目（模型、已安装的包、丢失的引用）
 - 在菜单中开关已放置在场景里的服装（VRCFury）
 - 用服装附带的分层 PSD 制作换色版本（PhotoCraft）
-- 通过材质数值调整 lilToon 的颜色、阴影、描边和自发光（不需要 PSD）
+- 通过材质数值调整 lilToon 和 Poiyomi 的颜色、阴影、描边和自发光（不需要 PSD）
 - 调整体型，删除被衣服遮住的身体部分（Modular Avatar、Avatar Optimizer）
 - 把饰品、头发挂到骨骼上，或取下（Modular Avatar）
 - 在 Blender 中把为其他模型制作的服装调整后穿上（Blender）
@@ -199,7 +199,7 @@ Source code and latest version: https://github.com/mistraparutenaste/dsh-vrc-uni
 
 ### 测试情况
 
-在作者的环境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）中，上述功能已测试到在 Unity 中应用以及 SDK 的预处理（lilToon 调整仅测试到修改前后的截图对比）。测试过的模型有限，其他模型或服装可能无法正常使用。
+在作者的环境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）中，上述功能已测试到在 Unity 中应用以及 SDK 的预处理。测试过的模型有限，其他模型或服装可能无法正常使用。
 
 尚未测试的内容写在 `00_README_JA.txt` 的「動作の確認状況」中。特别是，**Codex 版尚未在作者的环境中测试**。
 
@@ -237,7 +237,7 @@ DeepSeek Harness, Claude Code, Codex에서 사용할 수 있습니다.
 - 프로젝트 진단(아바타, 설치된 패키지, 끊어진 참조)
 - 씬에 배치된 의상을 메뉴에서 켜고 끄기(VRCFury)
 - 의상에 포함된 레이어 PSD로 색상 바리에이션 만들기(PhotoCraft)
-- 머티리얼 값으로 lilToon의 색, 그림자, 윤곽선, 발광 조정하기(PSD 불필요)
+- 머티리얼 값으로 lilToon과 Poiyomi의 색, 그림자, 윤곽선, 발광 조정하기(PSD 불필요)
 - 체형 조정, 옷 아래에 가려지는 몸 삭제(Modular Avatar, Avatar Optimizer)
 - 소품과 머리카락을 본에 붙이기, 떼기(Modular Avatar)
 - 다른 아바타용 의상을 Blender로 맞춰서 입히기(Blender)
@@ -266,7 +266,7 @@ ZIP 안의 `00_README_JA.txt`(일본어)를 참고해 주세요. README의 설�
 
 ### 동작 확인 상황
 
-작자의 환경(Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23)에서 위 기능을 Unity에서의 적용과 SDK 전처리까지 확인했습니다(lilToon 조정은 개변 전후 촬영 비교까지). 확인한 아바타는 한정되어 있어, 다른 아바타나 의상에서는 잘 되지 않을 수 있습니다.
+작자의 환경(Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23)에서 위 기능을 Unity에서의 적용과 SDK 전처리까지 확인했습니다. 확인한 아바타는 한정되어 있어, 다른 아바타나 의상에서는 잘 되지 않을 수 있습니다.
 
 아직 확인하지 않은 것은 `00_README_JA.txt`의 「動作の確認状況」에 적혀 있습니다. 특히 **Codex 버전은 아직 작자의 환경에서 동작을 확인하지 않았습니다**.
 

@@ -33,6 +33,7 @@ namespace DSH.Editor
             public float[] position = new float[3];
             public float[] rotation = new float[3];
             public float scale = 1;
+            public bool fitHead = false;
             public string menu = "";
             public string[] hide = Array.Empty<string>();
             public string materialsFrom = "";
@@ -132,6 +133,7 @@ namespace DSH.Editor
                 var changes = ApplyRecipe(avatar, request, true, out var mode);
                 result["mode"] = mode;
                 if (mode == "bone") result["origin"] = Origin(avatar, request);
+                if (request.fitHead && LastHeadFit != null) result["headFit"] = LastHeadFit;
                 result["applied"] = changes;
                 if (changes.Count > 0)
                 {
@@ -266,6 +268,7 @@ namespace DSH.Editor
                 result["rows"] = rows.Select(r => r.label).ToArray();
                 result["mode"] = mode;
                 if (mode == "bone") result["origin"] = Origin(avatar, recipe);
+                if (recipe.fitHead && LastHeadFit != null) result["headFit"] = LastHeadFit;
                 result["built"] = request.build;
                 result["triangles"] = triangles;
                 result["ok"] = true;
@@ -422,6 +425,93 @@ namespace DSH.Editor
         private static Vector3 Vector(float[] values) =>
             values != null && values.Length == 3 ? new Vector3(values[0], values[1], values[2]) : Vector3.zero;
 
+        internal static Dictionary<string, object> LastHeadFit;
+        private const float HeadLoose = 1.12f;    // the item is this much wider than the head
+        private const float BrowHeight = 0.12f;   // its lower edge sits this far (of the head height) above the head's centre
+        private const float BackMargin = 0.08f;   // its back edge this far (of the head depth) behind the back of the head
+
+        /// <summary>
+        /// Size and seat a generic head item (a cap, beret or hat made at any size): its width becomes HeadLoose
+        /// times the width of the avatar's head (the vertices that follow the Head bone), centred left to right,
+        /// its back just behind the head and its lower edge a little above the eyes. The item is at the bone with
+        /// scale 1 when this is called; returns the scale factor and world position for its root.
+        /// </summary>
+        private static (float scale, Vector3 position, Dictionary<string, object> report) FitToHead(
+            GameObject avatar, GameObject item, Transform headBone)
+        {
+            var head = HeadBounds(avatar, headBone)
+                ?? throw new InvalidOperationException("'scale': 'auto' could not find the avatar's head mesh (vertices on the Head bone). Give a number instead.");
+            var space = avatar.transform;
+            var itemBounds = BoundsIn(space, item.GetComponentsInChildren<Renderer>(true))
+                ?? throw new InvalidOperationException("The item has no mesh to size.");
+            if (itemBounds.size.x < 1e-4f) throw new InvalidOperationException("The item has no width to size.");
+            var factor = head.size.x * HeadLoose / itemBounds.size.x;
+            // The root moves with the scale around itself, so measure where the scaled bounds would be.
+            var root = space.InverseTransformPoint(item.transform.position);
+            var scaledMin = root + (itemBounds.min - root) * factor;
+            var scaledMax = root + (itemBounds.max - root) * factor;
+            var target = new Vector3(
+                head.center.x - ((scaledMin.x + scaledMax.x) / 2 - root.x),
+                head.center.y + head.size.y * BrowHeight - (scaledMin.y - root.y),
+                head.min.z - head.size.z * BackMargin - (scaledMin.z - root.z));
+            var report = new Dictionary<string, object>
+            {
+                { "scale", Math.Round(factor, 4) },
+                { "headSize", new[] { Math.Round(head.size.x, 3), Math.Round(head.size.y, 3), Math.Round(head.size.z, 3) } },
+                { "itemSizeBefore", new[] { Math.Round(itemBounds.size.x, 3), Math.Round(itemBounds.size.y, 3), Math.Round(itemBounds.size.z, 3) } },
+            };
+            return (factor, space.TransformPoint(target), report);
+        }
+
+        /// <summary>Bounds, in the avatar's space, of the avatar's vertices that mostly follow the head bone.</summary>
+        private static Bounds? HeadBounds(GameObject avatar, Transform headBone)
+        {
+            Bounds? found = null;
+            foreach (var skinned in avatar.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                var mesh = skinned.sharedMesh;
+                var index = Array.IndexOf(skinned.bones, headBone);
+                if (mesh == null || index < 0 || !mesh.isReadable && mesh.boneWeights.Length == 0) continue;
+                var weights = mesh.boneWeights;
+                if (weights.Length != mesh.vertexCount) continue;
+                var baked = new Mesh();
+                skinned.BakeMesh(baked, true);
+                var vertices = baked.vertices;
+                for (var i = 0; i < vertices.Length; i++)
+                {
+                    var w = weights[i];
+                    var onHead = (w.boneIndex0 == index ? w.weight0 : 0) + (w.boneIndex1 == index ? w.weight1 : 0) +
+                                 (w.boneIndex2 == index ? w.weight2 : 0) + (w.boneIndex3 == index ? w.weight3 : 0);
+                    if (onHead < 0.5f) continue;
+                    var point = avatar.transform.InverseTransformPoint(skinned.transform.TransformPoint(vertices[i]));
+                    if (found.HasValue) { var b = found.Value; b.Encapsulate(point); found = b; }
+                    else found = new Bounds(point, Vector3.zero);
+                }
+                UnityEngine.Object.DestroyImmediate(baked);
+            }
+            return found.HasValue && found.Value.size.x > 0.02f ? found : null;
+        }
+
+        private static Bounds? BoundsIn(Transform space, IEnumerable<Renderer> renderers)
+        {
+            Bounds? found = null;
+            foreach (var renderer in renderers)
+            {
+                var mesh = renderer is SkinnedMeshRenderer skinned ? skinned.sharedMesh : renderer.GetComponent<MeshFilter>()?.sharedMesh;
+                if (mesh == null) continue;
+                var local = mesh.bounds;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var p = local.center + Vector3.Scale(local.extents,
+                        new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
+                    var point = space.InverseTransformPoint(renderer.transform.TransformPoint(p));
+                    if (found.HasValue) { var b = found.Value; b.Encapsulate(point); found = b; }
+                    else found = new Bounds(point, Vector3.zero);
+                }
+            }
+            return found;
+        }
+
         /// <summary>Centre of the asset's meshes in the asset's own space (its root at the asset's saved pose).</summary>
         private static Vector3? MeshCentre(GameObject asset)
         {
@@ -470,6 +560,21 @@ namespace DSH.Editor
             var rotation = turn * basis * asset.transform.localRotation;
             var scale = asset.transform.localScale * factor;
             var t = item.transform;
+            if (request.fitHead)
+            {
+                // Seat the item on the avatar's head first, then apply the recipe's offset, turn and scale on top.
+                // It is measured in its base pose and put back, so an item already placed reads as unchanged.
+                var (savedPosition, savedRotation, savedScale) = (t.position, t.rotation, t.localScale);
+                t.SetPositionAndRotation(pivot, turn * basis * asset.transform.localRotation);
+                t.localScale = asset.transform.localScale;
+                var fit = FitToHead(avatar, item, bone);
+                t.SetPositionAndRotation(savedPosition, savedRotation);
+                t.localScale = savedScale;
+                LastHeadFit = fit.report;
+                var seated = fit.position + basis * Vector(request.position);
+                position = pivot + (seated - pivot) * factor;
+                scale = asset.transform.localScale * fit.scale * factor;
+            }
             if ((t.position - position).sqrMagnitude > Tolerance * Tolerance ||
                 Quaternion.Angle(t.rotation, rotation) > 0.01f || (t.localScale - scale).sqrMagnitude > Tolerance * Tolerance)
             {

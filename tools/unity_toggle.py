@@ -36,6 +36,7 @@ LEGACY = {
         "88d4f3fb624c6083b44436ccd5e29562d8cb8f04",  # 0.6.2
         "0a7da5fd1f1428cc639e6654fca15fbd5eb2a9a7",  # 0.6.3
         "3a2fa108730eaf9afff5e9c64fbe1578c422c789",  # 0.6.4 - 0.11.1
+        "645d60d67f330a3fe3477984b7bd5da519d468b0",  # 0.12.0
     ),
     "DshCapture.cs": ("99e317d29760a8151015a5858e4cf593668ee94e",  # 0.6.0 - 0.6.4
                       "82224ae9179ce0f7c0c3bbf491d4ef0411d9084d"),  # 0.7.0 - 0.11.1
@@ -44,11 +45,13 @@ LEGACY = {
         "1168f8a1430d88449909e6459cd236f611d0de13",  # 0.6.2
         "d04fa099a93b5ab56c4133493e25cc8ba850a525",  # 0.6.3 - 0.9.0
         "fab4ab2f63f9e98e2fec8d658a4e38836aa0c671",  # 0.9.1 - 0.11.1
+        "fecf1dcbbbd9908474830be23ae4e04f7dbd4a29",  # 0.12.0
     ),
     "DshShape.cs": ("c55ea10fa33bf54c9a23ff49fa7ee08de3d485c1",  # 0.7.0 - 0.9.2
                     "1e6d7ff70b95aad93d3be8576a0b40c0882099bd"),  # 0.10.0
     "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",  # 0.8.0 - 0.9.0
-                        "d79661a2f6585c578b1c11f288dc48c3d1608d78"),  # 0.9.1
+                        "d79661a2f6585c578b1c11f288dc48c3d1608d78",  # 0.9.1
+                        "59380d4af0be549483c156c771697c21cc2f865f"),  # 0.9.2 - 0.12.0
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -66,9 +69,12 @@ ACCESSORIES = "Assets/DSH/Accessories"
 # Models made or fitted in Blender (FBX, textures, the .blend and its recipe); DSH owns this folder.
 MODELS = "Assets/DSH/Models"
 MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS)
-# Package files that Unity rewrites whenever it opens the project. lilToon records the graphics API,
-# which differs between batch runs with and without -nographics.
-UNITY_REWRITES = {"Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt"}
+# Files that Unity editor extensions rewrite (or create) whenever Unity opens the project, so they are never a
+# user change. lilToon records the graphics API, which differs between batch runs with and without -nographics.
+# Poiyomi's editor (Thry) keeps its preset caches and settings in Thry/ at the project root and updates them
+# when it sees materials.
+UNITY_REWRITES = {"Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt", "Thry/presets_known_materials.txt",
+                  "Thry/preset_cache.txt", "Thry/Config.json", "Thry/global_links.json"}
 
 
 class WorkflowError(Exception):
@@ -363,7 +369,7 @@ def pending_user_changes(root, changes, allowed_scenes=()):
         if status in ("??", " M", " D") and any(path.startswith(folder + "/") or path == folder + ".meta"
                                                 for folder in MANAGED_FOLDERS):
             continue
-        if status == " M" and path in UNITY_REWRITES:
+        if status in (" M", "??") and path in UNITY_REWRITES:
             continue
         if status == " M" and path in allowed_scenes:
             continue

@@ -81,8 +81,14 @@ def load_recipe(root, name):
     if origin not in ORIGINS:
         raise WorkflowError(f"'origin' must be one of {', '.join(ORIGINS)}.")
     scale = recipe.get("scale", 1)
+    # "auto": size a generic hat or head item from the avatar's own head and seat it on top (bone Head only).
+    fit_head = scale == "auto"
+    if fit_head:
+        if bone != "Head" or mode == "armature" or origin == "avatar":
+            raise WorkflowError("'scale': 'auto' sizes items on the Head bone (mode bone, origin bone or auto).")
+        scale = 1
     if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not 0.01 <= scale <= 100:
-        raise WorkflowError("'scale' must be a number from 0.01 to 100.")
+        raise WorkflowError("'scale' must be a number from 0.01 to 100, or \"auto\" for an item on the head.")
     menu = recipe.get("menu", "")
     if not isinstance(menu, str) or len(menu) > 200 or (menu and any(not part.strip() for part in menu.split("/"))):
         raise WorkflowError("'menu' must be empty (always shown) or a menu path such as 'Accessory/Hat'.")
@@ -101,7 +107,7 @@ def load_recipe(root, name):
     request = {"name": name, "asset": asset, "mode": mode, "bone": bone, "origin": origin,
                "position": vector(recipe, "position", 2, "metres from the bone"),
                "rotation": vector(recipe, "rotation", 360, "degrees"),
-               "scale": float(scale), "menu": menu, "hide": hide, "materialsFrom": materials_from,
+               "scale": float(scale), "fitHead": fit_head, "menu": menu, "hide": hide, "materialsFrom": materials_from,
                "defaultOn": default_on,
                "folder": (ACCESSORIES / name).as_posix()}
     return request, path

@@ -60,13 +60,15 @@ python -B $acc candidates --project '<project>' --scene 'Assets/Avatar.unity' --
 | `mode` | `bone`: 1 つのボーンに付ける（MA Bone Proxy）。`armature`: 骨組みをアバターに統合する（MA Setup Outfit）。`auto`（既定）は `kind` で決める |
 | `bone` | `bone` モードで付けるボーン（Humanoid 名）。既定 `Head` |
 | `origin` | `avatar`: アセットの元の位置のまま（そのアバター用に作られた髪や小物）。`bone`: アセットの原点をボーンの位置に置く（汎用の帽子や Blender で作った形）。`auto`（既定）は、メッシュがボーンから 0.5m 以内にあれば `avatar` |
-| `position` / `rotation` / `scale` | 位置の微調整。アバターの向きで x 右、y 上、z 前（メートル・度）。回転と拡大はボーンを中心にかかる |
+| `position` / `rotation` / `scale` | 位置の微調整。アバターの向きで x 右、y 上、z 前（メートル・度）。回転と拡大はボーンを中心にかかる。`scale: "auto"` は Head に付ける汎用の帽子など（任意の大きさで作られたもの）を、アバターの頭の幅に合わせて大きさを決め、頭の上に載せる（結果の `headFit`）。その上に `position` などで微調整する |
 | `menu` | メニューのパス（VRCFury が必要）。空ならトグルなしで常に表示 |
 | `hide` | 小物を付けている間だけ隠す、アバターのオブジェクト（アバターからのパス）。髪の差し替えで元の髪を隠すときなど。`menu` があればトグルと一緒に切り替わる。`menu` が空なら常に着る扱いで、シーン上でオフにする（取り外すとオンに戻る） |
 | `materialsFrom` | 同じ名前のメッシュのマテリアルを写す元の prefab / FBX（マテリアルやシェーダーが欠けていればエラーで止まる。パッケージを丸ごと入れ直してもらう。マテリアルが同じ商品の別の共通パッケージにあることも多い。prefab が参照するのにプロジェクトに無いマテリアルは `preview` の `missingMaterials` に出る）。Blender で合わせた FBX は Unity の標準マテリアルで取り込まれるので、元の衣装・髪の prefab を指定する（シーン上の上書きとして保存。FBX は変えない） |
 | `defaultOn` | メニューの初期状態（既定 true）。トグルは保存される（ワールドを移っても残る） |
 
 - アバター専用の髪・小物は、たいてい `mode: bone`、`origin: auto` のままでよい（元の位置に付く）。
+- 汎用の帽子・キャップ・ベレー（特定のアバター用でないもの）は、`bone: Head`、`scale: "auto"` から始める。
+  モデルが実寸でない（1m を超えるなど）ことが多く、数値を当てずっぽうに書くより早い。撮影して 1〜2cm 単位で `position` を直す。
 - 衣装（Hips から骨組みがある）は `mode: armature`。ボーン名がアバターと合っている必要がある（合わない衣装は `vrc-blender-model` で合わせてから付ける）。
 - 別アバター用の髪や帽子（骨組みが Head から始まるもの）を `vrc-blender-model` で合わせた FBX は、`mode: bone`、`bone: Head` で付ける（`origin: auto` で元の位置になる）。
 - 元の髪を隠すオブジェクト名は、`unity_shape.py shapes --filter Hair` などで確かめる。

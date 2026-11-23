@@ -49,6 +49,26 @@ LILTOON = {
     "_AsUnlit": ("float", 0, 1), "_LightMinLimit": ("float", 0, 1), "_LightMaxLimit": ("float", 0, 10),
     "_MonochromeLighting": ("float", 0, 1),
 }
+
+# Poiyomi Toon 9 / 10 (unlocked materials). Ranges are the shader's own; DshMaterialEdit.AllowedPoiyomi matches.
+POIYOMI = {
+    "_Color": ("color",),
+    "_MainColorAdjustToggle": ("toggle",), "_MainHueShiftToggle": ("toggle",), "_MainHueShift": ("float", 0, 1),
+    "_Saturation": ("float", -1, 10), "_MainBrightness": ("float", -1, 2), "_MainGamma": ("float", 0.01, 5),
+    "_ShadowStrength": ("float", 0, 1), "_ShadowColor": ("color",), "_ShadowBorder": ("float", 0, 1),
+    "_ShadowBlur": ("float", 0, 1), "_LightingShadowColor": ("color",),
+    "_LightingMinLightBrightness": ("float", 0, 1), "_LightingCap": ("float", 0, 10),
+    "_EnableOutlines": ("toggle",), "_LineColor": ("color",), "_LineWidth": ("float", 0, 20),
+    "_OutlineTintMix": ("float", 0, 1),
+    "_EnableEmission": ("toggle",), "_EmissionColor": ("color",), "_EmissionStrength": ("float", 0, 20),
+    "_EnableRimLighting": ("toggle",), "_RimLightColor": ("color",), "_RimWidth": ("float", 0, 1),
+    "_RimStrength": ("float", 0, 20),
+    "_MatcapEnable": ("toggle",), "_MatcapColor": ("color",), "_MatcapIntensity": ("float", 0, 5),
+}
+# Poiyomi's color adjustment only works while its switches are on, so setting a value turns them on too.
+POIYOMI_NEEDS = {"_MainHueShift": ("_MainColorAdjustToggle", "_MainHueShiftToggle"),
+                 "_Saturation": ("_MainColorAdjustToggle",), "_MainBrightness": ("_MainColorAdjustToggle",),
+                 "_MainGamma": ("_MainColorAdjustToggle",)}
 TEXTURE_SUFFIXES = {".png", ".psd", ".tga", ".jpg", ".jpeg", ".tif", ".tiff", ".exr"}
 PSD_SUFFIXES = {".psd", ".psb", ".png"}
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".psd"}
@@ -248,15 +268,24 @@ def check_material(root, entry, edited):
     edited.add(material)
     values = entry.get("set")
     if not isinstance(values, dict) or not 1 <= len(values) <= MAX_PROPERTIES:
-        raise WorkflowError(f"Give {material} a 'set' object with 1 to {MAX_PROPERTIES} lilToon values.")
+        raise WorkflowError(f"Give {material} a 'set' object with 1 to {MAX_PROPERTIES} lilToon or Poiyomi values.")
     entry["_path"] = path
+    values = dict(values)
+    for name in list(values):
+        if name not in LILTOON:
+            for switch in POIYOMI_NEEDS.get(name, ()):
+                values.setdefault(switch, True)
     entry["_edits"] = [material_edit(material, name, value) for name, value in values.items()]
 
 
 def material_edit(material, name, value):
-    spec = LILTOON.get(name)
+    """One recipe value as a Unity edit. Unity checks it again against the material's own shader family."""
+    spec = LILTOON.get(name) or POIYOMI.get(name)
     if spec is None:
-        raise WorkflowError(f"{name} is not a lilToon value this tool changes. Use one of: {', '.join(LILTOON)}.")
+        raise WorkflowError(f"{name} is not a lilToon or Poiyomi value this tool changes. lilToon: "
+                            f"{', '.join(LILTOON)}. Poiyomi: {', '.join(POIYOMI)}.")
+    if name in LILTOON and name in POIYOMI and LILTOON[name][0] == "float" and POIYOMI[name][0] == "float":
+        spec = ("float", min(LILTOON[name][1], POIYOMI[name][1]), max(LILTOON[name][2], POIYOMI[name][2]))
     kind = spec[0]
     edit = {"material": material, "property": name, "kind": kind, "x": 0, "y": 0, "z": 0, "w": 0, "mask": 1}
     if kind == "toggle":
@@ -694,7 +723,7 @@ def main():
             action.add_argument("--filter", default="")
             action.add_argument("--psd-dir", action="append", default=[])
             action.add_argument("--properties", action="store_true",
-                                help="Also list the lilToon values of the matching materials (up to 12)")
+                                help="Also list the lilToon / Poiyomi values of the matching materials (up to 12)")
         if name == "capture":
             action.add_argument("--variant", default="")
             action.add_argument("--views", default="front,back,left,face")

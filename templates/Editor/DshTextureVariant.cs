@@ -53,7 +53,7 @@ namespace DSH.Editor
                 var filter = request.filter ?? "";
                 var slots = new List<Dictionary<string, object>>();
                 var textures = new Dictionary<string, Dictionary<string, object>>();
-                var lilToon = new Dictionary<string, Dictionary<string, object>>();
+                var values = new Dictionary<string, Dictionary<string, object>>();
                 var ranges = new Dictionary<string, object>();
                 foreach (var renderer in avatar.GetComponentsInChildren<Renderer>(true))
                 {
@@ -78,16 +78,19 @@ namespace DSH.Editor
                             { "mainTexture", used.Where(t => t.property == "_MainTex").Select(t => t.path).FirstOrDefault() ?? "" },
                             { "active", renderer.gameObject.activeInHierarchy },
                         });
-                        if (request.properties && !lilToon.ContainsKey(materialPath) &&
-                            DshAvatarScene.ShaderFamily(material.shader) == "lilToon" &&
+                        if (request.properties && !values.ContainsKey(materialPath) &&
+                            DshMaterialEdit.AllowedFor(material.shader) != null &&
                             materialPath.StartsWith("Assets/", StringComparison.Ordinal))
                         {
-                            if (lilToon.Count >= MaxPropertyMaterials) result["propertiesTruncated"] = true;
-                            else lilToon[materialPath] = new Dictionary<string, object>
+                            var family = DshAvatarScene.ShaderFamily(material.shader);
+                            if (values.Count >= MaxPropertyMaterials) result["propertiesTruncated"] = true;
+                            else values[materialPath] = new Dictionary<string, object>
                             {
-                                { "material", materialPath }, { "shader", material.shader.name },
-                                { "multi", DshMaterialEdit.IsMulti(material.shader) },
-                                { "outline", DshMaterialEdit.HasOutline(material.shader) },
+                                { "material", materialPath }, { "shader", material.shader.name }, { "family", family },
+                                { "locked", DshAvatarScene.IsLocked(material.shader) },
+                                { "multi", family == "lilToon" && DshMaterialEdit.IsMulti(material.shader) },
+                                { "outline", family == "lilToon" ? DshMaterialEdit.HasOutline(material.shader)
+                                    : material.HasProperty("_EnableOutlines") && material.GetFloat("_EnableOutlines") != 0f },
                                 { "properties", DshMaterialEdit.Read(material, ranges) },
                             };
                         }
@@ -115,7 +118,7 @@ namespace DSH.Editor
                     .ThenBy(t => (string)t["path"], StringComparer.Ordinal).Take(MaxSlots).ToArray();
                 if (request.properties)
                 {
-                    result["lilToon"] = lilToon.Values.ToArray();
+                    result["materialValues"] = values.Values.ToArray();
                     result["ranges"] = ranges;
                 }
                 result["ok"] = true;

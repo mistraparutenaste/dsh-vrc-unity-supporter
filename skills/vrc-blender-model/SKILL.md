@@ -80,14 +80,17 @@ python -B $model inspect 'Assets/Booth/Outfit/Outfit.fbx' --project '<project>'
   "push": 0.002,
   "boneMap": {"J_Bip_C_UpperChest": "Chest"},
   "exclude": [],
-  "scale": 1,
+  "scale": "auto",
   "offset": [0, 0, 0]
 }
 ```
 
 処理の順番:
 1. 衣装のボーンをアバターのボーンに対応づける（`boneMap` → 同じ名前 → Humanoid の綴りの違い。`Upperarm.L` と `Left_UpperArm` など）。
-2. 対応したボーンの付け根と向きをアバターに合わせ、衣装を変形する（シェイプキーも一緒に変形する）。長さの違いに合わせて拡大縮小もする（`scaleBones`、既定 true、0.5〜2 倍）。
+2. 対応したボーンの付け根と向きをアバターに合わせ、衣装を変形する（シェイプキーも一緒に変形する）。大きさも合わせる（`scaleBones`、既定 true）:
+   衣装全体に、アバターと衣装の「腰〜頭の高さ」と「肩幅」の比の平均をかける（結果の `bodyScale`）。
+   腰・背骨・胸・首・肩はこの大きさのまま。腕・脚だけは自分の長さの比に合わせる（全体の 0.8〜1.25 倍の範囲。結果の `boneScales`）。
+   対応しないボーン（スカート、袖、リボン）は親の大きさを受け継ぐ。
 3. `source`（衣装が作られた元のアバター）があれば、その体も同じように骨格を合わせ、元の体の表面からアバターの体の表面までの差（胸、腰、腕の太さなど）を衣装に写す。
 4. その姿勢を新しい基本姿勢にし、対応したボーンの名前をアバターに合わせる（`weights: keep`）。
 5. 体（`body`）の内側に入った頂点を、表面から `push`（既定 0.002m）外へ押し出す。
@@ -102,11 +105,13 @@ python -B $model inspect 'Assets/Booth/Outfit/Outfit.fbx' --project '<project>'
 | `followShapes` | 衣装にも作る体型キー（`Breasts_big`、`Waist_slim` など）。Unity で `vrc-shape-adjust` の `sync` を付けると体型に追従する。縮めるキー（`*_OFF`）や顔のキーは入れない。`avatarShapes` と同じキーは入れない（二重に動く） |
 | `push` | 押し出す距離（0〜0.02m、0 で押し出さない） |
 | `exclude` | 書き出さない衣装のメッシュ名（付属の素体など）。`inspect` に出る名前で書く |
-| `scale` / `offset` | 一番上の対応ボーンにかける拡大（0.5〜2）とずらし（x 右、y 上、z 前、メートル）。髪や帽子のように Head だけで対応するものは、頭の大きさの違いを骨格から読めないので、これで合わせる |
+| `scale` / `offset` | 一番上の対応ボーンにかける拡大とずらし（x 右、y 上、z 前、メートル）。`scale` は `"auto"`（既定）か 0.5〜2。髪や帽子のように Head だけで対応するものは、頭の大きさを骨格から読めないので、`"auto"` なら頭の中心を基準に、頭に埋まる頂点の 8 割が外に出る大きさを探す（結果の `headScale`。`insideAt1` は 1 倍で頭に埋まる頂点数）。全身の衣装では `bodyScale` が使われ、`"auto"` は何もしない。数値を書くとその倍率に固定する |
 
 - build の結果の `verticesInsideBody` に、メッシュごとの「体の内側にある頂点数」が、骨格を合わせた直後（`afterFit`）と押し出し後（`afterPush`）で出る。`afterPush` が大きく残るなら、`push` を少し上げるか、Unity の `vrc-shape-adjust` の `remove` で体側を消す。
 - 髪は `body` を省略すると頭のメッシュが選ばれる（`build` の結果の `body` で確かめる）。
 - `unmatchedHumanoidBones` は対応しなかった主なボーン（腕・脚・背骨など）。入っていたら `boneMap` で補う（つま先は無くてもよい）。揺れもの用などの数は `unmatchedOtherBones`。
+- `bodyScale` の `height`（腰〜頭）と `width`（肩幅）の比が大きく違う（0.2 以上）ときは、プロポーションの違うアバター。撮影で丈と幅を確かめる。
+- 撮影で衣装が風船のように膨らむ・縮むときは、`boneScales` で大きく外れたボーンを探し、`boneMap` の対応を確かめる。
 - `surfaceFit` は `source` を使ったときの結果。`matchedPoints` が半分未満なら、元のアバターか `sourceBody` が違う。`meanMoveMm` は体型差で動かした平均の距離。
 - `followedShapes` は、メッシュごとに作った体型キー（ほとんど動かないメッシュには作らない）。
 - 付けるときは vrc-accessory の `mode: armature` を使う（Head から始まる髪・帽子は `mode: bone`、`bone: Head`）。

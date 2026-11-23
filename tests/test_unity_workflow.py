@@ -543,6 +543,19 @@ class UnityWorkflowTests(unittest.TestCase):
         self.assertEqual(later["git"]["blockingChanges"], [])
 
 
+class UnityRewriteTests(unittest.TestCase):
+    def test_editor_extension_caches_are_not_user_changes(self):
+        sys.path.insert(0, str(TOOLS))
+        import unity_toggle
+        changes = [{"path": "Thry/presets_known_materials.txt", "status": " M"},
+                   {"path": "Thry/preset_cache.txt", "status": "??"},
+                   {"path": "Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt", "status": " M"},
+                   {"path": "Thry/Other.txt", "status": " M"},
+                   {"path": "Assets/Avatar.unity", "status": " M"}]
+        left = [c["path"] for c in unity_toggle.pending_user_changes(Path("."), changes)]
+        self.assertEqual(left, ["Thry/Other.txt", "Assets/Avatar.unity"])
+
+
 class HelperUpgradeTests(unittest.TestCase):
     def test_helpers_of_the_latest_release_upgrade_without_a_manual_merge(self):
         """A helper changed since the last release tag must list that release's blob in LEGACY."""

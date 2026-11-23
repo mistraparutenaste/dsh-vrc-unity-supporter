@@ -129,6 +129,21 @@ class BlenderModelTests(unittest.TestCase):
         self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "stale")
         self.assertEqual(calls.read_text().split(), ["fit"])
 
+    def test_fit_scale_is_automatic_unless_a_number_is_given(self):
+        env, calls = self.fake_blender()
+        self.write("Assets/Items/Hair.fbx", "hair\n")
+        self.write("Assets/Items/Avatar.fbx", "avatar\n")
+        self.recipe("Hair_Fit", kind="fit", outfit="Assets/Items/Hair.fbx", avatar="Assets/Items/Avatar.fbx")
+        self.json_output(self.build("Hair_Fit", env=env))
+        runs = sorted((self.project / ".dsh/runs").glob("*/request.json"), key=lambda p: p.stat().st_mtime)
+        self.assertEqual(json.loads(runs[-1].read_text(encoding="utf-8"))["scale"], "auto")
+        self.recipe("Hair_Fit", kind="fit", outfit="Assets/Items/Hair.fbx", avatar="Assets/Items/Avatar.fbx", scale=1.1)
+        self.json_output(self.build("Hair_Fit", env=env))
+        runs = sorted((self.project / ".dsh/runs").glob("*/request.json"), key=lambda p: p.stat().st_mtime)
+        self.assertEqual(json.loads(runs[-1].read_text(encoding="utf-8"))["scale"], 1.1)
+        self.recipe("Hair_Fit", kind="fit", outfit="Assets/Items/Hair.fbx", avatar="Assets/Items/Avatar.fbx", scale="big")
+        self.assertIn("'scale'", json.loads(self.build("Hair_Fit", env=env).stdout)["error"])
+
     def test_inspect_reads_a_project_file(self):
         env, calls = self.fake_blender()
         self.write("Assets/Items/Outfit.fbx", "fbx\n")

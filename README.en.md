@@ -155,7 +155,7 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, 
 | Look into the avatars | "Look into the avatars in this project" | Nothing |
 | Switch outfits from the menu | "Let me switch Outfit_Hoodie on and off from 'Outfit/Hoodie'" | VRCFury |
 | Make color variants | "Make a navy color variant of the hoodie" | PhotoCraft, the avatar's PSD |
-| Adjust lilToon colors, shadows and outlines | "Make the hair shadows lighter and the outline thinner" | VRCFury, lilToon materials |
+| Adjust lilToon colors, shadows and outlines | "Make the hair shadows lighter and the outline thinner" | VRCFury, lilToon or Poiyomi materials |
 | Adjust body shape and fix clipping | "Remove the body under the clothes and make the chest a little bigger" | Modular Avatar, Avatar Optimizer |
 | Attach accessories, hair and outfits | "Attach this wolf-cut hair" | Modular Avatar |
 | Make things in Blender, wear unsupported outfits | "Put this coat made for Selestia on Salt" | Blender, Modular Avatar |
@@ -189,7 +189,7 @@ The agent reads the PSD's layers and shows which layers it will change and how b
 
 ### Adjust lilToon colors, shadows and outlines
 
-Even for outfits and hair without a PSD, you can adjust the look through lilToon material values: main color and color correction (hue, saturation, brightness), shadow color and strength, outline color and width, emission, rim light, matcap, and the upper and lower brightness limits. The original material stays as it is; a copy with the changed values is added. You can switch between it and the original look from the menu.
+Even for outfits and hair without a PSD, you can adjust the look through lilToon material values (Poiyomi Toon 9 and 10 materials that are not locked work too): main color and color correction (hue, saturation, brightness), shadow color and strength, outline color and width, emission, rim light, matcap, and the upper and lower brightness limits. The original material stays as it is; a copy with the changed values is added. You can switch between it and the original look from the menu.
 
 ```text
 Make the hair shadows lighter and the outline thinner. I want it to look like this all the time
@@ -198,7 +198,7 @@ Make the hair shadows lighter and the outline thinner. I want it to look like th
 The agent reads the materials of the hair or outfit that is currently shown and their current values, and shows the values it will change (before → after). Then it checks before/after images side by side and applies after you confirm. If you say "all the time", the toggle starts on (switch it off in the menu to go back to the original). You remove it the same way as a color variant.
 
 - Black, white and gray hair or clothes have no color to shift, so changing hue or saturation does almost nothing. Adjust brightness, rim light or outline instead, or make a color variant from the PSD.
-- It does not change values such as render mode, transparency or stencil. Shaders other than lilToon, such as Poiyomi, are not supported yet.
+- It does not change values such as render mode, transparency or stencil. Shaders other than lilToon and Poiyomi, such as UnityChan Toon Shader, are not supported yet.
 
 ### Adjust body shape and fix clipping
 

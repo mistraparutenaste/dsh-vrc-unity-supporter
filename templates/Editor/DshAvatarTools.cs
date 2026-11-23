@@ -299,9 +299,9 @@ namespace DSH.Editor
     }
 
     /// <summary>
-    /// lilToon material values a variant may change: colors, color correction (HSVG), feature switches and
+    /// lilToon and Poiyomi material values a variant may change: colors, color correction, feature switches and
     /// strengths. Only these properties are read or written, so render mode, blending, stencil and texture slots
-    /// stay as the material's author set them. unity_texture.py keeps the same list (a test compares them).
+    /// stay as the material's author set them. unity_texture.py keeps the same lists (a test compares them).
     /// </summary>
     internal static class DshMaterialEdit
     {
@@ -318,7 +318,7 @@ namespace DSH.Editor
             public int mask = 15;     // which of x, y, z, w to write; the rest keep the material's value
         }
 
-        public static readonly Dictionary<string, string> Allowed = new Dictionary<string, string>(StringComparer.Ordinal)
+        public static readonly Dictionary<string, string> AllowedLilToon = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             { "_Color", "color" }, { "_MainTexHSVG", "hsvg" }, { "_MainGradationStrength", "float" },
             { "_UseShadow", "toggle" }, { "_ShadowStrength", "float" }, { "_ShadowColor", "color" },
@@ -339,6 +339,29 @@ namespace DSH.Editor
             { "_MonochromeLighting", "float" },
         };
 
+        /// <summary>Poiyomi Toon 9 / 10 (unlocked). Feature switches also set the keyword named by ThryToggle.</summary>
+        public static readonly Dictionary<string, string> AllowedPoiyomi = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            { "_Color", "color" },
+            { "_MainColorAdjustToggle", "toggle" }, { "_MainHueShiftToggle", "toggle" }, { "_MainHueShift", "float" },
+            { "_Saturation", "float" }, { "_MainBrightness", "float" }, { "_MainGamma", "float" },
+            { "_ShadowStrength", "float" }, { "_ShadowColor", "color" }, { "_ShadowBorder", "float" },
+            { "_ShadowBlur", "float" }, { "_LightingShadowColor", "color" },
+            { "_LightingMinLightBrightness", "float" }, { "_LightingCap", "float" },
+            { "_EnableOutlines", "toggle" }, { "_LineColor", "color" }, { "_LineWidth", "float" },
+            { "_OutlineTintMix", "float" },
+            { "_EnableEmission", "toggle" }, { "_EmissionColor", "color" }, { "_EmissionStrength", "float" },
+            { "_EnableRimLighting", "toggle" }, { "_RimLightColor", "color" }, { "_RimWidth", "float" },
+            { "_RimStrength", "float" },
+            { "_MatcapEnable", "toggle" }, { "_MatcapColor", "color" }, { "_MatcapIntensity", "float" },
+        };
+
+        public static Dictionary<string, string> AllowedFor(Shader shader)
+        {
+            var family = DshAvatarScene.ShaderFamily(shader);
+            return family == "lilToon" ? AllowedLilToon : family == "Poiyomi" ? AllowedPoiyomi : null;
+        }
+
         public static bool IsMulti(Shader shader) =>
             shader != null && shader.name.IndexOf("lilToonMulti", StringComparison.OrdinalIgnoreCase) >= 0;
 
@@ -353,8 +376,10 @@ namespace DSH.Editor
             {
                 var material = AssetDatabase.LoadAssetAtPath<Material>(edit.material)
                     ?? throw new InvalidOperationException($"Unity could not load the material {edit.material}.");
-                if (DshAvatarScene.ShaderFamily(material.shader) != "lilToon")
-                    throw new InvalidOperationException($"{edit.material} does not use lilToon ({material.shader?.name}). Only lilToon values can be changed.");
+                if (AllowedFor(material.shader) == null)
+                    throw new InvalidOperationException($"{edit.material} uses {material.shader?.name}. Only lilToon and Poiyomi values can be changed.");
+                if (DshAvatarScene.IsLocked(material.shader))
+                    throw new InvalidOperationException($"{edit.material} is a locked Poiyomi material. Unlock it in Unity (Poiyomi's Lock button), then retry.");
                 Check(material, edit);
                 if (!loaded.TryGetValue(material, out var list)) loaded[material] = list = new List<Edit>();
                 list.Add(edit);
@@ -364,8 +389,8 @@ namespace DSH.Editor
 
         private static void Check(Material material, Edit edit)
         {
-            if (!Allowed.TryGetValue(edit.property, out var kind) || kind != edit.kind)
-                throw new InvalidOperationException($"{edit.property} is not a lilToon value DSH changes as '{edit.kind}'.");
+            if (!AllowedFor(material.shader).TryGetValue(edit.property, out var kind) || kind != edit.kind)
+                throw new InvalidOperationException($"{edit.property} is not a {DshAvatarScene.ShaderFamily(material.shader)} value DSH changes as '{edit.kind}'.");
             var shader = material.shader;
             var index = shader.FindPropertyIndex(edit.property);
             if (index < 0 || !material.HasProperty(edit.property))
@@ -408,11 +433,27 @@ namespace DSH.Editor
                             copy.SetInteger(edit.property, Mathf.RoundToInt(edit.x));
                         else
                             copy.SetFloat(edit.property, edit.x);
+                        if (edit.kind == "toggle") SyncKeyword(copy, index, edit.x != 0f);
                         break;
                 }
             }
             // lilToon Multi compiles features as keywords; let lilToon set them from the new values.
             if (IsMulti(copy.shader) && SetupMulti != null) SetupMulti.Invoke(null, new object[] { copy });
+        }
+
+        /// <summary>
+        /// Shaders that compile a feature as a keyword name it in the property's toggle attribute
+        /// (Poiyomi's ThryToggle(COLOR_GRADING_HDR), Unity's Toggle(_KEYWORD)); the keyword follows the switch.
+        /// </summary>
+        private static void SyncKeyword(Material material, int index, bool on)
+        {
+            foreach (var attribute in material.shader.GetPropertyAttributes(index))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(attribute ?? "", @"^(?:Thry)?Toggle\((\w+)\)$");
+                if (!match.Success) continue;
+                if (on) material.EnableKeyword(match.Groups[1].Value);
+                else material.DisableKeyword(match.Groups[1].Value);
+            }
         }
 
         private static float Pick(Edit edit, int component, float current)
@@ -424,12 +465,12 @@ namespace DSH.Editor
         private static MethodInfo SetupMulti => DshVrc.LoadedType("lilToon.lilMaterialUtils")?.GetMethod(
             "SetupMultiMaterial", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(Material) }, null);
 
-        /// <summary>The allowed values present on a lilToon material, in the forms a recipe uses.</summary>
+        /// <summary>The allowed values present on a lilToon or Poiyomi material, in the forms a recipe uses.</summary>
         public static Dictionary<string, object> Read(Material material, Dictionary<string, object> ranges)
         {
             var values = new Dictionary<string, object>();
             var shader = material.shader;
-            foreach (var pair in Allowed)
+            foreach (var pair in AllowedFor(shader) ?? new Dictionary<string, string>())
             {
                 var index = shader.FindPropertyIndex(pair.Key);
                 if (index < 0 || !material.HasProperty(pair.Key)) continue;

@@ -46,7 +46,7 @@ description: VRChat アバター改変の入口（Claude Code 用）。プロジ
 | 構造の把握、参照切れの切り分け | `vrc-asset-read` |
 | 改変の設計（衣装・髪・メニュー・PhysBone） | `vrc-avatar-edit` |
 | 色違い・肌・髪・瞳の色、ロゴ（付属 PSD から） | `vrc-texture-variant` |
-| lilToon の色・影・輪郭線・発光・リムの調整（PSD なしで） | `vrc-material-adjust` |
+| lilToon・Poiyomi の色・影・輪郭線・発光・リムの調整（PSD なしで） | `vrc-material-adjust` |
 | 体型・顔の調整、衣装の貫通、隠れる部分の削除 | `vrc-shape-adjust` |
 | 小物・髪・衣装の取り付け、付け替え、取り外し | `vrc-accessory` |
 | 非対応衣装・髪を着せる（合わせる→付ける→追従・削除→確認） | `vrc-outfit-fit` |
