@@ -52,7 +52,8 @@ LEGACY = {
     "DshAccessory.cs": ("e8628d6efe411b04efa3a7a0a6dd9dc3c055050d",  # 0.8.0 - 0.9.0
                         "d79661a2f6585c578b1c11f288dc48c3d1608d78",  # 0.9.1
                         "59380d4af0be549483c156c771697c21cc2f865f",   # 0.9.2 - 0.12.0
-                        "ec88ac6cf1135b1795484f371690a0a67a58b1a7"),  # 0.13.0 - 0.14.0
+                        "ec88ac6cf1135b1795484f371690a0a67a58b1a7",   # 0.13.0 - 0.14.0
+                        "e4ca843bb1f84b2bb3d1e58428e10fb3f25be99b"),  # 0.15.0 - 0.19.0
     # Added in 0.14.0 (shared reflection helpers first, so the copy order keeps them ahead of their users).
     "DshDynamics.cs": (),
     "DshParameters.cs": (),

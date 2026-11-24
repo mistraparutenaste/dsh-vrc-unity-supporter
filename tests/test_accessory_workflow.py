@@ -43,6 +43,12 @@ class AccessoryWorkflowTests(unittest.TestCase):
             ({"hide": "Hair", "menu": "Hat"}, "'hide'"),
             ({"defaultOn": "yes"}, "'defaultOn'"),
             ({"materialsFrom": "Assets/Items/Missing.prefab"}, "'materialsFrom'"),
+            ({"physBones": {"root": "Tail_Sway"}}, "'physBones'"),
+            ({"physBones": [{"preset": "soft"}]}, "'root'"),
+            ({"physBones": [{"root": "A"}, {"root": "A"}]}, "'root'"),
+            ({"physBones": [{"root": "A", "preset": "floppy"}]}, "'preset'"),
+            ({"physBones": [{"root": "A", "values": {"gravity": 5}}]}, "'gravity'"),
+            ({"physBones": [{"root": "A", "values": {"colour": 1}}]}, "PhysBone value"),
         ]
         for fields, message in cases:
             self.recipe(**fields)
@@ -74,6 +80,18 @@ class AccessoryWorkflowTests(unittest.TestCase):
         self.recipe(bone="Head", scale=0.2)
         request = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))["request"]
         self.assertEqual((request["fitHead"], request["scale"]), (False, 0.2))
+
+    def test_phys_bones_for_sway_bones_use_a_preset_and_values(self):
+        self.write("Assets/Avatar.unity", "scene\n")
+        self.write("Assets/Items/Hat.prefab", "prefab\n")
+        self.recipe(origin="bone", physBones=[{"root": "Tail_R_Sway"},
+                                              {"root": "Tail_L_Sway", "preset": "heavy", "values": {"gravity": 0.4}}])
+        request = self.json_output(self.cli("unity_accessory.py", "preview", *ARGS))["request"]
+        right, left = request["physBones"]
+        self.assertEqual(right["root"], "Tail_R_Sway")
+        self.assertIn({"field": "pull", "value": "0.1"}, right["values"])
+        self.assertIn({"field": "gravity", "value": "0.4"}, left["values"])
+        self.assertIn({"field": "pull", "value": "0.25"}, left["values"])
 
     def test_preview_reports_materials_the_prefab_refers_to_but_the_project_lacks(self):
         self.write("Assets/Avatar.unity", "scene\n")

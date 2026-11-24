@@ -12,6 +12,7 @@ import re
 import sys
 import traceback
 
+import bmesh
 import bpy
 from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
@@ -175,7 +176,16 @@ def inspect(request):
     return result
 
 
-# --- make: simple shapes ----------------------------------------------------------
+# --- make: shapes for accessories ----------------------------------------------------
+#
+# A part is a primitive (cube, sphere, cylinder, cone, torus), a tube swept along points (ribbon tails, strings,
+# horns, headbands, chokers), a lathe (a profile turned about the up axis: buttons, beads, bells, cups) or an
+# extruded outline (stars, hearts, badges). Parts can be mirrored to the avatar's other side, subdivided, placed
+# against the avatar's surface (with an avatar), and given a chain of bones to sway with a PhysBone.
+
+SMOOTH_ANGLE = 40       # degrees: edges sharper than this stay crisp when a part is smooth-shaded
+MANY_TRIANGLES = 10000  # an accessory with more is worth a look in the performance budget
+
 
 def material(color):
     """One material per colour, named after it (Unity imports each as a material of that name)."""
@@ -187,13 +197,33 @@ def material(color):
     value = color.lstrip("#")
     rgb = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
     linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
-    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
     bsdf.inputs["Base Color"].default_value = (*linear, 1)
     mat.diffuse_color = (*linear, 1)
     return mat
 
 
-def primitive(part, index):
+def select_only(obj):
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+
+def link_mesh(name, bm):
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
+def part_matrix(part):
+    return Matrix.Translation(unity_vector(part.get("position", [0, 0, 0]))) @ unity_rotation(
+        part.get("rotation", [0, 0, 0])).to_4x4()
+
+
+def primitive(part, name):
     shape, segments = part["shape"], part.get("segments", 32)
     size = Vector(part.get("size", [0.1, 0.1, 0.1]))
     if shape == "cube":
@@ -212,22 +242,520 @@ def primitive(part, index):
     else:
         raise ValueError(f"Unknown shape {shape}")
     obj = bpy.context.active_object
-    obj.name = part.get("name") or f"{shape}_{index}"
+    obj.name = name
     # Every primitive starts in a 1 m box; size is its box in Unity axes (width x, height y, depth z).
     height = part.get("thickness", 0.2) if shape == "torus" else 1
     obj.scale = (size.x, size.z, size.y / height)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    obj.matrix_world = Matrix.Translation(unity_vector(part.get("position", [0, 0, 0]))) @ unity_rotation(
-        part.get("rotation", [0, 0, 0])).to_4x4()
     if part.get("bevel", 0) > 0 and shape in ("cube", "cylinder"):
         modifier = obj.modifiers.new("Bevel", "BEVEL")
         modifier.width = part["bevel"]
         modifier.segments = 3
         bpy.ops.object.modifier_apply(modifier=modifier.name)
-    if part.get("smooth", shape in ("sphere", "torus", "cylinder", "cone")):
-        bpy.ops.object.shade_smooth()
-    obj.data.materials.append(material(part.get("color", "#ffffff")))
+    obj.matrix_world = part_matrix(part)
     return obj
+
+
+def lathe(part, name):
+    """The profile [[radius, height], ...] (bottom to top, metres) turned about the up axis."""
+    segments = part.get("segments", 32)
+    bm = bmesh.new()
+    rings = []
+    for radius, height in part["profile"]:
+        if radius < 1e-5:
+            rings.append([bm.verts.new((0, 0, height))])
+        else:
+            rings.append([bm.verts.new((radius * math.cos(2 * math.pi * k / segments),
+                                        radius * math.sin(2 * math.pi * k / segments), height))
+                          for k in range(segments)])
+    for low, high in zip(rings, rings[1:]):
+        for k in range(segments):
+            j = (k + 1) % segments
+            if len(low) == 1 and len(high) == 1:
+                break
+            if len(low) == 1:
+                bm.faces.new((low[0], high[j], high[k]))
+            elif len(high) == 1:
+                bm.faces.new((low[k], low[j], high[0]))
+            else:
+                bm.faces.new((low[k], low[j], high[j], high[k]))
+    if part.get("caps", True):
+        for ring in (rings[0], rings[-1]):
+            if len(ring) > 2:
+                bm.faces.new(ring)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    obj = link_mesh(name, bm)
+    obj.matrix_world = part_matrix(part)
+    return obj
+
+
+def outline_points(part):
+    """The 2D outline of an extruded part (Unity x right, y up, metres): a list, or a named shape in size x, y."""
+    outline = part["outline"]
+    if isinstance(outline, list):
+        return [tuple(p) for p in outline]
+    width, height = part.get("size", [0.1, 0.1, 0.1])[:2]
+    if outline == "star":
+        corners, inner = part.get("corners", 5), part.get("inner", 0.45)
+        points = [((1 if k % 2 == 0 else inner) * math.cos(math.pi / 2 + k * math.pi / corners),
+                   (1 if k % 2 == 0 else inner) * math.sin(math.pi / 2 + k * math.pi / corners))
+                  for k in range(corners * 2)]
+    elif outline == "heart":
+        points = []
+        for k in range(64):
+            t = 2 * math.pi * k / 64
+            points.append((16 * math.sin(t) ** 3,
+                           13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)))
+    elif outline == "circle":
+        points = [(math.cos(2 * math.pi * k / 48), math.sin(2 * math.pi * k / 48)) for k in range(48)]
+    elif outline == "diamond":
+        points = [(0, 1), (-1, 0), (0, -1), (1, 0)]
+    else:
+        raise ValueError(f"Unknown outline {outline}")
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+    sx, sy = (max(xs) - min(xs)) or 1, (max(ys) - min(ys)) or 1
+    return [((x - cx) / sx * width, (y - cy) / sy * height) for x, y in points]
+
+
+def extrude(part, name):
+    """An outline in the avatar's front plane, extruded depth metres front to back (centred)."""
+    depth = part.get("depth", 0.005)
+    points = outline_points(part)
+    bm = bmesh.new()
+    front = [bm.verts.new(unity_vector((x, y, depth / 2))) for x, y in points]
+    back = [bm.verts.new(unity_vector((x, y, -depth / 2))) for x, y in points]
+    bm.faces.new(front)
+    bm.faces.new(list(reversed(back)))
+    count = len(points)
+    for k in range(count):
+        j = (k + 1) % count
+        bm.faces.new((front[k], back[k], back[j], front[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    obj = link_mesh(name, bm)
+    if part.get("bevel", 0) > 0:
+        select_only(obj)
+        modifier = obj.modifiers.new("Bevel", "BEVEL")
+        modifier.width = min(part["bevel"], depth * 0.45)
+        modifier.segments = 2
+        modifier.limit_method = "ANGLE"
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    obj.matrix_world = part_matrix(part)
+    return obj
+
+
+# --- tubes ------------------------------------------------------------------------------
+
+def catmull_rom(points, closed, steps):
+    """A smooth path through the points (centripetal Catmull-Rom), steps samples per span."""
+    count = len(points)
+    if count == 2 and not closed:
+        return [points[0].lerp(points[1], i / steps) for i in range(steps + 1)]
+    get = (lambda i: points[i % count]) if closed else (lambda i: points[max(0, min(count - 1, i))])
+    spans = count if closed else count - 1
+    samples = []
+    for span in range(spans):
+        p0, p1, p2, p3 = get(span - 1), get(span), get(span + 1), get(span + 2)
+        if not closed and span == 0:
+            p0 = p1 + (p1 - p2)
+        if not closed and span == spans - 1:
+            p3 = p2 + (p2 - p1)
+        t0 = 0.0
+        t1 = t0 + max((p1 - p0).length, 1e-6) ** 0.5
+        t2 = t1 + max((p2 - p1).length, 1e-6) ** 0.5
+        t3 = t2 + max((p3 - p2).length, 1e-6) ** 0.5
+        for i in range(steps):
+            t = t1 + (t2 - t1) * i / steps
+            a1 = p0 * ((t1 - t) / (t1 - t0)) + p1 * ((t - t0) / (t1 - t0))
+            a2 = p1 * ((t2 - t) / (t2 - t1)) + p2 * ((t - t1) / (t2 - t1))
+            a3 = p2 * ((t3 - t) / (t3 - t2)) + p3 * ((t - t2) / (t3 - t2))
+            b1 = a1 * ((t2 - t) / (t2 - t0)) + a2 * ((t - t0) / (t2 - t0))
+            b2 = a2 * ((t3 - t) / (t3 - t1)) + a3 * ((t - t1) / (t3 - t1))
+            samples.append(b1 * ((t2 - t) / (t2 - t1)) + b2 * ((t - t1) / (t2 - t1)))
+    if not closed:
+        samples.append(points[-1].copy())
+    return samples
+
+
+def perpendicular(vector, axis):
+    flat = vector - axis * vector.dot(axis)
+    if flat.length < 1e-6:
+        flat = axis.orthogonal()
+    return flat.normalized()
+
+
+def tube_profile(part):
+    """Cross-section points (across, out) before taper: a circle, or a soft-cornered flat band."""
+    segments = part.get("segments", 32)
+    if part.get("section", "round") == "flat":
+        half_w, half_d = part.get("width", 0.02) / 2, part.get("depth", 0.002) / 2
+        points = []
+        for k in range(12):
+            a = 2 * math.pi * k / 12
+            c, s = math.cos(a), math.sin(a)
+            points.append((half_w * math.copysign(abs(c) ** 0.5, c), half_d * math.copysign(abs(s) ** 0.5, s)))
+        return points, half_d
+    radius = part.get("radius", 0.005)
+    count = max(6, segments // 3)
+    return [(radius * math.cos(2 * math.pi * k / count), radius * math.sin(2 * math.pi * k / count))
+            for k in range(count)], radius
+
+
+def tube(part, name, context=None, gap=0.0):
+    """A profile swept along a smooth path through the points. The band's flat side faces `face` (Unity axes,
+    default forward), or the avatar's surface when the part conforms to it. Returns the object and the sweep
+    (sample positions and the distance along the path of each vertex), for sway bones."""
+    matrix = part_matrix(part)
+    points = [matrix @ unity_vector(p) for p in part["points"]]
+    closed = part.get("closed", False)
+    profile, thickness = tube_profile(part)
+    taper = part.get("taper", 1.0)
+    steps = max(2, min(16, part.get("segments", 32) // 5))
+    samples = catmull_rom(points, closed, steps)
+    count = len(samples)
+    lengths = [0.0]
+    for a, b in zip(samples, samples[1:]):
+        lengths.append(lengths[-1] + (b - a).length)
+    total = lengths[-1] + ((samples[0] - samples[-1]).length if closed else 0)
+    factors = [1 + (taper - 1) * (s / total if total > 0 else 0) for s in lengths]
+    normals = None
+    if context is not None:
+        # Rest the path on the avatar: each sample goes onto the outermost surface on its line toward the
+        # avatar (so hair layers and ears are not passed through), then out by its half thickness and the gap,
+        # and the band's flat side lies against the surface.
+        hits = [rest_on(context["tree"], point, toward(context, part, point)) for point in samples]
+        found = [i for i, hit in enumerate(hits) if hit[0] is not None]
+        normals = [None] * count
+        for i in found:
+            # Hair is uneven: average each normal with its neighbours so the band does not wobble.
+            near = [hits[j][1] for j in (i - 1, i, i + 1) if 0 <= j < count and hits[j][1] is not None]
+            normals[i] = (sum(near, Vector()) / len(near)).normalized()
+        for i in found:
+            samples[i] = hits[i][0] + normals[i] * (thickness * factors[i] + gap)
+        lengths = [0.0]
+        for a, b in zip(samples, samples[1:]):
+            lengths.append(lengths[-1] + (b - a).length)
+    tangents = []
+    for i in range(count):
+        if closed:
+            forward = samples[(i + 1) % count] - samples[i - 1]
+        else:
+            forward = samples[min(count - 1, i + 1)] - samples[max(0, i - 1)]
+        tangents.append(forward.normalized() if forward.length > 1e-9 else Vector((0, 0, 1)))
+    hint = unity_vector(part.get("face", [0, 0, 1]))
+    if hint.length < 1e-6:
+        hint = unity_vector((0, 0, 1))
+    hint.normalize()
+    frames, out = [], perpendicular(hint, tangents[0])
+    for i, tangent in enumerate(tangents):
+        if normals is not None and normals[i] is not None:
+            out = perpendicular(normals[i], tangent)
+        elif i > 0:
+            # Parallel transport: turn the previous frame by the turn of the path, so the band does not twist.
+            out = perpendicular(tangents[i - 1].rotation_difference(tangent) @ out, tangent)
+        tilt = Matrix.Rotation(math.radians(part.get("tilt", 0)), 3, tangent)
+        out_tilted = tilt @ out
+        frames.append((tangent.cross(out_tilted).normalized(), out_tilted))
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
+    rings = []
+    for i, (across, outward) in enumerate(frames):
+        f = max(factors[i], 0.0)
+        rings.append([bm.verts.new(samples[i] + across * (x * f) + outward * (y * f)) for x, y in profile])
+    width = len(profile)
+    length = max(lengths[-1], 1e-6)
+    spans = count if closed else count - 1
+    for i in range(spans):
+        a, b = rings[i], rings[(i + 1) % count]
+        va, vb = lengths[i] / length, (lengths[i + 1] / length if i + 1 < count else 1.0)
+        for k in range(width):
+            j = (k + 1) % width
+            face = bm.faces.new((a[k], a[j], b[j], b[k]))
+            for loop, (u, v) in zip(face.loops, ((k / width, va), ((k + 1) / width, va),
+                                                 ((k + 1) / width, vb), (k / width, vb))):
+                loop[uv].uv = (u, v)
+    if not closed:
+        for ring in (rings[0], rings[-1]):
+            if max((v.co - ring[0].co).length for v in ring) > 1e-6:
+                face = bm.faces.new(ring)
+                for loop in face.loops:
+                    loop[uv].uv = (0.5, 0.5)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    along = [lengths[i] for i in range(count) for _ in profile]
+    obj = link_mesh(name, bm)
+    return obj, {"samples": samples, "lengths": lengths, "along": along, "closed": closed}
+
+
+# --- placing parts against the avatar ------------------------------------------------
+
+def avatar_context(request):
+    """Import the avatar with the attach bone at the origin (the made model's origin, as vrc-accessory places it
+    with origin "bone"), set its body shapes, and build one surface from the chosen meshes."""
+    objects = import_named(request["avatar"], "DSH_avatar_")
+    armature = armature_of(objects, "avatar")
+    key = humanoid_key(request.get("bone") or "Head")
+    bone_name = humanoid_map(armature).get(key or "")
+    if not bone_name:
+        raise ValueError(f"The avatar has no {request.get('bone')} bone that DSH can read. "
+                         f"Humanoid bones found: {', '.join(sorted(humanoid_map(armature))[:30])}")
+    origin = armature.matrix_world @ armature.data.bones[bone_name].head_local
+    for obj in objects:
+        if obj.parent is None:
+            obj.matrix_world = Matrix.Translation(-origin) @ obj.matrix_world
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    region = {bone_name} | {b.name for b in armature.data.bones[bone_name].children_recursive}
+    wanted = request.get("surfaces") or []
+    if wanted:
+        missing = [name for name in wanted if not any(source_name(o) == name for o in meshes)]
+        if missing:
+            raise ValueError(f"The avatar has no mesh {', '.join(missing[:5])}. "
+                             f"Meshes: {', '.join(source_name(o) for o in meshes[:30])}")
+        surfaces = [o for o in meshes if source_name(o) in wanted]
+    else:
+        # The skin, hair and ears around the bone; the avatar's own clothes (often hidden or swapped) are left out.
+        skin = [o for o in meshes if not CLOTHES.search(source_name(o))]
+        surfaces = [o for o in skin if weighted_vertices(o, region) >= 20] or skin or meshes
+    shapes = request.get("avatarShapes", {})
+    for name, value in shapes.items():
+        owners = [o for o in surfaces if o.data.shape_keys and name in o.data.shape_keys.key_blocks]
+        if not owners:
+            raise ValueError(f"No avatar surface mesh has the shape key {name}.")
+        for obj in owners:
+            block = obj.data.shape_keys.key_blocks[name]
+            block.slider_max = max(1.0, value / 100)
+            block.value = value / 100
+    bpy.context.view_layer.update()
+    vertices, polygons = [], []
+    for obj in surfaces:
+        points, _, faces = evaluated_surface(obj)
+        base = len(vertices)
+        vertices += points
+        polygons += [tuple(base + i for i in face) for face in faces]
+    if not polygons:
+        raise ValueError("The avatar surface has no faces.")
+    centre = head_center(objects, bone_name) or Vector()
+    return {"tree": BVHTree.FromPolygons(vertices, polygons), "objects": objects, "surfaces": surfaces,
+            "bone": bone_name, "origin": origin, "centre": centre}
+
+
+CLOTHES = re.compile(r"cloth|costume|outfit|wear|hood|shoe|sneaker|boot|sock|skirt|shirt|jacket|coat|glove|dress",
+                     re.IGNORECASE)
+
+
+def weighted_vertices(obj, bones):
+    indices = {group.index for group in obj.vertex_groups if group.name in bones}
+    if not indices:
+        return 0
+    return sum(1 for v in obj.data.vertices if any(g.group in indices and g.weight > 0.3 for g in v.groups))
+
+
+def signed_gap(tree, point, limit=0.3):
+    location, normal, _, distance = tree.find_nearest(point, limit)
+    if location is None:
+        return limit
+    return distance if (point - location).dot(normal) >= 0 else -distance
+
+
+SHALLOW = 0.02  # metres: deeper "inside" readings are layered hair or ears seen from behind, not a real clash
+
+
+def mesh_gap(tree, points):
+    """Closest distance of the points to the avatar's surface, and how many lie just under it (within SHALLOW).
+    Hair and ears are open shells, so a point can only be told to be inside when it is close to the surface."""
+    gaps = [signed_gap(tree, p) for p in points]
+    return (min(abs(g) for g in gaps) if gaps else 0.3), sum(1 for g in gaps if -SHALLOW < g < 0)
+
+
+def rest_on(tree, point, direction, reach=0.12):
+    """The first avatar surface met on the line through point along direction (toward the avatar), coming from
+    reach metres outside it, with its normal turned back out. None when the line meets nothing."""
+    location, normal, _, _ = tree.ray_cast(point - direction * reach, direction, reach * 2.5)
+    if location is None:
+        return None, None
+    return location, (-normal if normal.dot(direction) > 0 else normal)
+
+
+def toward(context, part, point):
+    """The direction a part is moved to meet the avatar: the part's toward (Unity axes), else to the centre of
+    the attach bone's region of the avatar (the skull for Head, the neck for Neck)."""
+    if part.get("toward"):
+        return unity_vector(part["toward"]).normalized()
+    direction = context["centre"] - point
+    return direction.normalized() if direction.length > 1e-6 else Vector((0, 0, -1))
+
+
+def snap(objects, context, part, gap):
+    """Move the part (or the whole model) in a straight line until its first point to touch the avatar's outer
+    surface is gap metres from it. Returns the report and the move (Blender axes)."""
+    points = [v.co.copy() for obj in objects for v in obj.data.vertices]
+    sample = points[::max(1, len(points) // 3000)]
+    centre = sum(points, Vector()) / len(points)
+    direction = toward(context, part, centre)
+    reach = 0.15
+    distances = []
+    for point in sample:
+        location, _, _, distance = context["tree"].ray_cast(point - direction * reach, direction, reach * 2)
+        if location is not None:
+            distances.append(distance - reach)
+    if not distances:
+        return {"moved": False, "why": "no avatar surface within 15 cm in that direction"}, Vector()
+    move = direction * max(-reach, min(reach, min(distances) - gap))
+    for obj in objects:
+        for vertex in obj.data.vertices:
+            vertex.co += move
+        obj.data.update()
+    return {"moved": True, "movedMm": round(move.length * 1000, 1),
+            "offset": [round(-move.x, 4), round(move.z, 4), round(-move.y, 4)]}, move
+
+
+# --- sway bones ----------------------------------------------------------------------
+
+def sway_joints(sweep, bones):
+    """bones + 1 points at equal distances along the swept path."""
+    samples, lengths = sweep["samples"], sweep["lengths"]
+    total = lengths[-1]
+    joints = []
+    for i in range(bones + 1):
+        target = total * i / bones
+        k = next((k for k in range(1, len(lengths)) if lengths[k] >= target), len(lengths) - 1)
+        span = lengths[k] - lengths[k - 1]
+        t = 0 if span <= 0 else (target - lengths[k - 1]) / span
+        joints.append(samples[k - 1].lerp(samples[k], max(0.0, min(1.0, t))))
+    return joints
+
+
+def sway_weights(obj, name, sweep, bones):
+    """Weights that blend between neighbouring bones along the path, so the tube bends smoothly."""
+    total = max(sweep["lengths"][-1], 1e-6)
+    groups = [obj.vertex_groups.new(name=f"{name}_Sway{i + 1}") for i in range(bones)]
+    for index, along in enumerate(sweep["along"]):
+        f = along / total * bones - 0.5
+        if f <= 0:
+            groups[0].add([index], 1.0, "REPLACE")
+        elif f >= bones - 1:
+            groups[-1].add([index], 1.0, "REPLACE")
+        else:
+            low = int(f)
+            frac = f - low
+            groups[low].add([index], 1.0 - frac, "REPLACE")
+            groups[low + 1].add([index], frac, "REPLACE")
+
+
+def build_armature(chains):
+    """An armature with a Root bone at the origin and, per swaying part, <part>_Sway (the PhysBone root, which
+    stays put), <part>_Sway1..N along the path and <part>_SwayEnd (so the last bone has a direction to swing)."""
+    data = bpy.data.armatures.new("Armature")
+    rig = bpy.data.objects.new("Armature", data)
+    bpy.context.scene.collection.objects.link(rig)
+    select_only(rig)
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit = data.edit_bones
+    root = edit.new("Root")
+    root.head, root.tail = Vector((0, 0, 0)), Vector((0, 0, 0.02))
+    for name, joints in chains:
+        first = (joints[1] - joints[0]).normalized()
+        anchor = edit.new(f"{name}_Sway")
+        anchor.head, anchor.tail = joints[0], joints[0] + first * 0.005
+        anchor.parent = root
+        previous = anchor
+        for i in range(1, len(joints)):
+            bone = edit.new(f"{name}_Sway{i}")
+            bone.head, bone.tail = joints[i - 1], joints[i]
+            bone.parent = previous
+            previous = bone
+        last = (joints[-1] - joints[-2]).normalized()
+        end = edit.new(f"{name}_SwayEnd")
+        end.head, end.tail = joints[-1], joints[-1] + last * 0.01
+        end.parent = previous
+    bpy.ops.object.mode_set(mode="OBJECT")
+    return rig
+
+
+# --- finishing ------------------------------------------------------------------------
+
+def smooth_shading(obj, mode):
+    """'all' (round shapes), 'angle' (smooth with crisp edges), or 'flat'."""
+    select_only(obj)
+    if mode == "flat":
+        bpy.ops.object.shade_flat()
+        return
+    if mode == "angle":
+        try:
+            bpy.ops.object.shade_smooth_by_angle(angle=math.radians(SMOOTH_ANGLE))
+            return
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+    bpy.ops.object.shade_smooth()
+
+
+def tidy(obj):
+    """Merge doubled vertices, drop loose ones, point every face outward, and triangulate faces of more than
+    four sides (Unity would otherwise triangulate concave outlines its own way)."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1e-5)
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4], quad_method="BEAUTY",
+                          ngon_method="BEAUTY")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def smart_uv(obj):
+    select_only(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.02)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def pack_uv(obj):
+    select_only(obj)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    try:
+        bpy.ops.uv.pack_islands(rotate=False, margin=0.01)
+    except (RuntimeError, TypeError):
+        bpy.ops.uv.pack_islands(margin=0.01)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def quality(obj):
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    report = {"mesh": obj.name, "triangles": sum(len(f.verts) - 2 for f in bm.faces),
+              "openEdges": sum(1 for e in bm.edges if e.is_boundary),
+              "nonManifoldEdges": sum(1 for e in bm.edges if not e.is_manifold and not e.is_boundary),
+              "tinyFaces": sum(1 for f in bm.faces if f.calc_area() < 1e-10),
+              "uv": bool(obj.data.uv_layers), "materials": len(obj.material_slots)}
+    bm.free()
+    return report
+
+
+def expand(part, index):
+    """The part, and its mirror image on the avatar's other side when mirror is set. A mirrored pair is named
+    <name>_R (avatar's right, +x) and <name>_L."""
+    name = part.get("name") or f"{part['shape']}_{index}"
+    if not part.get("mirror"):
+        return [(part, name)]
+    copy = dict(part)
+    x, (rx, ry, rz) = part.get("position", [0, 0, 0])[0], part.get("rotation", [0, 0, 0])
+    copy["position"] = [-x, *part.get("position", [0, 0, 0])[1:]]
+    copy["rotation"] = [rx, -ry, -rz]
+    if "points" in part:
+        copy["points"] = [[-p[0], p[1], p[2]] for p in part["points"]]
+    if isinstance(part.get("outline"), list):
+        copy["outline"] = [[-p[0], p[1]] for p in reversed(part["outline"])]
+    if "face" in part:
+        copy["face"] = [-part["face"][0], *part["face"][1:]]
+    copy["tilt"] = -part.get("tilt", 0)
+    side = x if "points" not in part else sum(p[0] for p in part["points"]) / len(part["points"]) + x
+    right, left = (part, copy) if side >= 0 else (copy, part)
+    return [(right, f"{name}_R"), (left, f"{name}_L")]
 
 
 def export_fbx(path, objects):
@@ -245,26 +773,149 @@ def export_fbx(path, objects):
 
 def make(request):
     reset_scene()
-    parts = [primitive(part, i) for i, part in enumerate(request["parts"])]
-    if request.get("join", True) and len(parts) > 1:
+    context = avatar_context(request) if request.get("avatar") else None
+    tree = context["tree"] if context else None
+    gap = request.get("gap", 0.001)
+    built, reports, chains = [], [], []
+    for index, recipe_part in enumerate(request["parts"]):
+        for part, name in expand(recipe_part, index):
+            shape, conform = part["shape"], part.get("conform", "")
+            sweep = None
+            if shape == "tube":
+                obj, sweep = tube(part, name, context if conform == "surface" else None, gap)
+            elif shape == "lathe":
+                obj = lathe(part, name)
+            elif shape == "extrude":
+                obj = extrude(part, name)
+            else:
+                obj = primitive(part, name)
+            select_only(obj)
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            report = {"part": name, "shape": shape}
+            if conform == "snap":
+                report["snap"], shift = snap([obj], context, part, gap)
+                if sweep is not None:
+                    # The sway bones follow the part: shift the swept samples by the same move.
+                    sweep["samples"] = [p + shift for p in sweep["samples"]]
+            bones = part.get("sway", 0)
+            if bones and sweep is not None:
+                sway_weights(obj, name, sweep, bones)
+                chains.append((name, sway_joints(sweep, bones)))
+                report["sway"] = {"root": f"{name}_Sway", "bones": bones,
+                                  "lengthM": round(sweep["lengths"][-1], 4)}
+            else:
+                obj.vertex_groups.new(name="Root").add(list(range(len(obj.data.vertices))), 1.0, "REPLACE")
+            if part.get("subdivide", 0) > 0:
+                select_only(obj)
+                modifier = obj.modifiers.new("Subdivide", "SUBSURF")
+                modifier.levels = modifier.render_levels = part["subdivide"]
+                bpy.ops.object.modifier_apply(modifier=modifier.name)
+            if shape != "tube":
+                smart_uv(obj)
+            smooth = part.get("smooth")
+            if smooth is False:
+                mode = "flat"
+            elif shape in ("sphere", "torus") or part.get("subdivide", 0) > 0:
+                mode = "all"
+            elif shape == "cube" and not part.get("bevel") and smooth is None:
+                mode = "flat"
+            else:
+                mode = "angle"
+            smooth_shading(obj, mode)
+            obj.data.materials.append(material(part.get("color", "#ffffff")))
+            if tree is not None:
+                gap_now, inside = mesh_gap(tree, [v.co for v in obj.data.vertices])
+                report.update(gapMm=round(gap_now * 1000, 1), insideVertices=inside)
+            built.append(obj)
+            reports.append(report)
+
+    snapped = None
+    if request.get("snap"):
+        # The whole model moves as one (a bow's knot, loops and tails stay together).
+        snapped, shift = snap(built, context, {"toward": request.get("toward")}, gap)
+        chains = [(name, [p + shift for p in joints]) for name, joints in chains]
+        for obj, report in zip(built, reports):
+            if "gapMm" in report:
+                gap_now, inside = mesh_gap(tree, [v.co for v in obj.data.vertices])
+                report.update(gapMm=round(gap_now * 1000, 1), insideVertices=inside)
+
+    meshes = built
+    if request.get("join", True) and len(built) > 1:
         bpy.ops.object.select_all(action="DESELECT")
-        for obj in parts:
+        for obj in built:
             obj.select_set(True)
-        bpy.context.view_layer.objects.active = parts[0]
+        bpy.context.view_layer.objects.active = built[0]
         bpy.ops.object.join()
-        parts = [bpy.context.active_object]
-    root = parts[0] if len(parts) == 1 else None
-    if root is not None:
-        root.name = request["name"]
+        meshes = [bpy.context.active_object]
+        meshes[0].name = request["name"]
+    elif len(built) == 1:
+        built[0].name = request["name"]
+
+    pushed = None
+    if tree is not None and request.get("push", True):
+        before = sum(mesh_gap(tree, [v.co for v in obj.data.vertices])[1] for obj in meshes)
+        for obj in meshes:
+            for vertex, move in zip(obj.data.vertices, push_out(tree, obj, gap, limit=SHALLOW)):
+                vertex.co += move
+            obj.data.update()
+        after = sum(mesh_gap(tree, [v.co for v in obj.data.vertices])[1] for obj in meshes)
+        pushed = {"insideBefore": before, "insideAfter": after, "gapMm": round(gap * 1000, 2)}
+
+    for obj in meshes:
+        tidy(obj)
+        if len(built) > 1 and obj.data.uv_layers:
+            pack_uv(obj)
+
+    rig = build_armature(chains) if chains else None
+    if rig is not None:
+        for obj in meshes:
+            obj.parent = rig
+            obj.modifiers.new("Armature", "ARMATURE").object = rig
+        exported = [rig, *meshes]
+        rig.name = request["name"] + "_Armature"
     else:
-        root = bpy.data.objects.new(request["name"], None)
-        bpy.context.scene.collection.objects.link(root)
-        for obj in parts:
-            obj.parent = root
-    export_fbx(request["output"], [root, *parts] if root not in parts else parts)
-    result = dict(describe(parts), ok=True, output=request["output"])
+        for obj in meshes:
+            group = obj.vertex_groups.get("Root")
+            if group:
+                obj.vertex_groups.remove(group)
+        if len(meshes) == 1:
+            exported = meshes
+        else:
+            root = bpy.data.objects.new(request["name"], None)
+            bpy.context.scene.collection.objects.link(root)
+            for obj in meshes:
+                obj.parent = root
+            exported = [root, *meshes]
+    export_fbx(request["output"], exported)
+
+    checks = [quality(obj) for obj in meshes]
+    warnings = [f"The model was not snapped: {snapped['why']}."] if snapped and not snapped.get("moved") else []
+    triangles_total = sum(c["triangles"] for c in checks)
+    if triangles_total > MANY_TRIANGLES:
+        warnings.append(f"{triangles_total} triangles: lower segments or subdivide (vrc-perf-budget).")
+    if any(c["materials"] > 4 for c in checks):
+        warnings.append("More than 4 materials (colours) on one mesh: each is a draw call in VRChat.")
+    if any(c["nonManifoldEdges"] for c in checks):
+        warnings.append("Some edges join more than two faces (parts that overlap exactly); check the preview.")
+    for report in reports:
+        if report.get("snap") and not report["snap"].get("moved"):
+            warnings.append(f"{report['part']} was not snapped: {report['snap']['why']}.")
+    if pushed and pushed["insideAfter"]:
+        warnings.append(f"{pushed['insideAfter']} vertices are still inside the avatar after the push.")
+
+    result = dict(describe(meshes), ok=True, output=request["output"], parts=reports, quality=checks,
+                  warnings=warnings)
+    if chains:
+        result["sway"] = [{"root": f"{name}_Sway", "bones": len(joints) - 1} for name, joints in chains]
+    if context:
+        result["avatar"] = {"bone": context["bone"], "surfaces": [source_name(o) for o in context["surfaces"]][:30]}
+        if snapped:
+            result["snap"] = snapped
+        result["push"] = pushed
     if request.get("preview"):
-        result["preview"] = render_preview(request["preview"], parts, [], colors="MATERIAL")
+        shown = context["surfaces"] if context else []
+        result["preview"] = render_preview(request["preview"], meshes, shown, colors="MATERIAL",
+                                           min_extent=0.12 if context else 0.0, top=bool(context))
     return result
 
 
@@ -903,7 +1554,7 @@ def fit(request):
 
 # --- preview render -------------------------------------------------------------
 
-def render_preview(path, focus, context, size=512, colors="OBJECT"):
+def render_preview(path, focus, context, size=512, colors="OBJECT", min_extent=0.0, top=False):
     """Front and side orthographic workbench renders. With OBJECT colours the focus objects are orange and the
     context objects grey; MATERIAL shows the material colours."""
     scene = bpy.context.scene
@@ -926,7 +1577,7 @@ def render_preview(path, focus, context, size=512, colors="OBJECT"):
         return []
     low, high = bounds
     centre = (low + high) / 2
-    extent = max((high - low).length * 0.65, 0.05)
+    extent = max((high - low).length * 0.65, 0.05, min_extent)
     camera_data = bpy.data.cameras.new("DSH Preview")
     camera_data.type = "ORTHO"
     camera_data.ortho_scale = extent * 2
@@ -934,7 +1585,10 @@ def render_preview(path, focus, context, size=512, colors="OBJECT"):
     scene.collection.objects.link(camera)
     scene.camera = camera
     images = []
-    for name, direction in (("front", Vector((0, -1, 0))), ("side", Vector((1, 0, 0)))):
+    views = [("front", Vector((0, -1, 0))), ("side", Vector((1, 0, 0)))]
+    if top:
+        views.append(("top", Vector((0, -0.35, 1)).normalized()))
+    for name, direction in views:
         camera.location = centre + direction * 10
         camera.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
         scene.render.filepath = path.replace(".png", f"-{name}.png")

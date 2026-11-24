@@ -44,6 +44,22 @@ namespace DSH.Editor
             public bool keepFiles = false;
             public string follow = "proxy";   // proxy (MA Bone Proxy), constraint (held: VRC Parent Constraint), world
             public string dropMenu = "";      // with constraint: a menu toggle that leaves the item where it is
+            public PhysBoneSpec[] physBones = Array.Empty<PhysBoneSpec>();
+        }
+
+        [Serializable]
+        private sealed class PhysBoneValue
+        {
+            public string field = "";
+            public string value = "";
+        }
+
+        /// <summary>A PhysBone the accessory adds on one of its own bones (sway bones of a model made in Blender).</summary>
+        [Serializable]
+        private sealed class PhysBoneSpec
+        {
+            public string root = "";
+            public PhysBoneValue[] values = Array.Empty<PhysBoneValue>();
         }
 
         [Serializable]
@@ -350,6 +366,7 @@ namespace DSH.Editor
             else item = items[0];
 
             changes.AddRange(CopyMaterials(item, request));
+            changes.AddRange(EnsurePhysBones(item, request));
             if (mode != "bone" && request.follow != "proxy")
                 throw new InvalidOperationException("Holding or fixing in the world works for items attached to a bone (mode 'bone').");
             if (mode == "bone") changes.AddRange(PlaceOnBone(avatar, item, asset, request, out _));
@@ -376,6 +393,39 @@ namespace DSH.Editor
                     if (!hidden.activeSelf) continue;
                     SetActive(hidden, false);
                     changes.Add($"turned off {AnimationUtility.CalculateTransformPath(hidden.transform, avatar.transform)}");
+                }
+            }
+            return changes;
+        }
+
+        /// <summary>
+        /// Add a VRC PhysBone on each named bone of the accessory (the root stays put, the bones under it sway) and
+        /// set its values. Saved as added components on the scene's instance; the asset is not changed.
+        /// </summary>
+        private static List<string> EnsurePhysBones(GameObject item, Request request)
+        {
+            var changes = new List<string>();
+            if (request.physBones.Length == 0) return changes;
+            var type = DshReflect.Find("VRCPhysBone", "VRC")
+                ?? throw new InvalidOperationException("The VRChat SDK PhysBone component is unavailable in this project.");
+            var transforms = item.GetComponentsInChildren<Transform>(true);
+            foreach (var spec in request.physBones)
+            {
+                var matches = transforms.Where(t => t.name == spec.root).ToArray();
+                if (matches.Length != 1)
+                    throw new InvalidOperationException(matches.Length == 0
+                        ? $"The accessory has no bone named '{spec.root}' for a PhysBone. Build the model again, or check the name in the build result's sway list."
+                        : $"The accessory has several objects named '{spec.root}'.");
+                var component = matches[0].GetComponent(type);
+                if (component == null)
+                {
+                    component = matches[0].gameObject.AddComponent(type);
+                    changes.Add($"added a PhysBone on {spec.root}");
+                }
+                foreach (var value in spec.values)
+                {
+                    var before = DshReflect.Set(component, value.field, value.value);
+                    if (before != null) changes.Add($"{spec.root}: PhysBone {value.field} {before} -> {value.value}");
                 }
             }
             return changes;
@@ -892,6 +942,14 @@ namespace DSH.Editor
                     foreach (var index in indices) copyItem = copyItem.GetChild(index);
                 });
                 result["trianglesAfterBuild"] = Triangles(copy, false);
+                if (request.physBones.Length > 0)
+                {
+                    // The added PhysBones must survive the build (an optimiser may merge them, not drop them).
+                    var physBoneType = DshReflect.Find("VRCPhysBone", "VRC");
+                    var built = physBoneType == null ? 0 : copy.GetComponentsInChildren(physBoneType, true)
+                        .Count(c => request.physBones.Any(spec => c.transform.name == spec.root));
+                    result["physBones"] = $"{built}/{request.physBones.Length}";
+                }
                 if (!string.IsNullOrEmpty(request.menu))
                 {
                     var (_, parameter, location) = DshVrc.GeneratedToggle(DshAvatarScene.Descriptor(copy), request.menu);

@@ -38,7 +38,7 @@ description: VRChat アバター改変の入口（Codex 用）。プロジェク
 | ジェスチャーの表情、メニューで選ぶ表情、ほほ染めなどのトグル | `vrc-expression` |
 | アバターの新しい版への改変の引き継ぎ（一覧、参照チェック、まとめてかけ直す） | `vrc-avatar-update` |
 | 試す→測る・見る→直すのくり返し（揺れ物の自動調整、表情の混ざり、小物の位置） | `vrc-auto-adjust` |
-| Blender での簡単な形の作成、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
+| Blender での小物の作成（揺れ・頭への沿わせ込みも）、非対応衣装の合わせ込み | `vrc-blender-model`、`vrc-outfit-fit` |
 | 既存の PhysBone の値（揺れ方、掴める・ポーズできるか）、ボーンに付けるコライダー | `vrc-physbone` |
 | ビューポイント、ボーン単位の大きさ（頭・手など） | `vrc-proportion` |
 | 読み取り、性能ランク、パラメータ容量（256 bit）、コンパイル確認、再生テスト（ジェスチャー・メニューを動かして確かめる） | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |

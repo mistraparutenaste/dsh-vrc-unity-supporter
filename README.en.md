@@ -237,7 +237,7 @@ The agent looks into candidates and bones, shows how it will attach the item, ch
 
 With **Blender** installed, it can also do the following. Blender runs in the background, so no window opens.
 
-- **Make simple shapes**: combines spheres, cubes, cylinders, cones and rings into small items such as ribbons or horns.
+- **Make accessories**: besides spheres, cubes and the like, it sweeps bands and strings smoothly through points (ribbons, horns, headbands, chokers), turns profiles into round shapes (buttons, beads, bells), and extrudes stars and hearts, then combines them. Parts can be mirrored to the other side; UVs and face directions are tidied and triangle counts checked. Given the avatar's FBX, it rests parts against the head or hair so they neither float nor sink in, and gives ribbon tails sway bones that a PhysBone moves once attached.
 - **Wear unsupported outfits**: deforms hair or outfits made for another avatar to fit this avatar's armature, and pushes parts that sink into the body outward. If you have the FBX of the avatar the outfit was made for, it also transfers body differences such as chest, hips and arm thickness to the outfit. It adds the avatar's body shape keys (such as `Breasts_big`) to the outfit too, so the outfit follows when you change the body shape. After attaching, it goes on to remove the body hidden under the clothes and capture built before/after images.
 
 ```text

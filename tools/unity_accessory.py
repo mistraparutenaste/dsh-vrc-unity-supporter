@@ -124,13 +124,37 @@ def load_recipe(root, name):
     default_on = recipe.get("defaultOn", True)
     if not isinstance(default_on, bool):
         raise WorkflowError("'defaultOn' must be true or false.")
+    phys_bones = physbone_specs(recipe.get("physBones", []))
     request = {"name": name, "asset": asset, "mode": mode, "bone": bone, "origin": origin,
                "position": vector(recipe, "position", 2, "metres from the bone"),
                "rotation": vector(recipe, "rotation", 360, "degrees"),
                "scale": float(scale), "fitHead": fit_head, "menu": menu, "hide": hide, "materialsFrom": materials_from,
-               "defaultOn": default_on, "follow": follow, "dropMenu": drop_menu,
+               "defaultOn": default_on, "follow": follow, "dropMenu": drop_menu, "physBones": phys_bones,
                "folder": (ACCESSORIES / name).as_posix()}
     return request, path
+
+
+def physbone_specs(value):
+    """PhysBones to add on the accessory's own bones (the sway roots of a model made with vrc-blender-model)."""
+    from unity_physbone import PRESETS, text_value  # unity_physbone imports this module
+    if not isinstance(value, list) or len(value) > 16 or not all(isinstance(item, dict) for item in value):
+        raise WorkflowError("'physBones' must be a list of up to 16 {\"root\": bone name, \"preset\": ...}.")
+    specs, roots = [], set()
+    for item in value:
+        root = item.get("root")
+        if not isinstance(root, str) or not 0 < len(root) <= 128 or "/" in root or root in roots:
+            raise WorkflowError("Each physBones entry needs a different 'root': the bone name from the build "
+                                "result's sway list (such as Tail_R_Sway).")
+        roots.add(root)
+        preset = item.get("preset", "soft")
+        if preset not in PRESETS:
+            raise WorkflowError(f"'preset' must be one of {', '.join(PRESETS)}.")
+        values = item.get("values", {})
+        if not isinstance(values, dict):
+            raise WorkflowError("'values' must be an object such as {\"gravity\": 0.1}.")
+        merged = dict(PRESETS[preset], **values)
+        specs.append({"root": root, "values": [{"field": f, "value": text_value(f, v)} for f, v in merged.items()]})
+    return specs
 
 
 def fingerprint(root, recipe, path):

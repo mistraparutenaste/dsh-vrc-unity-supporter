@@ -8,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_unity_workflow as base  # noqa: E402
 
 
+TUBE = {"shape": "tube", "points": [[0, 0, 0], [0, -0.05, 0]]}
+
 FAKE_BLENDER = r'''
 import json, sys
 args = sys.argv[sys.argv.index("--") + 1:]
@@ -22,6 +24,8 @@ else:
     with open(request["output"], "w", encoding="utf-8") as fbx:
         fbx.write("fbx " + request["kind"] + " " + json.dumps(request.get("parts", []))[:40])
     result = {"ok": True, "kind": request["kind"]}
+    if any(p.get("sway") for p in request.get("parts", [])):
+        result["sway"] = [{"root": "Tail_Sway", "bones": 4}]
 json.dump(result, open(result_path, "w", encoding="utf-8"))
 '''
 
@@ -73,6 +77,29 @@ class BlenderModelTests(unittest.TestCase):
               "followShapes": ["Waist_slim", "Waist_slim"]}, "'followShapes'"),
             ({"kind": "fit", "outfit": "Assets/Items/Outfit.fbx", "avatar": "Assets/Items/Outfit.fbx",
               "sourceBody": 3}, "'sourceBody'"),
+            ({"kind": "make", "parts": [{"shape": "tube"}]}, "points"),
+            ({"kind": "make", "parts": [dict(TUBE, name="Tail"), dict(TUBE, name="Tail")]}, "must differ"),
+            ({"kind": "make", "parts": [{"shape": "tube", "points": [[0, 0, 0]]}]}, "points"),
+            ({"kind": "make", "parts": [dict(TUBE, section="square")]}, "'section'"),
+            ({"kind": "make", "parts": [dict(TUBE, closed=True)]}, "at least 3"),
+            ({"kind": "make", "parts": [dict(TUBE, sway=9)]}, "sway"),
+            ({"kind": "make", "parts": [dict(TUBE, points=[[0, 0, 0], [0, 1, 0], [1, 0, 0]], closed=True, sway=2)]},
+             "cannot sway"),
+            ({"kind": "make", "parts": [{"shape": "lathe", "profile": [[-0.1, 0], [0, 0.1]]}]}, "negative"),
+            ({"kind": "make", "parts": [{"shape": "extrude", "outline": "moon"}]}, "'outline'"),
+            ({"kind": "make", "parts": [{"shape": "extrude", "outline": [[0, 0], [1, 0]]}]}, "outline"),
+            ({"kind": "make", "parts": [{"shape": "cube", "mirror": "yes"}]}, "mirror"),
+            ({"kind": "make", "parts": [{"shape": "cube", "subdivide": 5}]}, "subdivide"),
+            ({"kind": "make", "parts": [dict(TUBE, conform="surface")]}, "'avatar'"),
+            ({"kind": "make", "parts": [{"shape": "cube"}], "snap": True}, "'snap' needs"),
+            ({"kind": "make", "avatar": "Assets/Items/Outfit.fbx", "parts": [{"shape": "cube", "conform": "surface"}]},
+             "for tubes"),
+            ({"kind": "make", "avatar": "Assets/Items/Outfit.fbx", "parts": [{"shape": "cube", "conform": "glue"}]},
+             "'conform'"),
+            ({"kind": "make", "avatar": "Assets/Items/Outfit.fbx", "bone": "Hat", "parts": [{"shape": "cube"}]}, "'bone'"),
+            ({"kind": "make", "avatar": "Assets/Items/Outfit.fbx", "toward": [0, 0, 0], "parts": [{"shape": "cube"}]},
+             "'toward'"),
+            ({"kind": "make", "avatar": "Assets/Items/Outfit.fbx", "gap": 0.5, "parts": [{"shape": "cube"}]}, "gap"),
         ]
         for fields, message in cases:
             self.recipe(**fields)
@@ -128,6 +155,27 @@ class BlenderModelTests(unittest.TestCase):
         source.write_text("source changed\n")
         self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "stale")
         self.assertEqual(calls.read_text().split(), ["fit"])
+
+    def test_make_on_the_avatar_passes_placement_and_tracks_the_avatar_file(self):
+        env, calls = self.fake_blender()
+        avatar = self.write("Assets/Items/Avatar.fbx", "avatar\n")
+        self.recipe("Bow", kind="make", avatar="Assets/Items/Avatar.fbx", bone="Head", snap=True, toward=[0, 0, 1],
+                    parts=[{"shape": "sphere", "size": [0.02, 0.02, 0.02]},
+                           dict(TUBE, section="flat", mirror=True, sway=True, conform="surface")])
+        built = self.json_output(self.build("Bow", env=env))
+        self.assertIn("physBones", built["next"])
+        self.assertIn("Tail_Sway", built["next"])
+        request = json.loads(next((self.project / ".dsh/runs").glob("*/request.json")).read_text(encoding="utf-8"))
+        self.assertEqual(Path(request["avatar"]), self.project / "Assets/Items/Avatar.fbx")
+        self.assertEqual((request["bone"], request["snap"], request["toward"], request["gap"], request["push"]),
+                         ("Head", True, [0, 0, 1], 0.001, True))
+        sphere, tube = request["parts"]
+        self.assertEqual((tube["sway"], tube["section"], tube["mirror"], tube["conform"]), (4, "flat", True, "surface"))
+        self.assertEqual(sphere["conform"], "")
+        self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "current")
+        avatar.write_text("avatar changed\n")
+        self.assertEqual(self.json_output(self.cli("blender_model.py", "list"))["models"][0]["fbx"], "stale")
+        self.assertEqual(calls.read_text().split(), ["make"])
 
     def test_fit_scale_is_automatic_unless_a_number_is_given(self):
         env, calls = self.fake_blender()

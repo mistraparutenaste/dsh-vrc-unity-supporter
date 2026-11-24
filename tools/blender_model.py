@@ -3,7 +3,7 @@
 
     inspect  list the meshes, armatures and humanoid bones of an FBX or .blend (read-only)
     list     model recipes and whether their FBX is current
-    build    run a model recipe: "make" (simple shapes) or "fit" (move an outfit onto the avatar's skeleton)
+    build    run a model recipe: "make" (accessories from shapes, tubes, lathes and outlines) or "fit" (move an outfit onto the avatar's skeleton)
 
 Source files are never changed. Attach the result with unity_accessory.py (bone mode for made shapes,
 armature mode for fitted outfits).
@@ -31,7 +31,7 @@ from unity_toggle import WorkflowError, digest, inside, read_result
 SCRIPT = Path(__file__).resolve().parent.parent / "templates" / "Blender" / "dsh_blender.py"
 MODELS = Path(toggle.MODELS)
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
-SHAPES = ("cube", "sphere", "cylinder", "cone", "torus")
+SHAPES = ("cube", "sphere", "cylinder", "cone", "torus", "tube", "lathe", "extrude")
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 SOURCES = (".fbx", ".blend")
 MAX_PARTS = 64
@@ -124,40 +124,138 @@ def source(root, value, label):
     return path
 
 
-def make_request(recipe):
+PRIMITIVES = ("cube", "sphere", "cylinder", "cone", "torus")
+OUTLINES = ("star", "heart", "circle", "diamond")
+BONES = re.compile(r"^(Hips|Spine|Chest|UpperChest|Neck|Head|(Left|Right)(Shoulder|UpperArm|LowerArm|Hand|UpperLeg|"
+                   r"LowerLeg|Foot|Toes))$")
+
+
+def points_list(value, size, low, high, least, most, label):
+    if (not isinstance(value, list) or not least <= len(value) <= most or
+            not all(isinstance(p, list) for p in value)):
+        raise WorkflowError(f"{label} must be a list of {least} to {most} points of {size} numbers.")
+    return [numbers(p, size, low, high, label) for p in value]
+
+
+def flag(part, key, default):
+    value = part.get(key, default)
+    if not isinstance(value, bool):
+        raise WorkflowError(f"{key} must be true or false.")
+    return value
+
+
+def make_part(part, has_avatar):
+    shape = part.get("shape")
+    if shape not in SHAPES:
+        raise WorkflowError(f"Each part needs 'shape': one of {', '.join(SHAPES)}.")
+    item = {"shape": shape,
+            "position": numbers(part.get("position", [0, 0, 0]), 3, -2, 2, "position"),
+            "rotation": numbers(part.get("rotation", [0, 0, 0]), 3, -360, 360, "rotation"),
+            "color": part.get("color", "#ffffff"),
+            "segments": int(number(part.get("segments", 32), 3, 128, "segments")),
+            "mirror": flag(part, "mirror", False),
+            "subdivide": int(number(part.get("subdivide", 0), 0, 3, "subdivide")),
+            "bevel": number(part.get("bevel", 0), 0, 0.1, "bevel")}
+    if not isinstance(item["color"], str) or not COLOR.match(item["color"]):
+        raise WorkflowError("color must be '#RRGGBB'.")
+    if "smooth" in part:
+        item["smooth"] = flag(part, "smooth", True)
+    name = part.get("name")
+    if name is not None:
+        if not isinstance(name, str) or not NAME.match(name) or len(name) > 40:
+            raise WorkflowError("A part name uses letters, digits, '_' or '-' (up to 40 characters).")
+        item["name"] = name
+    if shape in PRIMITIVES:
+        item.update(size=numbers(part.get("size", [0.1, 0.1, 0.1]), 3, 0.001, 2, "size"),
+                    thickness=number(part.get("thickness", 0.2), 0.02, 0.9, "thickness"),
+                    topRatio=number(part.get("topRatio", 0), 0, 1, "topRatio"))
+    elif shape == "tube":
+        item.update(points=points_list(part.get("points"), 3, -2, 2, 2, 64, "A tube's 'points'"),
+                    section=part.get("section", "round"),
+                    radius=number(part.get("radius", 0.005), 0.0005, 0.1, "radius"),
+                    width=number(part.get("width", 0.02), 0.001, 0.2, "width"),
+                    depth=number(part.get("depth", 0.002), 0.0002, 0.05, "depth"),
+                    taper=number(part.get("taper", 1), 0, 4, "taper"),
+                    tilt=number(part.get("tilt", 0), -360, 360, "tilt"),
+                    closed=flag(part, "closed", False))
+        if item["section"] not in ("round", "flat"):
+            raise WorkflowError("A tube's 'section' must be round or flat.")
+        if "face" in part:
+            item["face"] = numbers(part["face"], 3, -1, 1, "face")
+        if item["closed"] and len(item["points"]) < 3:
+            raise WorkflowError("A closed tube needs at least 3 points.")
+        sway = part.get("sway", False)
+        if sway is True:
+            sway = 4
+        elif sway is False:
+            sway = 0
+        sway = int(number(sway, 0, 8, "sway (bones, 1 to 8, or true for 4)"))
+        if sway and item["closed"]:
+            raise WorkflowError("A closed tube cannot sway; sway is for tails and strings that hang free.")
+        item["sway"] = sway
+    elif shape == "lathe":
+        item.update(profile=points_list(part.get("profile"), 2, -1, 1, 2, 64,
+                                        "A lathe's 'profile' ([radius, height])"),
+                    caps=flag(part, "caps", True))
+        if any(r < 0 for r, _ in item["profile"]):
+            raise WorkflowError("A lathe's profile radius cannot be negative.")
+    elif shape == "extrude":
+        outline = part.get("outline")
+        if isinstance(outline, str):
+            if outline not in OUTLINES:
+                raise WorkflowError(f"An extrude's 'outline' must be a list of [x, y] or one of {', '.join(OUTLINES)}.")
+        else:
+            outline = points_list(outline, 2, -2, 2, 3, 256, "An extrude's 'outline'")
+        item.update(outline=outline, size=numbers(part.get("size", [0.05, 0.05, 0.05]), 3, 0, 2, "size"),
+                    depth=number(part.get("depth", 0.005), 0.0005, 0.1, "depth"),
+                    corners=int(number(part.get("corners", 5), 3, 12, "corners")),
+                    inner=number(part.get("inner", 0.45), 0.1, 0.95, "inner"))
+    conform = part.get("conform", "")
+    if conform not in ("", "snap", "surface"):
+        raise WorkflowError("'conform' must be snap (move the part onto the avatar) or surface (a tube along it).")
+    if conform and not has_avatar:
+        raise WorkflowError("'conform' needs the recipe's 'avatar' (the avatar FBX) to know where the surface is.")
+    if conform == "surface" and shape != "tube":
+        raise WorkflowError("conform 'surface' is for tubes; use 'snap' to move other parts onto the avatar.")
+    item["conform"] = conform
+    if "toward" in part:
+        item["toward"] = numbers(part["toward"], 3, -1, 1, "toward")
+        if not any(item["toward"]):
+            raise WorkflowError("'toward' must point somewhere (not [0, 0, 0]).")
+    return item
+
+
+def make_request(root, recipe):
     parts = recipe.get("parts")
     if not isinstance(parts, list) or not 1 <= len(parts) <= MAX_PARTS or not all(isinstance(p, dict) for p in parts):
         raise WorkflowError(f"'parts' must be a list of 1 to {MAX_PARTS} shapes.")
-    checked = []
-    for part in parts:
-        shape = part.get("shape")
-        if shape not in SHAPES:
-            raise WorkflowError(f"Each part needs 'shape': one of {', '.join(SHAPES)}.")
-        item = {"shape": shape,
-                "size": numbers(part.get("size", [0.1, 0.1, 0.1]), 3, 0.001, 2, "size"),
-                "position": numbers(part.get("position", [0, 0, 0]), 3, -2, 2, "position"),
-                "rotation": numbers(part.get("rotation", [0, 0, 0]), 3, -360, 360, "rotation"),
-                "color": part.get("color", "#ffffff"),
-                "segments": int(number(part.get("segments", 32), 3, 128, "segments")),
-                "bevel": number(part.get("bevel", 0), 0, 0.1, "bevel"),
-                "thickness": number(part.get("thickness", 0.2), 0.02, 0.9, "thickness"),
-                "topRatio": number(part.get("topRatio", 0), 0, 1, "topRatio")}
-        if not isinstance(item["color"], str) or not COLOR.match(item["color"]):
-            raise WorkflowError("color must be '#RRGGBB'.")
-        if "smooth" in part:
-            if not isinstance(part["smooth"], bool):
-                raise WorkflowError("smooth must be true or false.")
-            item["smooth"] = part["smooth"]
-        name = part.get("name")
-        if name is not None:
-            if not isinstance(name, str) or not NAME.match(name):
-                raise WorkflowError("A part name uses letters, digits, '_' or '-'.")
-            item["name"] = name
-        checked.append(item)
-    join = recipe.get("join", True)
-    if not isinstance(join, bool):
-        raise WorkflowError("join must be true or false.")
-    return {"parts": checked, "join": join}
+    has_avatar = bool(recipe.get("avatar"))
+    request = {"parts": [make_part(part, has_avatar) for part in parts], "join": flag(recipe, "join", True)}
+    names = [part["name"] for part in request["parts"] if "name" in part]
+    if len(set(names)) != len(names):
+        raise WorkflowError("Part names must differ (they name the meshes and sway bones).")
+    if has_avatar:
+        bone = recipe.get("bone", "Head")
+        if not isinstance(bone, str) or not BONES.match(bone):
+            raise WorkflowError("'bone' must be the humanoid bone the model is attached to (Head, Neck, Chest, "
+                                "LeftHand ...), as in vrc-accessory.")
+        surfaces = recipe.get("surfaces", [])
+        if (not isinstance(surfaces, list) or len(surfaces) > 32 or
+                not all(isinstance(s, str) and 0 < len(s) <= 128 for s in surfaces)):
+            raise WorkflowError("'surfaces' must be a list of avatar mesh names (from inspect).")
+        request.update(avatar=str(source(root, recipe["avatar"], "avatar")), bone=bone, surfaces=surfaces,
+                       avatarShapes=shape_values(recipe.get("avatarShapes", {}), "avatarShapes"),
+                       gap=number(recipe.get("gap", 0.001), 0, 0.02, "gap"), push=flag(recipe, "push", True),
+                       snap=flag(recipe, "snap", False))
+        if "toward" in recipe:
+            request["toward"] = numbers(recipe["toward"], 3, -1, 1, "toward")
+            if not any(request["toward"]):
+                raise WorkflowError("'toward' must point somewhere (not [0, 0, 0]).")
+    else:
+        for key in ("bone", "surfaces", "avatarShapes", "gap", "push", "snap", "toward"):
+            if key in recipe:
+                raise WorkflowError(f"'{key}' needs the recipe's 'avatar' (the avatar FBX).")
+    return request
 
 
 def shape_values(value, label):
@@ -230,11 +328,11 @@ def load_recipe(root, name):
         raise WorkflowError(f"The recipe must be an object whose name is {name}.")
     kind = recipe.get("kind")
     if kind == "make":
-        request = make_request(recipe)
+        request = make_request(root, recipe)
     elif kind == "fit":
         request = fit_request(root, recipe)
     else:
-        raise WorkflowError("'kind' must be make (simple shapes) or fit (an outfit on the avatar's skeleton).")
+        raise WorkflowError("'kind' must be make (shapes) or fit (an outfit on the avatar's skeleton).")
     request.update(name=name, kind=kind)
     return request, path
 
@@ -328,7 +426,10 @@ def build(root, args):
         receipt_file.write_text(json.dumps(receipt), encoding="utf-8")
     result["output"] = output.relative_to(root).as_posix()
     result["next"] = ("Attach it with unity_accessory.py: mode 'armature' for a fitted outfit, "
-                      "mode 'bone' for a made shape. Unity imports the FBX on its next run.")
+                      "mode 'bone' with origin 'bone' for a made shape. Unity imports the FBX on its next run.")
+    if result.get("sway"):
+        result["next"] += (" Its sway bones move once the accessory recipe lists them in 'physBones' "
+                           "(root: " + ", ".join(s["root"] for s in result["sway"]) + ").")
     return result
 
 

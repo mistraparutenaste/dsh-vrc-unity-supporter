@@ -67,6 +67,7 @@ python -B $acc candidates --project '<project>' --scene 'Assets/Avatar.unity' --
 | `defaultOn` | メニューの初期状態（既定 true）。トグルは保存される（ワールドを移っても残る） |
 | `hold` | 手に持つ小物。`true` か `{"drop": "Props/Put down"}`。Bone Proxy の代わりに VRC Parent Constraint で `bone`（`RightHand` など）に追従する。`drop` を書くと「置く」トグルができ、オンの間はその場（ワールド）に残る。VRChat SDK 3.7 以降。追加のパラメータは 1 bit |
 | `world` | `true` でワールドに固定する（MA World Fixed Object）。読み込んだ時点の位置に置かれ、アバターが動いても動かない |
+| `physBones` | 小物自身のボーンに VRC PhysBone を付けて揺らす。`[{"root": "Tail_R_Sway", "preset": "heavy"}]`。`root` は `vrc-blender-model` の build 結果の `sway` に出る名前（根元は動かず、その先が揺れる）。`preset`（既定 `soft`）と `values` は `vrc-physbone` と同じ。リボンの端は `heavy`（重く垂れる）が自然。付けた後の調整は `vrc-physbone` の `simulate` と `bones`（`target` は list に出るパス） |
 
 - アバター専用の髪・小物は、たいてい `mode: bone`、`origin: auto` のままでよい（元の位置に付く）。
 - 汎用の帽子・キャップ・ベレー（特定のアバター用でないもの）は、`bone: Head`、`scale: "auto"` から始める。
@@ -77,6 +78,7 @@ python -B $acc candidates --project '<project>' --scene 'Assets/Avatar.unity' --
 - 手に持つ小物（剣、カップ、ぬいぐるみ）は `mode: bone`、`bone: RightHand`（か `LeftHand`）、`origin: bone`、`hold` で、撮影しながら `position` / `rotation` を手のひらに合わせる。
   `drop` の「置く」は、オンにしたときの場所に残り、オフで手に戻る。動きは撮影では分からないので、Gesture Manager で確かめてもらう。
 - `hold` と `world` は `mode: bone` の小物だけ。`scale: "auto"`（帽子の自動合わせ）とは一緒に使えない。
+- `vrc-blender-model` で作った小物は `mode: bone`、`origin: bone`、`position: [0, 0, 0]`、`bone` はレシピの `bone` と同じにする（作るときにボーンからの位置で作ってある）。揺れ用のボーンがあれば `physBones` を書く。
 - 書いたら、付けるもの、付け方、メニュー名、隠すものをユーザーに伝えて確認を取る。
 
 ## 3. 撮影して位置を調整する（シーンは保存しない）
@@ -102,6 +104,7 @@ python -B $acc apply @a --approved-preview '<preview の値>'
 
 - preview の `plannedPaths`（シーンと、`hide` を使うなら隠すためのクリップ）を伝え、明示的な確認を得てから apply する。
 - 適用後に位置だけ直したいときは、レシピの `position` などを変えて preview / apply し直す（`unity.applied` に変わった点だけが出る）。付けるもの、付け方、メニューを変えるときは、いったん取り外してから付け直す。
+- `physBones` を書いたら、`unity.sdkVerification.physBones` にビルド後に残った数（`2/2` など）が出る。揺れ方は `vrc-physbone` の `simulate --filter Sway` で測る。
 - `unity.sdkVerification` に、ビルド後に付いたボーン（`attachedTo`）または統合された衣装のメッシュ数（`mergedRenderers`）、メニューの場所（`menuLocation`）、トグルのアニメーションが届くオブジェクトの数（`toggleAnimation`）が出る。`hold` では追従するボーン（`follows`）と「置く」のアニメーションが届く数（`dropAnimation`）、`world` ではビルド後の親（`parentAfterBuild`）も出る。
 - 適用したら、`vrc-verify` §3 の再生テスト（`unity_playback.py test --auto`）で、ビルド後に表情・メニュー・「置く」が動くかを確かめてから、ユーザーに Gesture Manager での確認を頼む。
 - preview の `parameterBudget` で、パラメータの残りを確かめる（`vrc-perf-budget` §5）。

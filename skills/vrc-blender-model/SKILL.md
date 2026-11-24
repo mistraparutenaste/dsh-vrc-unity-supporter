@@ -1,6 +1,6 @@
 ---
 name: vrc-blender-model
-description: Blender をバックグラウンドで使い、簡単な小物（リボン・角・輪など）を作る、または別アバター用の衣装・髪をアバターの骨格に合わせて FBX に書き出す。FBX の中身を調べるときにも読む。
+description: Blender をバックグラウンドで使い、小物（リボン・角・カチューシャ・チョーカー・ボタンなど。頭や髪に沿わせ、揺れ用のボーン付き）を作る、または別アバター用の衣装・髪をアバターの骨格に合わせて FBX に書き出す。FBX の中身を調べるときにも読む。
 ---
 
 # Blender でモデルを作る・合わせる
@@ -37,32 +37,76 @@ python -B $model inspect 'Assets/Booth/Outfit/Outfit.fbx' --project '<project>'
 アバターの FBX（体のメッシュ名とボーン名）も同じように調べる。FBX の場所は `vrc-asset-read` の `refs` や、
 アバターの prefab が参照するモデルから探す。
 
-## 2a. 簡単な形を作る（kind: make）
+## 2a. 小物を作る（kind: make）
 
 ```json
 {
-  "name": "Ribbon",
+  "name": "Bow",
   "kind": "make",
+  "avatar": "Assets/Amatousagi/Salt/FBX/Salt.fbx",
+  "bone": "Head",
+  "snap": true,
+  "toward": [0, 0, 1],
   "parts": [
-    {"shape": "sphere", "size": [0.03, 0.03, 0.03], "position": [0, 0, 0], "color": "#e05a7a"},
-    {"shape": "cone", "size": [0.06, 0.05, 0.02], "position": [-0.035, 0, 0], "rotation": [0, 0, 90], "color": "#e05a7a"},
-    {"shape": "cone", "size": [0.06, 0.05, 0.02], "position": [0.035, 0, 0], "rotation": [0, 0, -90], "color": "#e05a7a"}
+    {"name": "Knot", "shape": "sphere", "size": [0.022, 0.028, 0.016], "position": [0, 0.07, -0.12], "color": "#d84a6e"},
+    {"name": "Wing", "shape": "tube", "section": "flat", "width": 0.032, "depth": 0.002, "closed": true, "mirror": true,
+     "points": [[0.006, 0.07, -0.116], [0.035, 0.074, -0.111], [0.064, 0.072, -0.115], [0.064, 0.066, -0.125],
+                [0.035, 0.068, -0.129], [0.006, 0.07, -0.124]], "color": "#d84a6e"},
+    {"name": "Tail", "shape": "tube", "section": "flat", "width": 0.02, "depth": 0.002, "taper": 0.85, "mirror": true, "sway": 4,
+     "points": [[0.004, 0.064, -0.126], [0.016, 0.035, -0.128], [0.024, 0, -0.129], [0.032, -0.03, -0.128]], "color": "#d84a6e"}
   ]
 }
 ```
 
+座標は付けるボーン（`bone`、既定 Head）の位置が原点で、x 右、y 上、z 前（Unity と同じ向き、メートル）。
+付けるときは vrc-accessory の `mode: bone`、`origin: bone`、`position: [0, 0, 0]` にする（ここでの位置がそのまま使われる）。
+`avatar` が無いときも同じ座標で作れるが、表面への沿わせ込みと、アバターと並べたプレビューは無い。
+
+部品（`parts[]`、最大 64）の形:
+
+| `shape` | 内容と項目 |
+|---|---|
+| `cube` `sphere` `cylinder` `cone` `torus` | `size`（幅 x・高さ y・奥行き z の外形）、`bevel`（cube と cylinder の角の丸め）、`thickness`（torus の輪の太さ、外径に対する割合）、`topRatio`（cone の上面の半径の割合） |
+| `tube` | `points`（2〜64 点）をなめらかに通る帯・紐。`section: round`（紐、`radius`）か `flat`（リボン、`width` と厚み `depth`）。`taper`（終わりの太さの割合。0 で尖る＝角）、`closed`（輪にする＝チョーカー、リボンの羽）、`face`（平らな面を向ける向き。既定 `[0, 0, 1]` で前後を向く）、`tilt`（帯を軸まわりにひねる角度） |
+| `lathe` | `profile`（`[半径, 高さ]` を下から 2〜64 点）を上下の軸まわりに回した形（ボタン、ビーズ、鈴、カップ）。`caps: false` で上下を閉じない |
+| `extrude` | `outline`（`[x, y]` の点の並び、3〜256 点）か `star` / `heart` / `circle` / `diamond` を、`depth` の厚みの板にする（`size` の x・y が外形。star は `corners` と `inner`）。`bevel` で縁を丸める |
+
+全部の形に使える項目:
+
 | 項目 | 内容 |
 |---|---|
-| `shape` | `cube`、`sphere`、`cylinder`、`cone`、`torus` |
-| `size` | 外形の大きさ（幅 x、高さ y、奥行き z、メートル） |
-| `position` / `rotation` | 原点からの位置と回転（x 右、y 上、z 前。Unity と同じ向き） |
-| `color` | `#RRGGBB`。Unity では Standard のマテリアルになる（lilToon にしたければ Unity で差し替える） |
-| `segments` / `bevel` / `smooth` | 分割数（既定 32）、角の丸め（cube と cylinder、メートル）、スムーズ表示 |
-| `thickness` | torus の輪の太さ（外径に対する割合、既定 0.2）。`topRatio` は cone の上面の半径の割合 |
+| `position` / `rotation` | 位置と回転（度）。tube は `points` にもかかる |
+| `color` | `#RRGGBB`。色ごとに 1 つのマテリアルになる（Unity では Standard。lilToon にするなら Unity で差し替える） |
+| `mirror` | 左右反対側にも作る（`<名前>_R` が右 = +x、`<名前>_L` が左） |
+| `subdivide` | 0〜3。なめらかにする（三角形は 4 倍ずつ増える） |
+| `segments` | 丸みの分割数（既定 32、3〜128）。三角形が多いときに下げる |
+| `smooth` | `false` で角ばった表示にする（既定は形に合わせ、縁は立てたまま丸く見せる） |
+| `conform` | `snap`: 部品をまっすぐ動かして、アバターの外側の表面（髪の上など）に当てる。`surface`（tube だけ）: 通る点を表面に載せ、平らな面を表面に沿わせる（カチューシャ、チョーカー、頭に沿う紐）。`avatar` が必要 |
+| `toward` | `snap` で動かす向き（例 `[0, 0, 1]` は前へ）。省略時は、付けるボーンのまわり（頭なら頭の中心）へ向かう |
+| `sway` | tube だけ。揺れ用のボーン数（1〜8、`true` で 4）。根元は動かず、先へ行くほど揺れる。輪（`closed`）には付けられない |
+
+レシピ全体の項目:
+
+| 項目 | 内容 |
+|---|---|
+| `avatar` | アバターの FBX。あると表面に沿わせられ、プレビューにアバターが写る（正面・横・斜め上） |
+| `bone` | 付けるボーン（Humanoid 名。`Head`、`Neck`、`Chest`、`LeftHand` など）。vrc-accessory の `bone` と同じにする |
+| `surfaces` | 沿わせる表面にするアバターのメッシュ名。省略時は、そのボーンのまわりの体・髪・耳（名前に cloth、costume、hood、shoe、sock などが入る服は除く）。結果の `avatar.surfaces` で確かめる |
+| `avatarShapes` | アバターの体型キーの値（0〜100）。シーンで変えているなら合わせる |
+| `snap` / `toward` | `true` で全体をひとつとして動かし、表面に当てる（リボンの結び目・羽・端がばらばらにならない） |
+| `gap` | 表面から離す距離（既定 0.001m、0〜0.02） |
+| `push` | 既定 true。表面のすぐ下（2cm 以内）に入った頂点を外へ押し出す |
 | `join` | 全部を 1 つのメッシュにまとめる（既定 true） |
 
-原点が付けるボーンの位置になる。付けるときは vrc-accessory の `mode: bone`、`origin: bone` を使い、
-`position` で頭の上などへずらす。
+- build の結果:
+  - `parts[]`: 部品ごとの `gapMm`（表面までの一番近い距離）、`insideVertices`（表面のすぐ下にある頂点数）、`snap`（動いた距離 `movedMm` と向き `offset`）、`sway`。
+  - `push`: 押し出しの前後で表面の下にあった頂点数。`warnings` に残りが出たら `gap` を上げるか、部品の位置を直す。
+  - `quality`: 三角形数、開いた縁（`openEdges`）、3 枚以上の面が重なる縁（`nonManifoldEdges`）、UV の有無、マテリアル数。`warnings` に三角形が多い（1 万超）・マテリアルが多い（4 超）などが出る。
+  - `sway`: 揺れ用ボーンの根元の名前（`Tail_R_Sway` など）。vrc-accessory の `physBones` に書く。
+- 髪や耳は薄い面なので、表面の「下」は表面のすぐ近く（2cm）しか判定しない。めり込みは撮影（vrc-accessory の capture）で確かめる。
+- プレビューで、浮き・めり込み・羽の向きを見て、`position` や `points` を 2〜5mm ずつ直す。羽が細い線に見えるときは、輪の点を前後（z）に並べて平らにする（上の例）。
+- 帯の向きが思った向きでないときは `face` か `tilt` を変える。
+- UV は自動で展開する（tube は長さ方向にそろう）。テクスチャを描くなら Unity で lilToon などに差し替える。
 
 ## 2b. 非対応の衣装を合わせる（kind: fit）
 
@@ -124,7 +168,7 @@ python -B $model build --project '<project>' --model Hoodie_Fit
 python -B $model list --project '<project>'
 ```
 
-- 結果の `preview`（正面と横の画像、衣装はオレンジ、体はグレー。make では指定した色）で、大きくずれていないかを先に見る。最終的な見た目は vrc-accessory の撮影で確かめる。
+- 結果の `preview`（正面と横の画像、衣装はオレンジ、体はグレー。make では指定した色で、`avatar` があればアバターと並べ、斜め上からの画像も付く）で、大きくずれていないかを先に見る。最終的な見た目は vrc-accessory の撮影で確かめる。
 - 書き出し先の FBX を手で変えていたら build は止まる（上書きしない）。`list` の `fbx` が `current` / `stale`（レシピか元ファイルが変わった）/ `edited` / `missing` を示す。
 - 作り直したら、Unity で付けた小物はそのまま新しい FBX を使う（レシピは同じ）。撮影で確かめる。
 
