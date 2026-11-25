@@ -160,6 +160,18 @@ namespace DSH.Editor
         private static Dictionary<string, object> MeasureAvatar(string prefabPath, Dictionary<string, object> data)
         {
             var root = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            var counts = MeasureCounts(root);
+            DSH.DshApply.Note(data, $"measured {prefabPath}");
+            return new Dictionary<string, object>
+            {
+                { "prefab", prefabPath },
+                { "counts", counts },
+            };
+        }
+
+        /// <summary>Performance counts of an avatar object (a prefab, or a scene copy after the SDK build).</summary>
+        internal static Dictionary<string, object> MeasureCounts(GameObject root)
+        {
             var components = root.GetComponentsInChildren<Component>(true).Where(c => c != null).ToArray();
 
             long triangles = 0;
@@ -241,13 +253,7 @@ namespace DSH.Editor
                 { "lineRenderers", Count("LineRenderer") },
                 { "audioSources", Count("AudioSource") },
             };
-
-            DSH.DshApply.Note(data, $"measured {prefabPath}");
-            return new Dictionary<string, object>
-            {
-                { "prefab", prefabPath },
-                { "counts", counts },
-            };
+            return counts;
         }
 
         [Serializable]

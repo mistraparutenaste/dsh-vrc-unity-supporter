@@ -33,15 +33,22 @@ TASKS = {
     "PhysBoneRecipe": ("physbone", "apply"), "PhysBoneRemove": ("physbone", "remove"),
     "ProportionRecipe": ("proportion", "apply"), "ProportionRemove": ("proportion", "remove"),
     "ExpressionApply": ("expression", "apply"), "ExpressionRemove": ("expression", "remove"),
+    "PolygonRecipe": ("polygon", "apply"), "PolygonRemove": ("polygon", "remove"),
+    "QuestRecipe": ("quest", "apply"), "QuestRemove": ("quest", "remove"),
+    "MenuApply": ("menu", "apply"), "MenuRemove": ("menu", "remove"),
 }
-# Re-applied in this order: body shape and attachments first, then what refers to them.
-ORDER = ("shape", "accessory", "physbone", "proportion", "toggle", "variant", "expression")
+# Re-applied in this order: body shape and attachments first, then what refers to them; the menu goes last,
+# since its moves refer to items the others add.
+ORDER = ("shape", "accessory", "physbone", "proportion", "toggle", "variant", "expression", "polygon", "quest",
+         "menu")
 TOOL = {"shape": "unity_shape.py", "accessory": "unity_accessory.py", "physbone": "unity_physbone.py",
         "proportion": "unity_proportion.py", "toggle": "unity_toggle.py", "variant": "unity_texture.py",
-        "expression": "unity_expression.py"}
+        "expression": "unity_expression.py", "polygon": "unity_polygon.py", "quest": "unity_quest.py",
+        "menu": "unity_menu.py"}
 HOLDERS = {"toggle": "DSH Outfit Toggle ", "variant": "DSH Color Variant ", "accessory": "DSH Accessory ",
-           "expression": "DSH Expression "}
-RECORDS = {"shape": ".dsh/shapes", "physbone": ".dsh/physbones", "proportion": ".dsh/proportions"}
+           "expression": "DSH Expression ", "menu": "DSH Menu "}
+RECORDS = {"shape": ".dsh/shapes", "physbone": ".dsh/physbones", "proportion": ".dsh/proportions",
+           "polygon": ".dsh/polygons", "quest": ".dsh/quest"}
 
 
 def avatar_path(unity):
@@ -276,6 +283,19 @@ def check_item(root, item, check, old_avatar, new_avatar):
         else:
             check.shapes(face, sorted({s["shape"] for section in ("gestures", "locks", "toggles")
                                        for e in recipe[section] for s in e["shapes"]}))
+    elif kind == "polygon":
+        import unity_polygon
+        recipe, _ = unity_polygon.load_recipe(root, name)
+        for path in [r["path"] for r in recipe["renderers"]] + recipe["keep"]:
+            check.renderer(path)
+    elif kind == "quest":
+        import unity_quest
+        recipe, _ = unity_quest.load_recipe(root, name)
+        for path in recipe["removeOnAndroid"]:
+            check.path(path, "object with PhysBones or contacts")
+    elif kind == "menu":
+        import unity_menu
+        unity_menu.load_recipe(root, name)  # menu paths exist only after the build; the apply checks them
     elif kind == "toggle":
         outfit = item.get("outfit") or ""
         relative = outfit[len(old_avatar) + 1:] if outfit.startswith(old_avatar + "/") else outfit

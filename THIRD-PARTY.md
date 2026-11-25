@@ -17,6 +17,8 @@ them are bundled, vendored, or copied into this package:
 | Avatar Optimizer (AAO) | MIT | VPM (`vpm.anatawa12.com`) |
 | lilToon | MIT | VPM (`lilxyzw.github.io`) |
 | TexTransTool | MIT | VPM (`vpm.rs64.net`) |
+| Meshia Mesh Simplification | MIT | VPM (`ramtype0.github.io/VpmRepository`) |
+| VRCQuestTools | MIT | VPM (`kurotu.github.io/vpm-repos`) |
 | `vrc-get` (optional) | MIT | winget, scoop, or cargo |
 
 Avatar, outfit, and hair assets are the user's own purchases and are never

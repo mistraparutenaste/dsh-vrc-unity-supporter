@@ -127,7 +127,7 @@ Claude Code 在 **Claude 桌面应用的 Code 标签页** 和终端版中都可�
 | **Unity Hub 和 Unity 2022.3.22f1** | 在 Unity Hub 中设置有效的许可证，并确认可以用这个版本打开项目。[VRChat 官方的 Unity 安装指南](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC 或 ALCOM 以及模型项目** | 使用你平时用的管理工具即可。要处理的项目需要已安装 **VRChat SDK - Avatars**，并且能在 Unity 中打开。[VCC 设置](https://vcc.docs.vrchat.com/guides/getting-started/) · [下载 ALCOM](https://vrc-get.anatawa12.com/alcom/) |
 
-部分功能还需要其他软件（VRCFury、Modular Avatar、Avatar Optimizer、PhotoCraft、Blender）。请查看[功能](#功能)中的表格。
+部分功能还需要其他软件（VRCFury、Modular Avatar、Avatar Optimizer、Meshia、VRCQuestTools、PhotoCraft、Blender）。请查看[功能](#功能)中的表格。
 
 ## 试一试
 
@@ -163,9 +163,12 @@ Claude Code 在 **Claude 桌面应用的 Code 标签页** 和终端版中都可�
 | 调整视点和局部大小 | 「视点太低了，帮我改一下。把头稍微调大一点」 | 只改手或胸时需要 Modular Avatar |
 | 修改表情 | 「把右手握拳改成笑脸，并且可以在菜单里切换成半眯眼」 | Modular Avatar |
 | 把修改带到更新后的模型 | 「Salt 更新到新版本了，帮我把修改带过去」 | 无（各修改本身需要的除外） |
+| 整理菜单 | 「把 Color 里的 Hair Pink 移到 Hair，把 Facial Set 放到最前面」 | VRCFury |
+| 减少多边形 | 「把三角形减到 7 万以下，脸部不要减」 | Meshia |
+| 制作 Quest（Android）版本 | 「让它在 Quest 上也能用」 | VRCQuestTools、Unity 的 Android Build Support |
 | 查看性能等级和参数容量 | 「查一下性能等级」「参数还剩多少 bit？」 | 无 |
 
-VRCFury、Modular Avatar 和 Avatar Optimizer 请用 VCC 或 ALCOM 添加到目标项目中。[VRCFury 安装步骤](https://vrcfury.com/download/)
+VRCFury、Modular Avatar、Avatar Optimizer、Meshia 和 VRCQuestTools 请用 VCC 或 ALCOM 添加到目标项目中。[VRCFury 安装步骤](https://vrcfury.com/download/)
 
 ### 在菜单中切换服装
 
@@ -293,6 +296,36 @@ Salt 更新到新版本了，帮我把修改带过去。新版本放在 Assets/D
 
 代理会列出当前模型上的修改，以及手动修改的数值（例如在 Inspector 中修改的值）。接着读取新版本，逐项确认修改所用的网格、形态键和骨骼是否存在；名称有变化的会给出相近的候选。条件齐全的修改会在确认一次后一并重新应用。手动修改的数值不会自动复制，而是作为需要重做的项目列出。
 
+### 整理菜单
+
+列出 VRChat 中看到的菜单（包括 VRCFury 和 Modular Avatar 在构建时添加的项目，以及「Next」页），并对项目进行移动、改名、设置图标和调整顺序。不修改原作者的菜单文件，而是把 VRCFury 的菜单整理组件集中添加到一个对象上。
+
+```text
+让我看看菜单。把 Color 里的 Hair Pink 移到 Hair，把 Facial Set 放到最前面
+```
+
+代理会以树状显示构建后的菜单，提出整理方案，确认后再应用。应用后会在构建后的菜单中确认项目已经移动。说「移除 Tidy 菜单整理」即可恢复原来的菜单。
+
+### 减少多边形
+
+使用 [Meshia](https://github.com/RamType0/Meshia.MeshSimplification) 在上传构建时减少多边形（三角形）数量。不修改 FBX 和网格文件。可以指定整个模型的目标（例如 7 万），或者每个网格的比例。脸部（口型同步的网格）和小网格，除非特别指定，否则不会减少。
+
+```text
+把三角形减到 7 万以下，脸部不要减
+```
+
+代理会查看每个网格的三角形数和等级并展示配方，用构建前后的图片确认没有破损后再应用。如果等级是由蒙皮网格或材质数量决定的，会先建议改善那些项目。说「恢复 Light 的多边形减少」即可恢复。
+
+### 制作 Quest（Android）版本
+
+使用 [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) 从同一个场景制作 Quest（Android）版本。不复制模型，只在为 Android 构建时把材质换成移动端着色器、缩小贴图，并移除你选择的摆动部件。PC 版本不会改变。
+
+```text
+让它在 Quest 上也能用。想保留刘海和尾巴的摆动
+```
+
+代理会把副本作为 Android 构建并测量 Mobile 等级，与你商量要移除的摆动部件和贴图大小，以 Medium 以内为目标。上传请在 Unity 中切换到 Android 后自行进行（请先在 Unity Hub 中安装 Android Build Support）。说「移除 Quest 设置」即可恢复。
+
 ### 查看性能等级
 
 请求「查一下性能等级」，就会显示 PC 和 Mobile 的性能等级、决定等级的项目（例如蒙皮网格的数量），以及提升一个等级的参考。这是用构建前的原始 prefab 统计的参考值，最终等级请在 VRChat SDK 的构建界面中确认。
@@ -320,6 +353,9 @@ Salt 更新到新版本了，帮我把修改带过去。新版本放在 Assets/D
 | 摆动调整 | 「还原 SoftHair 的摆动调整」 |
 | 视点、局部大小 | 「还原 BigHead」 |
 | 表情 | 「移除 Face 表情」 |
+| 菜单整理 | 「移除 Tidy 菜单整理」 |
+| 多边形减少 | 「恢复 Light 的多边形减少」 |
+| Quest 版本设置 | 「移除 Quest 设置」 |
 
 其他修改请从 Git 还原点恢复场景。具体方法可以在聊天中询问。
 

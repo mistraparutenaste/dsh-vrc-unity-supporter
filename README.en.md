@@ -127,7 +127,7 @@ If you let the AI agent install the plugin, it checks these for you. To prepare 
 | **Unity Hub and Unity 2022.3.22f1** | Set up a valid license in Unity Hub and check that your project opens with this version. [VRChat's guide to installing Unity](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC or ALCOM and an avatar project** | Use whichever project manager you normally use. The project you work on must have **VRChat SDK - Avatars** and open in Unity. [VCC setup](https://vcc.docs.vrchat.com/guides/getting-started/) · [Download ALCOM](https://vrc-get.anatawa12.com/alcom/) |
 
-Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, Blender). See the table in [What it can do](#what-it-can-do).
+Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, Meshia, VRCQuestTools, PhotoCraft, Blender). See the table in [What it can do](#what-it-can-do).
 
 ## Try it
 
@@ -163,9 +163,12 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, 
 | Change the view position and single sizes | "The view is too low, fix it. Make the head a little bigger" | Modular Avatar, to change only a hand or the chest |
 | Change expressions | "Make the right fist a smile, and let me pick a half-closed-eye look from the menu" | Modular Avatar |
 | Carry changes over to an updated avatar | "I updated Salt to the new version; carry my changes over" | Nothing (beyond what each change needs) |
+| Tidy the menu | "Move Hair Pink from Color to Hair, and put Facial Set first" | VRCFury |
+| Reduce polygons | "Bring it under 70,000 triangles, but leave the face alone" | Meshia |
+| Make a Quest (Android) version | "Make it work on Quest too" | VRCQuestTools, Unity's Android Build Support |
 | Check the performance rank and parameter memory | "Check the performance rank", "How many parameter bits are left?" | Nothing |
 
-Add VRCFury, Modular Avatar and Avatar Optimizer to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
+Add VRCFury, Modular Avatar, Avatar Optimizer, Meshia and VRCQuestTools to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
 
 ### Switch outfits from the menu
 
@@ -293,6 +296,36 @@ I updated Salt to the new version; carry my changes over. The new version is in 
 
 The agent lists the changes on the current avatar and the values changed by hand (in the Inspector, for example). It then reads the new version and checks, change by change, that the meshes, shape keys and bones it uses are there, with close names for anything renamed. Changes that are ready are applied again after one confirmation. Values changed by hand are not copied; they are shown as a list to redo.
 
+### Tidy the menu
+
+Lists the menu as VRChat shows it (including the items VRCFury and Modular Avatar add at build time, and the "Next" pages), and moves, renames, reorders or sets icons on its items. The author's menu files stay as they are: the changes are VRCFury menu components gathered on one object.
+
+```text
+Show me the menu. Move Hair Pink from Color to Hair, and put Facial Set first
+```
+
+The agent shows the built menu as a tree, suggests a tidier layout, and applies it after you confirm. Afterwards it checks the built menu to see that the items moved. Ask "Remove the Tidy menu changes" to get the old menu back.
+
+### Reduce polygons
+
+Uses [Meshia](https://github.com/RamType0/Meshia.MeshSimplification) to reduce the polygon (triangle) count when the avatar is built for upload. The FBX and mesh files stay as they are. Give a goal for the whole avatar (for example 70,000) or a ratio per mesh. The face (the lip sync mesh) and small meshes are left alone unless you name them.
+
+```text
+Bring it under 70,000 triangles, but leave the face alone
+```
+
+The agent reads the triangles of each mesh and the rank, shows the recipe, and checks images of the built avatar before and after for damage before applying. When the rank is set by the number of skinned meshes or materials rather than triangles, it suggests fixing that first. Ask "Undo the Light polygon reduction" to revert.
+
+### Make a Quest (Android) version
+
+Uses [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) to make a Quest (Android) version from the same scene. The avatar is not copied: only when it is built for Android are its materials changed to mobile shaders, its textures made smaller, and the PhysBones you choose removed. The PC version does not change.
+
+```text
+Make it work on Quest too. I want to keep the bangs and tail swaying
+```
+
+The agent builds a copy as Android and measures its Mobile rank, then works with you on which PhysBones to drop and how large the textures should be, aiming for Medium or better. Upload it yourself after switching Unity to Android (install Android Build Support in Unity Hub first). Ask "Remove the Quest settings" to revert.
+
 ### Check the performance rank
 
 Ask "Check the performance rank" and it shows the PC and Mobile performance ranks, the items that set the rank (such as the number of skinned meshes), and what to change to reach the next rank up. These are estimates counted from the original prefab before the build, so check the final rank in the VRChat SDK build panel.
@@ -320,6 +353,9 @@ You can undo changes made by this plugin by asking as below. Before removing any
 | Swing adjustments | "Undo the SoftHair swing adjustment" |
 | View position and single sizes | "Undo BigHead" |
 | Expressions | "Remove the Face expressions" |
+| Menu tidying | "Remove the Tidy menu changes" |
+| Polygon reduction | "Undo the Light polygon reduction" |
+| Quest version settings | "Remove the Quest settings" |
 
 For other changes, put the scene back from the Git restore point. Ask in the chat how to do it.
 

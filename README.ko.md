@@ -127,7 +127,7 @@ AI 에이전트에게 맡기는 경우에는 에이전트가 확인합니다. �
 | **Unity Hub와 Unity 2022.3.22f1** | Unity Hub에서 유효한 라이선스를 설정하고, 지정된 버전으로 프로젝트를 열 수 있는지 확인합니다. [VRChat 공식 Unity 설치 안내](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC 또는 ALCOM과 아바타 프로젝트** | 평소에 쓰는 관리 앱 중 하나를 사용합니다. 작업 대상은 **VRChat SDK - Avatars**가 설치되어 있고 Unity에서 열 수 있는 프로젝트입니다. [VCC 설정](https://vcc.docs.vrchat.com/guides/getting-started/) · [ALCOM 다운로드](https://vrc-get.anatawa12.com/alcom/) |
 
-기능에 따라 그 밖에도 필요한 것이 있습니다(VRCFury, Modular Avatar, Avatar Optimizer, PhotoCraft, Blender). [할 수 있는 것](#할-수-있는-것)의 표를 봐 주세요.
+기능에 따라 그 밖에도 필요한 것이 있습니다(VRCFury, Modular Avatar, Avatar Optimizer, Meshia, VRCQuestTools, PhotoCraft, Blender). [할 수 있는 것](#할-수-있는-것)의 표를 봐 주세요.
 
 ## 해 보기
 
@@ -163,9 +163,12 @@ AI 에이전트에게 맡기는 경우에는 에이전트가 확인합니다. �
 | 시점과 부분 크기 변경 | 「시점이 낮으니 고쳐 줘. 머리를 조금 크게 해 줘」 | 손이나 가슴만 바꿀 때는 Modular Avatar |
 | 표정 바꾸기 | 「오른손 주먹을 웃는 얼굴로 해 줘. 메뉴에서 게슴츠레한 눈으로 고정할 수 있게 해 줘」 | Modular Avatar |
 | 아바타 업데이트에 개변 이어 가기 | 「Salt를 새 버전으로 바꿨으니 개변을 이어 가 줘」 | 없음(각 개변에 필요한 것 제외) |
+| 메뉴 정리 | 「Color의 Hair Pink를 Hair로 옮기고, Facial Set을 맨 앞으로 해 줘」 | VRCFury |
+| 폴리곤 줄이기 | 「삼각형을 7만 이하로 해 줘. 얼굴은 줄이지 말고」 | Meshia |
+| Quest(Android) 버전 만들기 | 「Quest에서도 쓸 수 있게 해 줘」 | VRCQuestTools, Unity의 Android Build Support |
 | 퍼포먼스 랭크와 파라미터 용량 조사 | 「퍼포먼스 랭크를 조사해 줘」「파라미터가 몇 bit 남았어?」 | 없음 |
 
-VRCFury, Modular Avatar, Avatar Optimizer는 VCC 또는 ALCOM으로 대상 프로젝트에 넣습니다. [VRCFury 설치 순서](https://vrcfury.com/download/)
+VRCFury, Modular Avatar, Avatar Optimizer, Meshia, VRCQuestTools는 VCC 또는 ALCOM으로 대상 프로젝트에 넣습니다. [VRCFury 설치 순서](https://vrcfury.com/download/)
 
 ### 메뉴에서 의상 전환
 
@@ -293,6 +296,36 @@ Salt를 새 버전으로 바꿨으니 개변을 이어 가 줘. 새 버전은 As
 
 에이전트는 지금 아바타에 걸린 개변과 손으로 바꾼 값(Inspector에서 고친 값 등)을 목록으로 보여 줍니다. 이어서 새 버전을 조사해 개변마다 사용하는 메시, 셰이프 키, 본이 있는지 확인하고, 이름이 바뀐 것은 비슷한 후보를 보여 줍니다. 준비된 개변은 한 번 확인한 뒤 한꺼번에 다시 적용합니다. 손으로 바꾼 값은 자동으로 복사하지 않고, 다시 할 항목의 목록으로 보여 줍니다.
 
+### 메뉴 정리
+
+VRChat에서 보이는 그대로의 메뉴(VRCFury와 Modular Avatar가 빌드할 때 더하는 항목과 「Next」 페이지 포함)를 목록으로 보여 주고, 항목의 이동, 이름 변경, 아이콘, 순서 변경을 합니다. 제작자의 메뉴 파일은 바꾸지 않고, VRCFury의 메뉴 정리 부품을 하나의 오브젝트에 모아서 붙입니다.
+
+```text
+메뉴를 보여 줘. Color의 Hair Pink를 Hair로 옮기고, Facial Set을 맨 앞으로 해 줘
+```
+
+에이전트는 빌드 후의 메뉴를 트리로 보여 주고 정리 방안을 제안한 뒤, 확인을 받고 적용합니다. 적용 후에는 빌드한 메뉴에서 항목이 옮겨졌는지 확인합니다. 「Tidy 메뉴 정리를 떼 줘」라고 하면 원래 메뉴로 돌아갑니다.
+
+### 폴리곤 줄이기
+
+[Meshia](https://github.com/RamType0/Meshia.MeshSimplification)로 업로드용 빌드를 할 때 폴리곤(삼각형) 수를 줄입니다. FBX와 메시 파일은 바꾸지 않습니다. 아바타 전체의 목표(예: 7만)나 메시별 비율을 정합니다. 얼굴(립싱크 메시)과 작은 메시는 따로 지정하지 않는 한 줄이지 않습니다.
+
+```text
+삼각형을 7만 이하로 해 줘. 얼굴은 줄이지 말고
+```
+
+에이전트는 메시별 삼각형 수와 랭크를 조사해 레시피를 보여 주고, 빌드한 전후 이미지로 깨진 곳이 없는지 확인한 뒤 적용합니다. 삼각형 수가 아니라 스킨 메시나 머티리얼 수로 랭크가 정해질 때는 그쪽 개선을 먼저 안내합니다. 「Light 폴리곤 줄이기를 되돌려 줘」로 되돌릴 수 있습니다.
+
+### Quest(Android) 버전 만들기
+
+[VRCQuestTools](https://github.com/kurotu/VRCQuestTools)로 같은 씬에서 Quest(Android) 버전을 만듭니다. 아바타를 복제하지 않고, Android로 빌드할 때만 머티리얼을 모바일용 셰이더로 바꾸고, 텍스처를 작게 하고, 고른 흔들림 부품을 뺍니다. PC 버전은 바뀌지 않습니다.
+
+```text
+Quest에서도 쓸 수 있게 해 줘. 앞머리와 꼬리의 흔들림은 남기고 싶어
+```
+
+에이전트는 Android로 빌드한 사본을 측정해 Mobile 랭크를 보여 주고, 뺄 흔들림 부품과 텍스처 크기를 상의하며 Medium 이내를 목표로 합니다. 업로드는 Unity에서 Android로 전환한 뒤 직접 해 주세요(먼저 Unity Hub에서 Android Build Support를 설치해 둡니다). 「Quest 설정을 떼 줘」로 되돌릴 수 있습니다.
+
 ### 퍼포먼스 랭크 조사
 
 「퍼포먼스 랭크를 조사해 줘」라고 요청하면 PC와 Mobile의 퍼포먼스 랭크, 랭크를 정하는 항목(예: 스킨드 메시 수), 한 단계 위의 랭크로 만들기 위한 기준을 보여 줍니다. 빌드 전의 원래 prefab으로 센 기준이므로, 최종 랭크는 VRChat SDK의 빌드 화면에서 확인해 주세요.
@@ -320,6 +353,9 @@ Salt를 새 버전으로 바꿨으니 개변을 이어 가 줘. 새 버전은 As
 | 흔들림 조정 | 「SoftHair 흔들림 조정을 되돌려 줘」 |
 | 시점, 부분 크기 | 「BigHead를 되돌려 줘」 |
 | 표정 | 「Face 표정을 떼 줘」 |
+| 메뉴 정리 | 「Tidy 메뉴 정리를 떼 줘」 |
+| 폴리곤 줄이기 | 「Light 폴리곤 줄이기를 되돌려 줘」 |
+| Quest 버전 설정 | 「Quest 설정을 떼 줘」 |
 
 그 밖의 변경은 Git 복원 지점에서 씬을 되돌립니다. 방법은 채팅으로 물어봐 주세요.
 

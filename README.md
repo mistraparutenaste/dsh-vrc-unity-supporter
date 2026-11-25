@@ -125,7 +125,7 @@ AI エージェントに任せる場合は、エージェントが確認しま�
 | **Unity Hub と Unity 2022.3.22f1** | Unity Hub で有効なライセンスを設定し、指定のバージョンでプロジェクトを開けることを確認します。 [VRChat 公式の Unity 導入案内](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC または ALCOM とアバタープロジェクト** | 普段使っている管理アプリをどちらか一つ使います。作業対象は **VRChat SDK - Avatars** が導入済みで、Unity で開けるプロジェクトです。 [VCC のセットアップ](https://vcc.docs.vrchat.com/guides/getting-started/) · [ALCOM のダウンロード](https://vrc-get.anatawa12.com/alcom/) |
 
-機能によっては、ほかにも必要なものがあります（VRCFury、Modular Avatar、Avatar Optimizer、PhotoCraft、Blender）。[できること](#できること) の表を見てください。
+機能によっては、ほかにも必要なものがあります（VRCFury、Modular Avatar、Avatar Optimizer、Meshia、VRCQuestTools、PhotoCraft、Blender）。[できること](#できること) の表を見てください。
 
 ## 試すこと
 
@@ -161,9 +161,12 @@ AI エージェントに任せる場合は、エージェントが確認しま�
 | 目線と部分的な大きさを変える | 「目線が低いので直して。頭を少し大きくして」 | 手だけ・胸だけを変えるときは Modular Avatar |
 | 表情を変える | 「右手のグーを笑顔にして。メニューでジト目にできるようにして」 | Modular Avatar |
 | アバターの更新に改変を引き継ぐ | 「Salt を新しい版にしたので、改変を引き継いで」 | なし（引き継ぐ改変に必要なもの） |
+| メニューを整理する | 「Color の Hair Pink を Hair に動かして、Facial Set を先頭にして」 | VRCFury |
+| ポリゴンを減らす | 「三角形を 7 万以下にして。顔は減らさないで」 | Meshia |
+| Quest（Android）版を作る | 「Quest でも使えるようにして」 | VRCQuestTools、Unity の Android Build Support |
 | 性能ランクとパラメータ容量を調べる | 「性能ランクを調べて」「パラメータはあと何 bit 使える？」 | なし |
 
-VRCFury、Modular Avatar、Avatar Optimizer は、VCC または ALCOM で対象のプロジェクトに入れます。 [VRCFury の導入手順](https://vrcfury.com/download/)
+VRCFury、Modular Avatar、Avatar Optimizer、Meshia、VRCQuestTools は、VCC または ALCOM で対象のプロジェクトに入れます。 [VRCFury の導入手順](https://vrcfury.com/download/)
 
 ### 衣装をメニューで切り替える
 
@@ -291,6 +294,36 @@ Salt を新しい版にしたので、改変を引き継いで。新しい版は
 
 エージェントは、今のアバターにかかっている改変と、手で変えた値（Inspector で直した値など）を一覧にします。続いて新しい版を調べ、改変ごとに、使うメッシュ・シェイプキー・ボーンがそろっているかを確かめます。名前が変わったものは近い候補を示します。そろっている改変は、1 回の確認でまとめてかけ直します。手で変えた値は自動ではコピーせず、やり直す項目の一覧として示します。
 
+### メニューを整理する
+
+VRChat で見えるとおりのメニュー（VRCFury や Modular Avatar がビルド時に足す項目と「Next」ページを含む）を一覧にし、項目の移動・名前の変更・アイコン・並べ替えをします。作者のメニューのファイルは変えず、VRCFury のメニュー整理の部品を 1 つのオブジェクトにまとめて付けます。
+
+```text
+メニューを見せて。Color の Hair Pink を Hair に動かして、Facial Set を先頭にして
+```
+
+エージェントはビルド後のメニューを木の形で示し、整理の案を出してから適用します。適用後は、ビルドしたメニューで項目が動いたことを確かめます。「Tidy のメニュー整理を外して」で元のメニューに戻ります。
+
+### ポリゴンを減らす
+
+[Meshia](https://github.com/RamType0/Meshia.MeshSimplification) で、アップロードのビルドのときにポリゴン数（三角形数）を減らします。FBX とメッシュのファイルは変えません。アバター全体の目標（たとえば 7 万）か、メッシュごとの割合を決めます。顔（リップシンクのメッシュ）と小さなメッシュは、名前を挙げない限り減らしません。
+
+```text
+三角形を 7 万以下にして。顔は減らさないで
+```
+
+エージェントはメッシュごとの三角形数とランクを調べてレシピを示し、ビルドした前後の画像で崩れが無いかを確認してから適用します。三角形数ではなくスキンメッシュやマテリアルの数でランクが決まっているときは、先にそちらの改善を案内します。「Light のポリゴン削減を元に戻して」で戻せます。
+
+### Quest（Android）版を作る
+
+[VRCQuestTools](https://github.com/kurotu/VRCQuestTools) で、同じシーンから Quest（Android）版を作ります。アバターを複製せず、Android でビルドするときだけ、マテリアルをモバイル用のシェーダーに変え、テクスチャを小さくし、選んだ揺れ物を外します。PC 版は変わりません。
+
+```text
+Quest でも使えるようにして。前髪としっぽの揺れは残したい
+```
+
+エージェントは、Android としてビルドしたコピーを測って Mobile のランクを示し、外す揺れ物やテクスチャの大きさを相談しながら Medium 以内を目指します。アップロードは、Unity で Android に切り替えてから自分で行ってください（Unity Hub で Android Build Support を入れておきます）。「Quest の設定を外して」で戻せます。
+
 ### 性能ランクを調べる
 
 「性能ランクを調べて」と頼むと、PC と Mobile の性能ランクと、ランクを決めている項目（たとえばスキンメッシュの数）、1 つ上のランクにするための目安を示します。ビルド前の元の prefab で数えた目安なので、最終的なランクは VRChat SDK のビルド画面で確認してください。
@@ -318,6 +351,9 @@ Salt を新しい版にしたので、改変を引き継いで。新しい版は
 | 揺れ物の調整 | 「SoftHair の揺れ物の調整を元に戻して」 |
 | 目線・部分的な大きさ | 「BigHead を元に戻して」 |
 | 表情 | 「Face の表情を外して」 |
+| メニューの整理 | 「Tidy のメニュー整理を外して」 |
+| ポリゴン削減 | 「Light のポリゴン削減を元に戻して」 |
+| Quest 版の設定 | 「Quest の設定を外して」 |
 
 それ以外の変更は、Git の復元地点からシーンを戻します。戻し方はチャットで聞いてください。
 

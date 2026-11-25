@@ -103,7 +103,7 @@ class MigrateTests(unittest.TestCase):
         self.assertEqual(unity_migrate.tool_args({"kind": "variant", "name": "Blue"}, "S", "A", False)[-2:],
                          ["--variant", "Blue"])
         self.assertEqual(list(unity_migrate.ORDER), ["shape", "accessory", "physbone", "proportion", "toggle",
-                                                     "variant", "expression"])
+                                                     "variant", "expression", "polygon", "quest", "menu"])
 
 
 if __name__ == "__main__":

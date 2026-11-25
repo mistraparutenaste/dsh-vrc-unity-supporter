@@ -14,6 +14,9 @@
 - **Avatar updates**: apply the changes made with this plugin again to a new version of the avatar, and list the values changed by hand.
 - **Swinging parts**: change PhysBone values of hair, skirts and tails (how they swing, whether they can be grabbed or posed), and add colliders on the legs or body so they do not pass through.
 - **View position and sizes**: put the view position between the eyes again, and make the head, hands or other single bones bigger or smaller.
+- **Menu tidying**: list the menu as built (with the items VRCFury and Modular Avatar add) and move, rename, reorder or set icons on its items without changing the author's menus (uses VRCFury).
+- **Polygon reduction**: reduce triangles at build time with [Meshia](https://github.com/RamType0/Meshia.MeshSimplification), without changing the FBX. The face and small meshes are kept.
+- **Quest (Android) version**: make the Android version from the same scene with [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) (mobile shaders, smaller textures, fewer PhysBones), measured as an Android build. The PC version does not change.
 - **Parameter memory**: count the synced parameters (256-bit limit) as built, and show what is left before a toggle is added.
 - **Try-and-adjust loops**: turn requests such as "swing more softly" into a measurable goal, try and adjust without saving, and show the result before applying.
 - **PhysBone simulation**: run the avatar in play mode while it sways, walks and sits, and measure each swinging part's swing, settling time and depth into the legs; recipes can be tried in memory and compared.

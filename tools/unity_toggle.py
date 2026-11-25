@@ -24,6 +24,7 @@ LEGACY = {
         "92de7704a6e547f8fdbb6a8abb2c543de0f3b4cc",  # 0.2.x
         "727506060aeef9224f5aa0a8eb6b21054bda6ad3",  # 0.3.0 - 0.4.1
         "eff2cb9ed8e6b9b442c9e7e18089e72a4496e2b4",  # 0.5.0 - 0.7.0
+        "4a58b29e8827e61abcb1d6e289d1f9b812937750",  # 0.7.1 - 0.20.0
     ),
     "DshOutfitToggle.cs": (
         "eeb52260a3f2ab8c44a3f46d7a949e8eb0937148",  # 0.3.0
@@ -64,6 +65,9 @@ LEGACY = {
     "DshMigrate.cs": (),  # added in 0.16.0
     "DshPlayback.cs": (),  # added in 0.17.0
     "DshPhysBoneSim.cs": (),  # added in 0.18.0
+    "DshMenu.cs": (),  # added in 0.21.0
+    "DshPolygon.cs": (),  # added in 0.21.0
+    "DshQuest.cs": (),  # added in 0.21.0
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -85,13 +89,18 @@ PROPORTIONS = "Assets/DSH/Proportions"
 EXPRESSIONS = "Assets/DSH/Expressions"
 # Models made or fitted in Blender (FBX, textures, the .blend and its recipe); DSH owns this folder.
 MODELS = "Assets/DSH/Models"
-MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS, PHYSBONES, PROPORTIONS, EXPRESSIONS)
+# Menu tidying, polygon reduction and Android (Quest) conversion recipes; DSH owns these folders.
+MENUS = "Assets/DSH/Menus"
+POLYGONS = "Assets/DSH/Polygons"
+QUEST = "Assets/DSH/Quest"
+MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS, PHYSBONES, PROPORTIONS, EXPRESSIONS, MENUS, POLYGONS, QUEST)
 # Files that Unity editor extensions rewrite (or create) whenever Unity opens the project, so they are never a
 # user change. lilToon records the graphics API, which differs between batch runs with and without -nographics.
 # Poiyomi's editor (Thry) keeps its preset caches and settings in Thry/ at the project root and updates them
-# when it sees materials.
+# when it sees materials. VRCQuestTools writes its project settings when Unity starts.
 UNITY_REWRITES = {"Packages/jp.lilxyzw.liltoon/Editor/CurrentRP.txt", "Thry/presets_known_materials.txt",
-                  "Thry/preset_cache.txt", "Thry/Config.json", "Thry/global_links.json"}
+                  "Thry/preset_cache.txt", "Thry/Config.json", "Thry/global_links.json",
+                  "ProjectSettings/VRCQuestToolsSettings.json"}
 
 
 class WorkflowError(Exception):
