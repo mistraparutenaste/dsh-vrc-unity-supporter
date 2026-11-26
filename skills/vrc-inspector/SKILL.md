@@ -1,6 +1,6 @@
 ---
 name: vrc-inspector
-description: Unity の Inspector に出ている値を、そのとおりに読む（unity_inspector.py）。コンポーネントの各項目を Inspector の表示名・保存名・値・Prefab からの変更の有無つきで返す。「この設定はいくつ？」「Inspector のこの項目は何？」「どこに Menu Installer がある？」と聞かれたら、推測で答えずにこれで読む。
+description: Unity の Inspector に出ている値を、表示名・保存名・Prefab からの変更つきで読む（unity_inspector.py）。設定値やコンポーネントの場所を聞かれたら、推測せずにこれで読む。
 ---
 
 # Inspector の値を読む
