@@ -74,7 +74,7 @@ README.md の「AI エージェントに任せる（おすすめ）」の文章�
 
     codex plugin marketplace add "<フォルダ>"
 
-  ※ Codex 版は、まだ作者の環境で動作を確認していません。
+  ※ Codex 版は、モデル sol6.1・エフォート「中」で動作を確認しています。
 
 自動で新しい版を受け取りたい場合は、<フォルダ> の代わりに
   mistraparutenaste/dsh-vrc-unity-supporter
@@ -128,6 +128,7 @@ Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）で確認したこと:
   ・着せた衣装を、腕を下ろす・座る・腕を上げる姿勢で撮影しての貫通の確認
   ・体型の調整、服の下に隠れる体の削除、その取り消し
   ・性能ランクの試算
+  ・Codex 版（モデル sol6.1、エフォート「中」）での動作
   いずれも、Unity での適用と SDK の前処理（ビルド）までを確認しています。
 
 まだ確認していないこと:
@@ -137,7 +138,9 @@ Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）で確認したこと:
     VRChat の中での動き
   ・肌・髪・瞳の PSD からの色違い
   ・別アバター用の衣装に Blendshape Sync を付けて、服の下の体を消す手順
-  ・Codex 版での動作全般
+  ・軽量化（Avatar Optimizer の Trace and Optimize、TexTransTool の
+    テクスチャ縮小・マテリアル統合）と、Inspector の値の読み取り
+    （どちらも版 0.22.0 で追加）
   ・lilToon・Poiyomi の調整の、VRChat の中での見た目
   ・Poiyomi のアップロード時の自動ロック（ロックの処理そのものは確認済み）
 

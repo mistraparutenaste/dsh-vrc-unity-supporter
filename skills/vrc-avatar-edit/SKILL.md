@@ -117,7 +117,7 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 
 ## 9. 委任の切り方
 
-- 読み取りだけで済む → `vrc-asset-read` の `unity_inspect.py`
+- 読み取りだけで済む → `vrc-asset-read` の `unity_inspect.py`（Inspector に出る値そのものは `vrc-inspector`）
 - 配置済み衣装のオン・オフ → `vrc-first-run`
 - 色違い・肌色・ロゴ（付属 PSD から） → `vrc-texture-variant`
 - lilToon・Poiyomi の色・影・輪郭線・発光の調整（マテリアルの値） → `vrc-material-adjust`
@@ -128,6 +128,7 @@ MA で組む場合。Expression Menu の階層を MA が生成するので、
 - ビューポイント、ボーン単位の大きさ → `vrc-proportion`
 - メニューの項目の移動・改名・アイコン・並べ替え（ビルド後のメニューに対して） → `vrc-menu`
 - ポリゴン削減 → `vrc-polygon`、Quest（Android）版 → `vrc-quest`
+- 軽量化（メッシュ統合、不要ボーンの削除、テクスチャ縮小、マテリアル統合） → `vrc-optimize`
 - 表情（ジェスチャー、メニューで選ぶ表情、ほほ染めなどのトグル） → `vrc-expression`（既存の FX は変えずにレイヤーを足す）
 - 手に持って置ける小物、ワールドに固定する小物 → `vrc-accessory` の `hold` / `world`
 - アバターの新しい版に改変を引き継ぐ → `vrc-avatar-update`

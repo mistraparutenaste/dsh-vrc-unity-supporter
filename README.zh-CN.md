@@ -127,7 +127,7 @@ Claude Code 在 **Claude 桌面应用的 Code 标签页** 和终端版中都可�
 | **Unity Hub 和 Unity 2022.3.22f1** | 在 Unity Hub 中设置有效的许可证，并确认可以用这个版本打开项目。[VRChat 官方的 Unity 安装指南](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC 或 ALCOM 以及模型项目** | 使用你平时用的管理工具即可。要处理的项目需要已安装 **VRChat SDK - Avatars**，并且能在 Unity 中打开。[VCC 设置](https://vcc.docs.vrchat.com/guides/getting-started/) · [下载 ALCOM](https://vrc-get.anatawa12.com/alcom/) |
 
-部分功能还需要其他软件（VRCFury、Modular Avatar、Avatar Optimizer、Meshia、VRCQuestTools、PhotoCraft、Blender）。请查看[功能](#功能)中的表格。
+部分功能还需要其他软件（VRCFury、Modular Avatar、Avatar Optimizer、TexTransTool、Meshia、VRCQuestTools、PhotoCraft、Blender）。请查看[功能](#功能)中的表格。
 
 ## 试一试
 
@@ -153,6 +153,7 @@ Claude Code 在 **Claude 桌面应用的 Code 标签页** 和终端版中都可�
 | 功能 | 请求示例 | 另外需要 |
 | --- | --- | --- |
 | 调查模型结构 | 「调查一下这个项目里的模型结构」 | 无 |
+| 读取 Inspector 中的值 | 「后发 PhysBone 的 Pull 是多少？」「Menu Installer 挂在哪里？」 | 无 |
 | 在菜单中切换服装 | 「让 Outfit_Hoodie 可以在『服装/连帽衫』中开关」 | VRCFury |
 | 制作换色版本 | 「做一个把连帽衫改成藏青色的换色版本」 | PhotoCraft、模型附带的 PSD |
 | 调整 lilToon 的颜色、阴影、描边 | 「把头发的阴影调淡，描边调细」 | VRCFury、lilToon 或 Poiyomi 材质 |
@@ -165,10 +166,11 @@ Claude Code 在 **Claude 桌面应用的 Code 标签页** 和终端版中都可�
 | 把修改带到更新后的模型 | 「Salt 更新到新版本了，帮我把修改带过去」 | 无（各修改本身需要的除外） |
 | 整理菜单 | 「把 Color 里的 Hair Pink 移到 Hair，把 Facial Set 放到最前面」 | VRCFury |
 | 减少多边形 | 「把三角形减到 7 万以下，脸部不要减」 | Meshia |
+| 轻量化（贴图、材质、网格） | 「把贴图缩到 1024 来减轻负载，脸部保持不变」 | Avatar Optimizer、TexTransTool |
 | 制作 Quest（Android）版本 | 「让它在 Quest 上也能用」 | VRCQuestTools、Unity 的 Android Build Support |
 | 查看性能等级和参数容量 | 「查一下性能等级」「参数还剩多少 bit？」 | 无 |
 
-VRCFury、Modular Avatar、Avatar Optimizer、Meshia 和 VRCQuestTools 请用 VCC 或 ALCOM 添加到目标项目中。[VRCFury 安装步骤](https://vrcfury.com/download/)
+VRCFury、Modular Avatar、Avatar Optimizer、TexTransTool、Meshia 和 VRCQuestTools 请用 VCC 或 ALCOM 添加到目标项目中。[VRCFury 安装步骤](https://vrcfury.com/download/)
 
 ### 在菜单中切换服装
 
@@ -316,6 +318,16 @@ Salt 更新到新版本了，帮我把修改带过去。新版本放在 Assets/D
 
 代理会查看每个网格的三角形数和等级并展示配方，用构建前后的图片确认没有破损后再应用。如果等级是由蒙皮网格或材质数量决定的，会先建议改善那些项目。说「恢复 Light 的多边形减少」即可恢复。
 
+### 轻量化（贴图、材质、网格）
+
+在上传构建时，用 [Avatar Optimizer](https://vpm.anatawa12.com/avatar-optimizer/) 的 Trace and Optimize 合并网格，并删除未使用的骨骼、对象和形态键；用 [TexTransTool](https://ttt.rs64.net/) 把贴图缩小到指定大小，并把指定的材质合并为一个。不修改 FBX、材质和贴图文件。
+
+```text
+把贴图缩到 1024 来减轻负载，脸部保持不变
+```
+
+代理会查看每个材质的贴图大小、网格和骨骼数量以及等级并展示配方，比较构建前后的数量（贴图内存、材质数、网格数、骨骼数）和图片后再应用。使用同一张贴图的材质会一起缩小。说「还原 Slim 的轻量化」即可恢复。
+
 ### 制作 Quest（Android）版本
 
 使用 [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) 从同一个场景制作 Quest（Android）版本。不复制模型，只在为 Android 构建时把材质换成移动端着色器、缩小贴图，并移除你选择的摆动部件。PC 版本不会改变。
@@ -329,6 +341,10 @@ Salt 更新到新版本了，帮我把修改带过去。新版本放在 Assets/D
 ### 查看性能等级
 
 请求「查一下性能等级」，就会显示 PC 和 Mobile 的性能等级、决定等级的项目（例如蒙皮网格的数量），以及提升一个等级的参考。这是用构建前的原始 prefab 统计的参考值，最终等级请在 VRChat SDK 的构建界面中确认。
+
+### 读取 Inspector 中的值
+
+请求「后发 PhysBone 的 Pull 是多少？」「Menu Installer 挂在哪里？」，代理就会用与 Inspector 相同的项目名读出 Unity Inspector 中显示的值。如果值是从 prefab 修改过的，也会告诉你。也能读取 Modular Avatar 和 VRCFury 的设置。不修改文件（请先保存场景并关闭 Unity）。
 
 说「参数还剩多少 bit？」即可统计同步参数的用量（上限 256 bit），包括 VRCFury 和 Modular Avatar 在构建时添加的部分。测量之后，添加服装开关或饰品前会显示剩余量，超过上限的修改会在应用前停止。
 
@@ -355,19 +371,20 @@ Salt 更新到新版本了，帮我把修改带过去。新版本放在 Assets/D
 | 表情 | 「移除 Face 表情」 |
 | 菜单整理 | 「移除 Tidy 菜单整理」 |
 | 多边形减少 | 「恢复 Light 的多边形减少」 |
+| 轻量化（贴图、材质、网格） | 「还原 Slim 的轻量化」 |
 | Quest 版本设置 | 「移除 Quest 设置」 |
 
 其他修改请从 Git 还原点恢复场景。具体方法可以在聊天中询问。
 
 ## 测试环境
 
-| 项目 | DSH | Claude Code |
-| --- | --- | --- |
-| 应用 | DeepSeek Harness Desktop（Windows） | Claude 桌面应用 |
-| 模型 | DeepSeek V4.1 Flash（显示为 `DeepSeek-V41-Flash`） | Opus 5.5 |
-| 努力程度（推理强度） | `MAX` | 中等或以上 |
+| 项目 | DSH | Claude Code | Codex |
+| --- | --- | --- | --- |
+| 应用 | DeepSeek Harness Desktop（Windows） | Claude 桌面应用 | Codex 应用 |
+| 模型 | DeepSeek V4.1 Flash（显示为 `DeepSeek-V41-Flash`） | Opus 5.5 | sol6.1 |
+| 努力程度（推理强度） | `MAX` | 中等或以上 | 中等 |
 
-其他组合尚未测试。Codex 版尚未测试。
+其他组合尚未测试。
 
 ## 遇到问题时
 

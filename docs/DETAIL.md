@@ -16,6 +16,8 @@
 - **View position and sizes**: put the view position between the eyes again, and make the head, hands or other single bones bigger or smaller.
 - **Menu tidying**: list the menu as built (with the items VRCFury and Modular Avatar add) and move, rename, reorder or set icons on its items without changing the author's menus (uses VRCFury).
 - **Polygon reduction**: reduce triangles at build time with [Meshia](https://github.com/RamType0/Meshia.MeshSimplification), without changing the FBX. The face and small meshes are kept.
+- **Optimization**: Avatar Optimizer's Trace and Optimize (merged meshes, unused bones, objects and blendshapes removed) and TexTransTool (smaller textures, merged materials) at build time, without changing the files. The counts of the built avatar before and after are compared before applying.
+- **Reading Inspector values**: read component values with the Inspector's own names, and whether a prefab override changed them.
 - **Quest (Android) version**: make the Android version from the same scene with [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) (mobile shaders, smaller textures, fewer PhysBones), measured as an Android build. The PC version does not change.
 - **Parameter memory**: count the synced parameters (256-bit limit) as built, and show what is left before a toggle is added.
 - **Try-and-adjust loops**: turn requests such as "swing more softly" into a measurable goal, try and adjust without saving, and show the result before applying.

@@ -68,6 +68,8 @@ LEGACY = {
     "DshMenu.cs": (),  # added in 0.21.0
     "DshPolygon.cs": (),  # added in 0.21.0
     "DshQuest.cs": (),  # added in 0.21.0
+    "DshInspector.cs": (),  # added in 0.22.0
+    "DshOptimize.cs": (),  # added in 0.22.0
 }
 HELPERS = tuple(LEGACY)
 LOCAL_IGNORE = b"/.dsh/"
@@ -93,7 +95,10 @@ MODELS = "Assets/DSH/Models"
 MENUS = "Assets/DSH/Menus"
 POLYGONS = "Assets/DSH/Polygons"
 QUEST = "Assets/DSH/Quest"
-MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS, PHYSBONES, PROPORTIONS, EXPRESSIONS, MENUS, POLYGONS, QUEST)
+# Build-time optimization recipes (Avatar Optimizer, TexTransTool); DSH owns this folder.
+OPTIMIZE = "Assets/DSH/Optimize"
+MANAGED_FOLDERS = (VARIANTS, SHAPES, ACCESSORIES, MODELS, PHYSBONES, PROPORTIONS, EXPRESSIONS, MENUS, POLYGONS, QUEST,
+                   OPTIMIZE)
 # Files that Unity editor extensions rewrite (or create) whenever Unity opens the project, so they are never a
 # user change. lilToon records the graphics API, which differs between batch runs with and without -nographics.
 # Poiyomi's editor (Thry) keeps its preset caches and settings in Thry/ at the project root and updates them

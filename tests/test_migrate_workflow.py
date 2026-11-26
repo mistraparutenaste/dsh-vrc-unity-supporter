@@ -95,6 +95,18 @@ class MigrateTests(unittest.TestCase):
         self.assertEqual(manual["addedComponents"], [{"path": "Hair", "type": "Light"}])
         self.assertEqual(manual["addedObjects"], ["Props"])
 
+    def test_trace_and_optimize_added_by_an_optimize_recipe_is_not_hand_made(self):
+        data = {"addedComponents": [{"path": "", "type": "TraceAndOptimize"}],
+                "addedObjects": ["DSH Optimize Slim"]}
+        manual = unity_migrate.manual_overrides(self.project, data, SCENE, [])
+        self.assertEqual(manual["addedComponents"], [{"path": "", "type": "TraceAndOptimize"}])
+        self.assertEqual(manual["addedObjects"], [])
+        self.write(".dsh/optimize/Slim.json", json.dumps({"scenes": {SCENE: [
+            {"key": "aao:trace", "kind": "aao-trace", "path": ""},
+            {"key": "optimize:holder", "kind": "optimize-holder", "path": "DSH Optimize Slim"}]}}))
+        manual = unity_migrate.manual_overrides(self.project, data, SCENE, [{"kind": "optimize", "name": "Slim"}])
+        self.assertEqual(manual["addedComponents"], [])
+
     def test_steps_turn_into_each_workflows_arguments(self):
         args = unity_migrate.tool_args({"kind": "toggle", "name": "DSH Outfit Toggle 1", "newOutfit": "V2/Hoodie",
                                         "menu": "Outfit/Hoodie", "defaultOn": True}, "Assets/V2.unity", "V2", True)
@@ -103,7 +115,8 @@ class MigrateTests(unittest.TestCase):
         self.assertEqual(unity_migrate.tool_args({"kind": "variant", "name": "Blue"}, "S", "A", False)[-2:],
                          ["--variant", "Blue"])
         self.assertEqual(list(unity_migrate.ORDER), ["shape", "accessory", "physbone", "proportion", "toggle",
-                                                     "variant", "expression", "polygon", "quest", "menu"])
+                                                     "variant", "expression", "polygon", "optimize", "quest",
+                                                     "menu"])
 
 
 if __name__ == "__main__":
