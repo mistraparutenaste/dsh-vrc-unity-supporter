@@ -43,6 +43,8 @@ $required = @(
     'templates/Editor/DshMenu.cs', 'tools/unity_menu.py', 'skills/vrc-menu/SKILL.md',
     'templates/Editor/DshPolygon.cs', 'tools/unity_polygon.py', 'skills/vrc-polygon/SKILL.md',
     'templates/Editor/DshQuest.cs', 'tools/unity_quest.py', 'skills/vrc-quest/SKILL.md',
+    'templates/Editor/DshInspector.cs', 'tools/unity_inspector.py', 'skills/vrc-inspector/SKILL.md',
+    'templates/Editor/DshOptimize.cs', 'tools/unity_optimize.py', 'skills/vrc-optimize/SKILL.md',
     'install.cmd',
     'installer/install.cmd', 'installer/install.ps1',
     'installer/uninstall.cmd', 'installer/uninstall.ps1',

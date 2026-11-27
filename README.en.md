@@ -127,7 +127,7 @@ If you let the AI agent install the plugin, it checks these for you. To prepare 
 | **Unity Hub and Unity 2022.3.22f1** | Set up a valid license in Unity Hub and check that your project opens with this version. [VRChat's guide to installing Unity](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC or ALCOM and an avatar project** | Use whichever project manager you normally use. The project you work on must have **VRChat SDK - Avatars** and open in Unity. [VCC setup](https://vcc.docs.vrchat.com/guides/getting-started/) · [Download ALCOM](https://vrc-get.anatawa12.com/alcom/) |
 
-Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, Meshia, VRCQuestTools, PhotoCraft, Blender). See the table in [What it can do](#what-it-can-do).
+Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, TexTransTool, Meshia, VRCQuestTools, PhotoCraft, Blender). See the table in [What it can do](#what-it-can-do).
 
 ## Try it
 
@@ -153,6 +153,7 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, Meshia, VRCQ
 | Feature | Example request | Also needs |
 | --- | --- | --- |
 | Look into the avatars | "Look into the avatars in this project" | Nothing |
+| Read Inspector values | "What is Pull on the back hair PhysBone?", "Where is the Menu Installer?" | Nothing |
 | Switch outfits from the menu | "Let me switch Outfit_Hoodie on and off from 'Outfit/Hoodie'" | VRCFury |
 | Make color variants | "Make a navy color variant of the hoodie" | PhotoCraft, the avatar's PSD |
 | Adjust lilToon colors, shadows and outlines | "Make the hair shadows lighter and the outline thinner" | VRCFury, lilToon or Poiyomi materials |
@@ -165,10 +166,11 @@ Some features need more (VRCFury, Modular Avatar, Avatar Optimizer, Meshia, VRCQ
 | Carry changes over to an updated avatar | "I updated Salt to the new version; carry my changes over" | Nothing (beyond what each change needs) |
 | Tidy the menu | "Move Hair Pink from Color to Hair, and put Facial Set first" | VRCFury |
 | Reduce polygons | "Bring it under 70,000 triangles, but leave the face alone" | Meshia |
+| Make it lighter (textures, materials, meshes) | "Make it lighter with 1024 textures, but leave the face as it is" | Avatar Optimizer, TexTransTool |
 | Make a Quest (Android) version | "Make it work on Quest too" | VRCQuestTools, Unity's Android Build Support |
 | Check the performance rank and parameter memory | "Check the performance rank", "How many parameter bits are left?" | Nothing |
 
-Add VRCFury, Modular Avatar, Avatar Optimizer, Meshia and VRCQuestTools to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
+Add VRCFury, Modular Avatar, Avatar Optimizer, TexTransTool, Meshia and VRCQuestTools to your project with VCC or ALCOM. [Installing VRCFury](https://vrcfury.com/download/)
 
 ### Switch outfits from the menu
 
@@ -316,6 +318,16 @@ Bring it under 70,000 triangles, but leave the face alone
 
 The agent reads the triangles of each mesh and the rank, shows the recipe, and checks images of the built avatar before and after for damage before applying. When the rank is set by the number of skinned meshes or materials rather than triangles, it suggests fixing that first. Ask "Undo the Light polygon reduction" to revert.
 
+### Make it lighter (textures, materials, meshes)
+
+When the avatar is built for upload, [Avatar Optimizer](https://vpm.anatawa12.com/avatar-optimizer/)'s Trace and Optimize merges meshes and removes unused bones, objects and blendshapes, and [TexTransTool](https://ttt.rs64.net/) shrinks textures to the size you choose and merges the materials you name into one. The FBX, material and texture files stay as they are.
+
+```text
+Make it lighter with 1024 textures, but leave the face as it is
+```
+
+The agent reads each material's texture sizes, the number of meshes and bones, and the rank, shows the recipe, and compares the counts of the built avatar before and after (texture memory, materials, meshes, bones) and images before applying. Materials that share a texture are shrunk together. Ask "Undo the Slim optimization" to revert.
+
 ### Make a Quest (Android) version
 
 Uses [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) to make a Quest (Android) version from the same scene. The avatar is not copied: only when it is built for Android are its materials changed to mobile shaders, its textures made smaller, and the PhysBones you choose removed. The PC version does not change.
@@ -329,6 +341,10 @@ The agent builds a copy as Android and measures its Mobile rank, then works with
 ### Check the performance rank
 
 Ask "Check the performance rank" and it shows the PC and Mobile performance ranks, the items that set the rank (such as the number of skinned meshes), and what to change to reach the next rank up. These are estimates counted from the original prefab before the build, so check the final rank in the VRChat SDK build panel.
+
+### Read Inspector values
+
+Ask "What is Pull on the back hair PhysBone?" or "Where is the Menu Installer?" and the agent reads the values shown in Unity's Inspector, with the Inspector's own names. It tells you when a value was changed from the prefab. Modular Avatar and VRCFury settings can be read too. No files change (save the scene and close Unity first).
 
 Ask "How many parameter bits are left?" to count the synced parameters (the limit is 256 bits), including what VRCFury and Modular Avatar add when the avatar is built. After a measurement, adding an outfit toggle or accessory shows how many bits remain, and a change that would go over the limit stops before it is applied.
 
@@ -355,19 +371,20 @@ You can undo changes made by this plugin by asking as below. Before removing any
 | Expressions | "Remove the Face expressions" |
 | Menu tidying | "Remove the Tidy menu changes" |
 | Polygon reduction | "Undo the Light polygon reduction" |
+| Optimization (textures, materials, meshes) | "Undo the Slim optimization" |
 | Quest version settings | "Remove the Quest settings" |
 
 For other changes, put the scene back from the Git restore point. Ask in the chat how to do it.
 
 ## Tested environment
 
-| Item | DSH | Claude Code |
-| --- | --- | --- |
-| App | DeepSeek Harness Desktop (Windows) | Claude desktop app |
-| Model | DeepSeek V4.1 Flash (shown as `DeepSeek-V41-Flash`) | Opus 5.5 |
-| Effort (reasoning strength) | `MAX` | Medium or higher |
+| Item | DSH | Claude Code | Codex |
+| --- | --- | --- | --- |
+| App | DeepSeek Harness Desktop (Windows) | Claude desktop app | Codex app |
+| Model | DeepSeek V4.1 Flash (shown as `DeepSeek-V41-Flash`) | Opus 5.5 | sol6.1 |
+| Effort (reasoning strength) | `MAX` | Medium or higher | Medium |
 
-Other combinations have not been tested. The Codex version has not been tested yet.
+Other combinations have not been tested.
 
 ## Troubleshooting
 

@@ -34,7 +34,7 @@ function Install-OutfitHelpers([string]$ProjectPath, [string]$RequestPath) {
     $destDir = Join-Path $ProjectPath 'Assets\DSH\Editor'
     $sourceDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'templates\Editor'
     $copies = foreach ($helper in $request.helpers) {
-        if ($helper.file -cnotin @('DshApply.cs', 'DshInspect.cs', 'DshOutfitToggle.cs', 'DshTextureVariant.cs', 'DshCapture.cs', 'DshAvatarTools.cs', 'DshShape.cs', 'DshAccessory.cs', 'DshDynamics.cs', 'DshParameters.cs', 'DshPhysBone.cs', 'DshProportion.cs', 'DshExpression.cs', 'DshMigrate.cs', 'DshPlayback.cs', 'DshPhysBoneSim.cs', 'DshMenu.cs', 'DshPolygon.cs', 'DshQuest.cs')) {
+        if ($helper.file -cnotin @('DshApply.cs', 'DshInspect.cs', 'DshOutfitToggle.cs', 'DshTextureVariant.cs', 'DshCapture.cs', 'DshAvatarTools.cs', 'DshShape.cs', 'DshAccessory.cs', 'DshDynamics.cs', 'DshParameters.cs', 'DshPhysBone.cs', 'DshProportion.cs', 'DshExpression.cs', 'DshMigrate.cs', 'DshPlayback.cs', 'DshPhysBoneSim.cs', 'DshMenu.cs', 'DshPolygon.cs', 'DshQuest.cs', 'DshInspector.cs', 'DshOptimize.cs')) {
             throw "Unknown DSH helper: $($helper.file)"
         }
         $dest = Join-Path $destDir $helper.file

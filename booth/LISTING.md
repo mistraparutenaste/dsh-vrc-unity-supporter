@@ -67,7 +67,7 @@ ZIP の中の `00_README_JA.txt` を見てください。AI エージェント�
 
 作者の環境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）で、上の機能を Unity での適用と SDK の前処理まで確認しています。確認したアバターは限られていて、ほかのアバターや衣装ではうまくいかないことがあります。
 
-まだ確認していないことは、`00_README_JA.txt` の「動作の確認状況」に書いています。特に **Codex 版は、まだ作者の環境で動作を確認していません**。
+まだ確認していないことは、`00_README_JA.txt` の「動作の確認状況」に書いています。
 
 ### AI について
 
@@ -134,7 +134,7 @@ See `00_README_JA.txt` in the ZIP (Japanese). You can also paste the setup promp
 
 In the author's environment (Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23), the features above were checked up to applying them in Unity and the SDK build preprocessing. Only a few avatars were tested; other avatars and outfits may not work.
 
-What has not been tested is listed under 「動作の確認状況」 in `00_README_JA.txt`. In particular, **the Codex version has not been tested in the author's environment yet**.
+What has not been tested is listed under 「動作の確認状況」 in `00_README_JA.txt`.
 
 ### About AI
 
@@ -201,7 +201,7 @@ Source code and latest version: https://github.com/mistraparutenaste/dsh-vrc-uni
 
 在作者的环境（Unity 2022.3.22f1、VRCFury 1.1475.0、Modular Avatar 1.18.7、Avatar Optimizer 1.9.23）中，上述功能已测试到在 Unity 中应用以及 SDK 的预处理。测试过的模型有限，其他模型或服装可能无法正常使用。
 
-尚未测试的内容写在 `00_README_JA.txt` 的「動作の確認状況」中。特别是，**Codex 版尚未在作者的环境中测试**。
+尚未测试的内容写在 `00_README_JA.txt` 的「動作の確認状況」中。
 
 ### 关于 AI
 
@@ -268,7 +268,7 @@ ZIP 안의 `00_README_JA.txt`(일본어)를 참고해 주세요. README의 설�
 
 작자의 환경(Unity 2022.3.22f1, VRCFury 1.1475.0, Modular Avatar 1.18.7, Avatar Optimizer 1.9.23)에서 위 기능을 Unity에서의 적용과 SDK 전처리까지 확인했습니다. 확인한 아바타는 한정되어 있어, 다른 아바타나 의상에서는 잘 되지 않을 수 있습니다.
 
-아직 확인하지 않은 것은 `00_README_JA.txt`의 「動作の確認状況」에 적혀 있습니다. 특히 **Codex 버전은 아직 작자의 환경에서 동작을 확인하지 않았습니다**.
+아직 확인하지 않은 것은 `00_README_JA.txt`의 「動作の確認状況」에 적혀 있습니다.
 
 ### AI에 대해
 

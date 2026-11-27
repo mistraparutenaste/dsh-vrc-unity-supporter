@@ -34,21 +34,22 @@ TASKS = {
     "ProportionRecipe": ("proportion", "apply"), "ProportionRemove": ("proportion", "remove"),
     "ExpressionApply": ("expression", "apply"), "ExpressionRemove": ("expression", "remove"),
     "PolygonRecipe": ("polygon", "apply"), "PolygonRemove": ("polygon", "remove"),
+    "OptimizeRecipe": ("optimize", "apply"), "OptimizeRemove": ("optimize", "remove"),
     "QuestRecipe": ("quest", "apply"), "QuestRemove": ("quest", "remove"),
     "MenuApply": ("menu", "apply"), "MenuRemove": ("menu", "remove"),
 }
 # Re-applied in this order: body shape and attachments first, then what refers to them; the menu goes last,
 # since its moves refer to items the others add.
-ORDER = ("shape", "accessory", "physbone", "proportion", "toggle", "variant", "expression", "polygon", "quest",
-         "menu")
+ORDER = ("shape", "accessory", "physbone", "proportion", "toggle", "variant", "expression", "polygon", "optimize",
+         "quest", "menu")
 TOOL = {"shape": "unity_shape.py", "accessory": "unity_accessory.py", "physbone": "unity_physbone.py",
         "proportion": "unity_proportion.py", "toggle": "unity_toggle.py", "variant": "unity_texture.py",
         "expression": "unity_expression.py", "polygon": "unity_polygon.py", "quest": "unity_quest.py",
-        "menu": "unity_menu.py"}
+        "optimize": "unity_optimize.py", "menu": "unity_menu.py"}
 HOLDERS = {"toggle": "DSH Outfit Toggle ", "variant": "DSH Color Variant ", "accessory": "DSH Accessory ",
            "expression": "DSH Expression ", "menu": "DSH Menu "}
 RECORDS = {"shape": ".dsh/shapes", "physbone": ".dsh/physbones", "proportion": ".dsh/proportions",
-           "polygon": ".dsh/polygons", "quest": ".dsh/quest"}
+           "polygon": ".dsh/polygons", "quest": ".dsh/quest", "optimize": ".dsh/optimize"}
 
 
 def avatar_path(unity):
@@ -138,6 +139,8 @@ def own_changes(root, scene_path, items):
                     owned.add((entry.get("path"), "m_LocalScale"))
                 elif kind == "blendShape":
                     owned.add((entry.get("path"), entry.get("field")))
+                elif kind == "aao-trace":  # Trace and Optimize that an optimize recipe added to the avatar root
+                    owned.add(("", "component:TraceAndOptimize"))
     return owned
 
 
@@ -169,7 +172,8 @@ def manual_overrides(root, data, scene_path, items):
         values.append(row)
     added_objects = [p for p in data.get("addedObjects") or [] if not dsh_path(p)]
     added_components = [c for c in data.get("addedComponents") or []
-                        if not dsh_path(c.get("path")) and c.get("type") not in DSH_COMPONENTS]
+                        if not dsh_path(c.get("path")) and c.get("type") not in DSH_COMPONENTS and
+                        (c.get("path", ""), f"component:{c.get('type')}") not in owned]
     return {"values": values[:200], "valueCount": len(values), "addedObjects": added_objects[:100],
             "addedComponents": added_components[:100], "removedComponents": (data.get("removedComponents") or [])[:100]}
 
@@ -288,6 +292,17 @@ def check_item(root, item, check, old_avatar, new_avatar):
         recipe, _ = unity_polygon.load_recipe(root, name)
         for path in [r["path"] for r in recipe["renderers"]] + recipe["keep"]:
             check.renderer(path)
+    elif kind == "optimize":
+        import unity_optimize
+        recipe, _ = unity_optimize.load_recipe(root, name)
+        materials = check.info.get("materials") or {}
+        known = set(materials) | {Path(p).stem for p in materials}
+        named = [m for group in recipe["atlas"] for m in group["materials"]]
+        named += [m for m in recipe["textureMaterials"] + recipe["textureExclude"] if m != "*"]
+        for material in named:
+            if material not in known:
+                check.problems.append({"missing": "material used by the avatar", "name": material,
+                                       "suggest": close(material, known)})
     elif kind == "quest":
         import unity_quest
         recipe, _ = unity_quest.load_recipe(root, name)

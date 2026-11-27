@@ -62,7 +62,7 @@ python -B "<pkg>\tools\unity_inspect.py" rank "<project>\.dsh\runs\<run-id>\resu
 
 `pc` / `mobile` ごとに、全体の `rank`、それを決めた項目（`limitedBy`）、1 つ上のランクに上げるための上限（`toReach.reduce`）、数えていない項目（`notMeasured`）が出る。Perf はプロジェクト内のアバター prefab をすべて数えるので、`--prefab` で対象を絞る（パスの一部で一致。`--json` を外すと 1 prefab 2 行の要約になる）。撮影や SDK 検証の三角形数だけを見るときは `{"triangles": 52000}` のような JSON を渡してもよい。
 
-Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクスチャメモリは概算。未計測の項目がある場合は測った項目ごとの目安を伝える。
+Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクスチャメモリは 1 ピクセル 4 バイトの概算で高めに出る（`vrc-optimize` の read と try は取り込み後の大きさで数える）。未計測の項目がある場合は測った項目ごとの目安を伝える。
 
 - **その項目が Excellent の上限以下なら Excellent を維持**
 - 1 つでも超えたら、その項目の達成ランクに全体が引き下げられる（最弱の項目で決まる）
@@ -73,11 +73,11 @@ Read/Writeが無効な計測対象は `unreadableMeshes` に出る。テクス�
 ## 3. よく効く改善（コストの低い順）
 
 1. **Avatar Optimizer (AAO) の Trace and Optimize** — 未使用ボーン・ blendshape・
-   メッシュの削除。ほぼ無設定で効く
-2. **マテリアル統合** — 同じシェーダ・同じテクスチャなら 1 スロットに寄せる（TexTransTool）
-3. **メッシュ統合** — 同一マテリアルのメッシュを結合
+   メッシュの削除、メッシュの自動統合。ほぼ無設定で効く（`vrc-optimize` の `traceAndOptimize`）
+2. **マテリアル統合** — 同じシェーダのマテリアルを 1 スロットに寄せる（TexTransTool、`vrc-optimize` の `atlas`）
+3. **メッシュ統合** — 1 の自動統合で足りないときは、AAO の Merge Skinned Mesh を Unity で設定する
 4. **PhysBone の統合** — 揺れ物ごとに分かれた PhysBone をまとめる（値やコライダーの調整は `vrc-physbone`）
-5. **テクスチャ圧縮** — 1024 以下に落とす、使っていないチャンネルを削る
+5. **テクスチャ縮小** — 1024 以下に落とす（TexTransTool、`vrc-optimize` の `textures`）
 6. **ポリゴン削減** — 三角形数でランクが決まっているときだけ。Meshia でビルド時に減らす（`vrc-polygon`）
 
 Quest（Android）版は、VRCQuestTools でモバイル用シェーダーと揺れ物の削減を同じシーンから作る（`vrc-quest`）。
@@ -87,7 +87,7 @@ Quest（Android）版は、VRCQuestTools でモバイル用シェーダーと揺
 | 状況 | 判断 |
 |---|---|
 | 改変で +5,000 tri 程度 | 多くの場合許容。まず現状値を測る |
-| Good 上限まで残り 10% 未満 | AAO の導入を提案する |
+| Good 上限まで残り 10% 未満 | AAO の導入を提案する（`vrc-optimize`） |
 | Mobile 版も作る | 最初から 20,000 tri を上限に設計する。`vrc-quest` の `try` で Android 版のランクを測る |
 | SPS を入れる | Contacts 8 個で Excellent 満杯。プラグ+ソケット 1 組で約 8 |
 

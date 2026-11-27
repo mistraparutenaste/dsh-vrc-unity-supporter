@@ -43,7 +43,9 @@ description: VRChat アバター改変の入口（Claude Code 用）。プロジ
 | ビューポイント、ボーン単位の大きさ（頭・手など） | `vrc-proportion` |
 | メニューの整理（ビルド後のメニューの一覧、項目の移動・改名・アイコン・並べ替え） | `vrc-menu` |
 | ポリゴン削減（Meshia、ビルド時） | `vrc-polygon` |
+| 軽量化（AAO の Trace and Optimize、TexTransTool のテクスチャ縮小・マテリアル統合、ビルド時） | `vrc-optimize` |
 | Quest（Android）版（VRCQuestTools、PC 版は変えない） | `vrc-quest` |
+| Inspector の値の読み取り（表示名・値・Prefab からの変更） | `vrc-inspector` |
 | 読み取り、性能ランク、パラメータ容量（256 bit）、コンパイル確認、再生テスト（ジェスチャー・メニューを動かして確かめる） | `vrc-asset-read`、`vrc-perf-budget`、`vrc-verify` |
 
 | Editor スクリプトで行う（`vrc-edit-script`） |
@@ -83,6 +85,8 @@ description: VRChat アバター改変の入口（Claude Code 用）。プロジ
 | 目線（ビューポイント）のずれ、頭を大きく・手を小さく | `vrc-proportion` |
 | メニューが散らかっている、項目を動かしたい・並べ替えたい・アイコンを付けたい | `vrc-menu` |
 | ポリゴン数（三角形数）を減らしたい | `vrc-polygon` |
+| 軽くしたい、テクスチャを減らしたい、マテリアル・メッシュ・ボーンの数を減らしたい | `vrc-optimize` |
+| Inspector のこの項目は何／いくつ？、どこに〇〇が付いている？ | `vrc-inspector` |
 | Quest 対応、Android 版を作りたい、モバイルのランク | `vrc-quest` |
 | 同梱のコマンドで足りない改変（新しい PhysBone、コンタクト、MA のメニューの部品の組み替えなど） | `vrc-edit-script` |
 | バッチモードの失敗の読み方 | `unity-cli` |

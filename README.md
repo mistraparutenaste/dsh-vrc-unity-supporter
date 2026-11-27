@@ -125,7 +125,7 @@ AI エージェントに任せる場合は、エージェントが確認しま�
 | **Unity Hub と Unity 2022.3.22f1** | Unity Hub で有効なライセンスを設定し、指定のバージョンでプロジェクトを開けることを確認します。 [VRChat 公式の Unity 導入案内](https://creators.vrchat.com/sdk/upgrade/current-unity-version/) |
 | **VCC または ALCOM とアバタープロジェクト** | 普段使っている管理アプリをどちらか一つ使います。作業対象は **VRChat SDK - Avatars** が導入済みで、Unity で開けるプロジェクトです。 [VCC のセットアップ](https://vcc.docs.vrchat.com/guides/getting-started/) · [ALCOM のダウンロード](https://vrc-get.anatawa12.com/alcom/) |
 
-機能によっては、ほかにも必要なものがあります（VRCFury、Modular Avatar、Avatar Optimizer、Meshia、VRCQuestTools、PhotoCraft、Blender）。[できること](#できること) の表を見てください。
+機能によっては、ほかにも必要なものがあります（VRCFury、Modular Avatar、Avatar Optimizer、TexTransTool、Meshia、VRCQuestTools、PhotoCraft、Blender）。[できること](#できること) の表を見てください。
 
 ## 試すこと
 
@@ -151,6 +151,7 @@ AI エージェントに任せる場合は、エージェントが確認しま�
 | できること | 頼み方の例 | 追加で必要なもの |
 | --- | --- | --- |
 | アバターの構成を調べる | 「このプロジェクトのアバター構成を調べて」 | なし |
+| Inspector の値を読む | 「後ろ髪の PhysBone の Pull はいくつ？」「Menu Installer はどこに付いている？」 | なし |
 | 衣装をメニューで切り替える | 「Outfit_Hoodie を『衣装/パーカー』からオン・オフできるようにして」 | VRCFury |
 | 色違いを作る | 「パーカーを紺色にした色違いを作って」 | PhotoCraft、アバター付属の PSD |
 | lilToon の色・影・輪郭線を調整する | 「髪の影を薄くして、輪郭線を細くして」 | VRCFury、lilToon か Poiyomi のマテリアル |
@@ -163,10 +164,11 @@ AI エージェントに任せる場合は、エージェントが確認しま�
 | アバターの更新に改変を引き継ぐ | 「Salt を新しい版にしたので、改変を引き継いで」 | なし（引き継ぐ改変に必要なもの） |
 | メニューを整理する | 「Color の Hair Pink を Hair に動かして、Facial Set を先頭にして」 | VRCFury |
 | ポリゴンを減らす | 「三角形を 7 万以下にして。顔は減らさないで」 | Meshia |
+| 軽くする（テクスチャ・マテリアル・メッシュ） | 「テクスチャを 1024 にして軽くして。顔はそのままで」 | Avatar Optimizer、TexTransTool |
 | Quest（Android）版を作る | 「Quest でも使えるようにして」 | VRCQuestTools、Unity の Android Build Support |
 | 性能ランクとパラメータ容量を調べる | 「性能ランクを調べて」「パラメータはあと何 bit 使える？」 | なし |
 
-VRCFury、Modular Avatar、Avatar Optimizer、Meshia、VRCQuestTools は、VCC または ALCOM で対象のプロジェクトに入れます。 [VRCFury の導入手順](https://vrcfury.com/download/)
+VRCFury、Modular Avatar、Avatar Optimizer、TexTransTool、Meshia、VRCQuestTools は、VCC または ALCOM で対象のプロジェクトに入れます。 [VRCFury の導入手順](https://vrcfury.com/download/)
 
 ### 衣装をメニューで切り替える
 
@@ -314,6 +316,16 @@ VRChat で見えるとおりのメニュー（VRCFury や Modular Avatar がビ�
 
 エージェントはメッシュごとの三角形数とランクを調べてレシピを示し、ビルドした前後の画像で崩れが無いかを確認してから適用します。三角形数ではなくスキンメッシュやマテリアルの数でランクが決まっているときは、先にそちらの改善を案内します。「Light のポリゴン削減を元に戻して」で戻せます。
 
+### 軽くする（テクスチャ・マテリアル・メッシュ）
+
+アップロードのビルドのときに、[Avatar Optimizer](https://vpm.anatawa12.com/avatar-optimizer/) の Trace and Optimize でメッシュをまとめ、使われないボーン・オブジェクト・シェイプキーを消します。[TexTransTool](https://ttt.rs64.net/) では、テクスチャを指定の大きさに縮め、名前を挙げたマテリアルを 1 つにまとめます。FBX・マテリアル・テクスチャのファイルは変えません。
+
+```text
+テクスチャを 1024 にして軽くして。顔はそのままで
+```
+
+エージェントはマテリアルごとのテクスチャの大きさ、メッシュ・ボーンの数、ランクを調べてレシピを示し、ビルドした前後の数（テクスチャメモリ、マテリアル数、メッシュ数、ボーン数）と画像を比べてから適用します。同じテクスチャを使うマテリアルはまとめて縮めます。「Slim の軽量化を元に戻して」で戻せます。
+
 ### Quest（Android）版を作る
 
 [VRCQuestTools](https://github.com/kurotu/VRCQuestTools) で、同じシーンから Quest（Android）版を作ります。アバターを複製せず、Android でビルドするときだけ、マテリアルをモバイル用のシェーダーに変え、テクスチャを小さくし、選んだ揺れ物を外します。PC 版は変わりません。
@@ -327,6 +339,10 @@ Quest でも使えるようにして。前髪としっぽの揺れは残した�
 ### 性能ランクを調べる
 
 「性能ランクを調べて」と頼むと、PC と Mobile の性能ランクと、ランクを決めている項目（たとえばスキンメッシュの数）、1 つ上のランクにするための目安を示します。ビルド前の元の prefab で数えた目安なので、最終的なランクは VRChat SDK のビルド画面で確認してください。
+
+### Inspector の値を読む
+
+「後ろ髪の PhysBone の Pull はいくつ？」「Menu Installer はどこに付いている？」と頼むと、Unity の Inspector に出ている値を、Inspector と同じ項目名で読み上げます。Prefab から変えた値はそう伝えます。Modular Avatar や VRCFury の設定も読めます。ファイルは変えません（シーンは保存して Unity を閉じておきます）。
 
 「パラメータはあと何 bit 使える？」と頼むと、同期するパラメータの使用量（上限 256 bit）を、VRCFury や Modular Avatar がビルド時に足す分も含めて数えます。測ったあとは、衣装トグルや小物を足す前に残りが表示され、上限を超える変更は適用の前に止まります。
 
@@ -353,19 +369,20 @@ Quest でも使えるようにして。前髪としっぽの揺れは残した�
 | 表情 | 「Face の表情を外して」 |
 | メニューの整理 | 「Tidy のメニュー整理を外して」 |
 | ポリゴン削減 | 「Light のポリゴン削減を元に戻して」 |
+| 軽量化（テクスチャ・マテリアル・メッシュ） | 「Slim の軽量化を元に戻して」 |
 | Quest 版の設定 | 「Quest の設定を外して」 |
 
 それ以外の変更は、Git の復元地点からシーンを戻します。戻し方はチャットで聞いてください。
 
 ## 動作確認環境
 
-| 項目 | DSH | Claude Code |
-| --- | --- | --- |
-| アプリ | DeepSeek Harness Desktop（Windows） | Claude デスクトップアプリ |
-| モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） | Opus 5.5 |
-| エフォート（推論の強さ） | `MAX` | 中以上 |
+| 項目 | DSH | Claude Code | Codex |
+| --- | --- | --- | --- |
+| アプリ | DeepSeek Harness Desktop（Windows） | Claude デスクトップアプリ | Codex アプリ |
+| モデル | DeepSeek V4.1 Flash（画面表示例 `DeepSeek-V41-Flash`） | Opus 5.5 | sol6.1 |
+| エフォート（推論の強さ） | `MAX` | 中以上 | 中 |
 
-上記以外の組み合わせでの動作は確認していません。Codex 版はまだ動作を確認していません。
+上記以外の組み合わせでの動作は確認していません。
 
 ## 困ったとき
 
